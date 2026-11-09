@@ -1,0 +1,102 @@
+<UserControl x:Class="Sluice.App.Views.ConnectionsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="Vis"/>
+    </UserControl.Resources>
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Why is nothing listed? -->
+        <Border Grid.Row="1" Margin="0,0,0,14" Padding="14,10" CornerRadius="8" Background="{DynamicResource AccentSoft}"
+                Visibility="{Binding HasRoutingHint, Converter={StaticResource Vis}}">
+            <DockPanel>
+                <TextBlock Style="{StaticResource Icon}" Text="&#xE946;" Foreground="{DynamicResource Accent}" Margin="0,0,10,0" VerticalAlignment="Top"/>
+                <TextBlock Text="{Binding RoutingHint}" TextWrapping="Wrap"/>
+            </DockPanel>
+        </Border>
+
+        <DockPanel Margin="0,0,0,14">
+            <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+                <Button Style="{StaticResource SecondaryButton}" Command="{Binding DisconnectCommand}" Margin="0,0,8,0">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource Icon}" Text="&#xE711;" FontSize="12" Margin="0,0,8,0"/>
+                        <TextBlock Text="Disconnect"/>
+                    </StackPanel>
+                </Button>
+                <Button Style="{StaticResource GhostButton}" Content="Disconnect all" Command="{Binding DisconnectAllCommand}"/>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <TextBlock Text="Open now" Style="{StaticResource SectionTitle}" Margin="0"/>
+                <Border Style="{StaticResource Pill}" Background="{DynamicResource AccentSoft}" Margin="10,0,0,0">
+                    <TextBlock Text="{Binding Rows.Count}" FontSize="11" FontWeight="Bold"/>
+                </Border>
+                <TextBlock Text="{Binding Filter, StringFormat=matching “{0}”}" Margin="12,0,0,0" VerticalAlignment="Center">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock" BasedOn="{StaticResource Muted}">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding Filter}" Value="">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+            </StackPanel>
+        </DockPanel>
+
+        <Border Grid.Row="2" Style="{StaticResource CardBox}" Padding="8,12,8,8">
+            <Grid>
+                <DataGrid Style="{StaticResource Grid}" ItemsSource="{Binding Rows}" SelectedItem="{Binding Selected}">
+                    <DataGrid.Columns>
+                        <DataGridTemplateColumn Header="Application" Width="1.3*" SortMemberPath="Application">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Application}" FontWeight="Bold" ToolTip="{Binding ProcessDetail}" TextTrimming="CharacterEllipsis"/>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTextColumn Header="Target" Binding="{Binding Target}" Width="2*"/>
+                        <DataGridTemplateColumn Header="Route" Width="1.6*" SortMemberPath="Via">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal">
+                                        <Ellipse Width="7" Height="7" Margin="0,0,8,0" VerticalAlignment="Center">
+                                            <Ellipse.Style>
+                                                <Style TargetType="Ellipse">
+                                                    <Setter Property="Fill" Value="{DynamicResource Accent}"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsDirect}" Value="True">
+                                                            <Setter Property="Fill" Value="{DynamicResource TextFaint}"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Ellipse.Style>
+                                        </Ellipse>
+                                        <TextBlock Text="{Binding Via}" TextTrimming="CharacterEllipsis"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTextColumn Header="Rule" Binding="{Binding Rule}" Width="*"/>
+                        <DataGridTextColumn Header="Sent" Binding="{Binding Sent}" Width="80"/>
+                        <DataGridTextColumn Header="Received" Binding="{Binding Received}" Width="90"/>
+                        <DataGridTextColumn Header="Time" Binding="{Binding Duration}" Width="70"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding IsEmpty, Converter={StaticResource Vis}}"
+                            IsHitTestVisible="False">
+                    <TextBlock Style="{StaticResource Icon}" Text="&#xE774;" FontSize="32" HorizontalAlignment="Center" Foreground="{DynamicResource TextFaint}"/>
+                    <TextBlock Text="No open connections" HorizontalAlignment="Center" Margin="0,12,0,4" FontSize="15" FontWeight="Bold"/>
+                    <TextBlock Style="{StaticResource Muted}" HorizontalAlignment="Center" TextAlignment="Center" MaxWidth="360"
+                               Text="Turn on interception to capture every app, or point an app at the local SOCKS5 server."/>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

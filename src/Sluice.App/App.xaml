@@ -1,0 +1,16 @@
+﻿<Application x:Class="Sluice.App.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:v="clr-namespace:Sluice.App.Views"
+             ShutdownMode="OnExplicitShutdown">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <!-- Defaults for the designer; App.ApplyTheme rebuilds this list (Fluent theme + palette + styles) at startup. -->
+                <ResourceDictionary Source="Theme/Light.xaml"/>
+                <ResourceDictionary Source="Theme/Styles.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+            <v:NotConverter x:Key="Not"/>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

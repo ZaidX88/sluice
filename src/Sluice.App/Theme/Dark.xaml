@@ -1,0 +1,52 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- Monochrome inverse: near-black surfaces, white as the only accent. -->
+    <Color x:Key="AccentColor">#FAFAFA</Color>
+    <Color x:Key="ShadowColor">#000000</Color>
+    <SolidColorBrush x:Key="Bg" Color="#0B0B0C"/>
+    <SolidColorBrush x:Key="Sidebar" Color="#111113"/>
+    <SolidColorBrush x:Key="Card" Color="#151517"/>
+    <SolidColorBrush x:Key="CardBorder" Color="#232327"/>
+    <SolidColorBrush x:Key="Divider" Color="#1F1F23"/>
+    <SolidColorBrush x:Key="Text" Color="#F4F4F5"/>
+    <SolidColorBrush x:Key="TextMuted" Color="#8E8E96"/>
+    <SolidColorBrush x:Key="TextFaint" Color="#55555C"/>
+    <SolidColorBrush x:Key="Accent" Color="{StaticResource AccentColor}"/>
+    <SolidColorBrush x:Key="AccentSoft" Color="#1C1C1F"/>
+    <SolidColorBrush x:Key="OnAccent" Color="#0A0A0A"/>
+    <SolidColorBrush x:Key="Hover" Color="#1A1A1D"/>
+    <SolidColorBrush x:Key="Selected" Color="#FAFAFA"/>
+    <SolidColorBrush x:Key="OnSelected" Color="#0A0A0A"/>
+    <SolidColorBrush x:Key="RowHover" Color="#18181B"/>
+    <SolidColorBrush x:Key="RowSelected" Color="#202024"/>
+    <SolidColorBrush x:Key="Success" Color="#FAFAFA"/>
+    <SolidColorBrush x:Key="SuccessSoft" Color="#1C1C1F"/>
+    <SolidColorBrush x:Key="Warning" Color="#B4B4BA"/>
+    <SolidColorBrush x:Key="Danger" Color="#F07070"/>
+    <SolidColorBrush x:Key="DangerSoft" Color="#2A1617"/>
+    <SolidColorBrush x:Key="SwitchOff" Color="#3A3A40"/>
+    <SolidColorBrush x:Key="Spark" Color="#FAFAFA"/>
+    <SolidColorBrush x:Key="SparkFill" Color="#1AFAFAFA"/>
+    <system:Double xmlns:system="clr-namespace:System;assembly=System.Runtime" x:Key="ShadowOpacity">0.5</system:Double>
+
+    <!-- Make the Fluent controls monochrome too (focus underline, checkboxes, selected text …). -->
+    <Color x:Key="SystemAccentColor">#FAFAFA</Color>
+    <Color x:Key="SystemAccentColorLight1">#FAFAFA</Color>
+    <Color x:Key="SystemAccentColorLight2">#FAFAFA</Color>
+    <Color x:Key="SystemAccentColorLight3">#FAFAFA</Color>
+    <Color x:Key="SystemAccentColorDark1">#D4D4D8</Color>
+    <Color x:Key="SystemAccentColorDark2">#B4B4BA</Color>
+    <Color x:Key="SystemAccentColorDark3">#8E8E96</Color>
+    <SolidColorBrush x:Key="AccentFillColorDefaultBrush" Color="#FAFAFA"/>
+    <SolidColorBrush x:Key="AccentFillColorSecondaryBrush" Color="#D4D4D8"/>
+    <SolidColorBrush x:Key="AccentFillColorTertiaryBrush" Color="#B4B4BA"/>
+    <SolidColorBrush x:Key="AccentFillColorPrimaryBrush" Color="#FAFAFA"/>
+    <SolidColorBrush x:Key="AccentFillColorSelectedTextBackgroundBrush" Color="#FAFAFA"/>
+    <SolidColorBrush x:Key="AccentFillColorSelectedTextBrush" Color="#0A0A0A"/>
+    <SolidColorBrush x:Key="AccentTextFillColorPrimaryBrush" Color="#FAFAFA"/>
+    <SolidColorBrush x:Key="AccentTextFillColorSecondaryBrush" Color="#D4D4D8"/>
+    <SolidColorBrush x:Key="AccentTextFillColorTertiaryBrush" Color="#B4B4BA"/>
+    <SolidColorBrush x:Key="TextControlElevationBorderFocusedBrush" Color="#FAFAFA"/>
+    <SolidColorBrush x:Key="TextControlFocusedBorderBrush" Color="#FAFAFA"/>
+    <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="#FAFAFA"/>
+</ResourceDictionary>

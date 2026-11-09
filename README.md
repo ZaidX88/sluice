@@ -17,12 +17,17 @@ analysis and the build plan.
 | 4 | DNS through proxy: fake IPs (198.18.0.0/15), hostname rules for intercepted traffic, loop prevention | done |
 | 5 | Profile password encryption, byte-compatible with Proxifier (disabled / basic / account / master) | done |
 | 6 | Proxy checker (3 tests), statistics per app/target/rule, daily file log, clean shutdown | done |
-| 7–8 | WPF UI, extras | planned |
+| 7 | WPF app: Fluent light/dark UI, connections, statistics, log, proxies (+checker), rules, settings, tray | done |
+| 8 | Extras: chains editor, UDP via SOCKS5, NTLM/Kerberos, service mode, profile auto-update | planned |
+
+![Rules](docs/screenshots/rules-light.png)
+![Proxies, dark theme](docs/screenshots/proxies-dark.png)
 
 ## Layout
 
 ```
 src/Sluice.Core    engine: profiles, rules, proxy protocols, relay, listeners (no UI)
+src/Sluice.App     WPF desktop app (Sluice.exe)
 src/Sluice.Cli     console host
 tests/Sluice.Tests xUnit tests with in-process SOCKS/HTTP test servers
 ```
@@ -31,6 +36,19 @@ tests/Sluice.Tests xUnit tests with in-process SOCKS/HTTP test servers
 
 ```bash
 dotnet test
+```
+
+The desktop app opens your last profile and listens for SOCKS5 on 127.0.0.1:1080. Turn on **Capture traffic** to
+route every app (it asks to restart as administrator when needed):
+
+```bash
+dotnet run --project src/Sluice.App
+```
+
+Render every page to PNG (demo profile, no admin rights, nothing saved):
+
+```bash
+dotnet run --project src/Sluice.App -- --screenshot shots --theme dark
 ```
 
 ```bash

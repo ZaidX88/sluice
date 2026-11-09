@@ -480,3 +480,6 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# Vendored WinDivert runtime (must be committed)
+!lib/WinDivert/x64/

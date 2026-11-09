@@ -13,7 +13,7 @@ analysis and the build plan.
 |---|---|---|
 | 1 | Profiles (`.ppx`), rule engine, SOCKS4/4a/5 and HTTPS proxy clients, chains | done |
 | 2 | Engine and relay, connection tracking, local SOCKS5 listener, process detection, CLI | done |
-| 3 | Transparent interception with WinDivert | next |
+| 3 | Transparent TCP interception with WinDivert (`--intercept`, needs Administrator) | done |
 | 4–8 | DNS through proxy, password encryption, proxy checker, WPF UI, extras | planned |
 
 ## Layout
@@ -37,3 +37,12 @@ dotnet run --project src/Sluice.Cli -- "%APPDATA%\Proxifier4\Profiles\Default.pp
 ```bash
 curl --socks5-hostname 127.0.0.1:1080 https://example.com/
 ```
+
+Transparent mode captures every application's TCP traffic, with no proxy settings needed in the apps.
+Run it from an Administrator terminal, and quit Proxifier or any other redirector first:
+
+```bash
+dotnet run --project src/Sluice.Cli -- my-profile.ppx --intercept --log verbose
+```
+
+WinDivert 2.2.2 (x64) is vendored in `lib/WinDivert` (LGPLv3 / GPLv2) and copied next to the build output.

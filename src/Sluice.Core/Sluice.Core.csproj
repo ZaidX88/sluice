@@ -6,4 +6,14 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Sluice.Tests" />
+  </ItemGroup>
+
+  <!-- WinDivert 2.2 runtime (x64). Copied next to every app that references Sluice.Core. -->
+  <ItemGroup>
+    <None Include="..\..\lib\WinDivert\x64\WinDivert.dll" Link="WinDivert.dll" CopyToOutputDirectory="PreserveNewest" Condition="Exists('..\..\lib\WinDivert\x64\WinDivert.dll')" />
+    <None Include="..\..\lib\WinDivert\x64\WinDivert64.sys" Link="WinDivert64.sys" CopyToOutputDirectory="PreserveNewest" Condition="Exists('..\..\lib\WinDivert\x64\WinDivert64.sys')" />
+  </ItemGroup>
+
 </Project>

@@ -1,17 +1,22 @@
 using System.Net;
 using Sluice.Core.Engine;
 using Sluice.Core.Inbound;
+using Sluice.Core.Interception;
 using Sluice.Core.Profiles;
 
-// Usage: Sluice.Cli [profile.ppx] [--socks 127.0.0.1:1080] [--log normal|verbose|debug|errors]
+// Usage: Sluice.Cli [profile.ppx] [--socks 127.0.0.1:1080] [--intercept] [--log normal|verbose|debug|errors]
 string? profilePath = null;
 var socksBind = new IPEndPoint(IPAddress.Loopback, 1080);
 var level = LogLevel.Normal;
+var intercept = false;
 
 for (var i = 0; i < args.Length; i++)
 {
     switch (args[i])
     {
+        case "--intercept":
+            intercept = true;
+            break;
         case "--socks" when i + 1 < args.Length:
             socksBind = IPEndPoint.Parse(args[++i]);
             break;
@@ -25,7 +30,8 @@ for (var i = 0; i < args.Length; i++)
             };
             break;
         case "-h" or "--help":
-            Console.WriteLine("Sluice.Cli [profile.ppx] [--socks 127.0.0.1:1080] [--log errors|normal|verbose|debug]");
+            Console.WriteLine("Sluice.Cli [profile.ppx] [--socks 127.0.0.1:1080] [--intercept] [--log errors|normal|verbose|debug]");
+            Console.WriteLine("  --intercept  capture all applications' TCP traffic with WinDivert (needs Administrator)");
             return 0;
         default:
             profilePath = args[i];
@@ -62,11 +68,30 @@ engine.Reload(profile);
 await using var socks = new Socks5Inbound(engine, socksBind);
 socks.Start();
 
-Console.WriteLine($"Profile: {profilePath ?? "(built-in default)"} | SOCKS5 on {socks.LocalEndPoint} | Ctrl+C to stop");
+Interceptor? interceptor = null;
+if (intercept)
+{
+    interceptor = new Interceptor(engine) { DiagnosticPackets = level == LogLevel.Debug ? 20 : 0 };
+    try
+    {
+        interceptor.Start();
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"Interception unavailable: {ex.Message}");
+        await interceptor.DisposeAsync();
+        return 2;
+    }
+}
+
+Console.WriteLine($"Profile: {profilePath ?? "(built-in default)"} | SOCKS5 on {socks.LocalEndPoint} | " +
+                  $"interception {(intercept ? "ON" : "off")} | Ctrl+C to stop");
 
 var stop = new TaskCompletionSource();
 Console.CancelKeyPress += (_, e) => { e.Cancel = true; stop.TrySetResult(); };
 await stop.Task;
+
+if (interceptor is not null) await interceptor.DisposeAsync();
 
 Console.WriteLine($"Stopping. Total sent {tracker.TotalSent:N0} B, received {tracker.TotalReceived:N0} B.");
 return 0;

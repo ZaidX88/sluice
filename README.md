@@ -14,7 +14,8 @@ analysis and the build plan.
 | 1 | Profiles (`.ppx`), rule engine, SOCKS4/4a/5 and HTTPS proxy clients, chains | done |
 | 2 | Engine and relay, connection tracking, local SOCKS5 listener, process detection, CLI | done |
 | 3 | Transparent TCP interception with WinDivert (`--intercept`, needs Administrator) | done |
-| 4–8 | DNS through proxy, password encryption, proxy checker, WPF UI, extras | planned |
+| 4 | DNS through proxy: fake IPs (198.18.0.0/15), hostname rules for intercepted traffic, loop prevention | done |
+| 5–8 | Password encryption, proxy checker, WPF UI, extras | planned |
 
 ## Layout
 

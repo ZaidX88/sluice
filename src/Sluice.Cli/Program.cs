@@ -9,6 +9,7 @@ string? profilePath = null;
 var socksBind = new IPEndPoint(IPAddress.Loopback, 1080);
 var level = LogLevel.Normal;
 var intercept = false;
+TimeSpan? duration = null;
 
 for (var i = 0; i < args.Length; i++)
 {
@@ -16,6 +17,9 @@ for (var i = 0; i < args.Length; i++)
     {
         case "--intercept":
             intercept = true;
+            break;
+        case "--duration" when i + 1 < args.Length:
+            duration = TimeSpan.FromSeconds(double.Parse(args[++i], System.Globalization.CultureInfo.InvariantCulture));
             break;
         case "--socks" when i + 1 < args.Length:
             socksBind = IPEndPoint.Parse(args[++i]);
@@ -32,6 +36,7 @@ for (var i = 0; i < args.Length; i++)
         case "-h" or "--help":
             Console.WriteLine("Sluice.Cli [profile.ppx] [--socks 127.0.0.1:1080] [--intercept] [--log errors|normal|verbose|debug]");
             Console.WriteLine("  --intercept  capture all applications' TCP traffic with WinDivert (needs Administrator)");
+            Console.WriteLine("  --duration N stop cleanly after N seconds");
             return 0;
         default:
             profilePath = args[i];
@@ -89,6 +94,7 @@ Console.WriteLine($"Profile: {profilePath ?? "(built-in default)"} | SOCKS5 on {
 
 var stop = new TaskCompletionSource();
 Console.CancelKeyPress += (_, e) => { e.Cancel = true; stop.TrySetResult(); };
+if (duration is { } d) _ = Task.Delay(d).ContinueWith(_ => stop.TrySetResult());
 await stop.Task;
 
 if (interceptor is not null) await interceptor.DisposeAsync();

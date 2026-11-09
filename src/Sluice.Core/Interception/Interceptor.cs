@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.ComponentModel;
 using System.Net;
 using System.Runtime.InteropServices;
+using Sluice.Core.Dns;
 using Sluice.Core.Engine;
 using Sluice.Core.Inbound;
 using Sluice.Core.Platform;
@@ -30,7 +31,12 @@ public sealed class Interceptor : IAsyncDisposable
     private Task? _sweeper;
     private TransparentInbound? _relay;
     private PacketReflector? _reflector;
-    private long _reflected, _passed, _recvErrors;
+    private long _reflected, _passed, _recvErrors, _dnsAnswered;
+
+    private readonly FakeIpPool _fakeIps = new();
+    private DnsResolver? _resolver;
+    private DnsRedirector? _dns;
+    private (Profile Profile, DnsPolicy Policy)? _policy;
 
     /// <summary>Log the headers of this many packets at Debug level (troubleshooting).</summary>
     public int DiagnosticPackets;
@@ -39,21 +45,38 @@ public sealed class Interceptor : IAsyncDisposable
 
     public long PacketsReflected => Interlocked.Read(ref _reflected);
     public long PacketsPassed => Interlocked.Read(ref _passed);
+    public long DnsQueriesAnswered => Interlocked.Read(ref _dnsAnswered);
     public IPEndPoint? RelayEndPoint => _relay?.LocalEndPoint;
+    public FakeIpPool FakeIps => _fakeIps;
 
     public void Start()
     {
         // Relay on the dual-stack wildcard: reflected packets arrive addressed to the machine's own IP.
-        var relay = new TransparentInbound(_engine, new IPEndPoint(IPAddress.IPv6Any, 0), new LateBoundTable(() => _reflector));
+        var relay = new TransparentInbound(_engine, new IPEndPoint(IPAddress.IPv6Any, 0), new LateBoundTable(() => _reflector, _fakeIps));
         _relay = relay;
         var port = (ushort)relay.LocalEndPoint.Port;
         _reflector = new PacketReflector(port, Decide);
         relay.Start();
 
+        // Sluice's own lookups must bypass the OS DNS cache (which will hold fake addresses).
+        _resolver = new DnsResolver();
+        _engine.HostResolver = _resolver.ResolveAsync;
+        _dns = new DnsRedirector(_fakeIps, CurrentPolicy, _resolver.LocalPort);
+        _dns.Answered += (name, type) =>
+            _engine.Tracker.Write(LogLevel.Debug, $"DNS {name} type {type} answered locally ({(type == 1 ? _fakeIps.GetOrAdd(name) : "no data")})");
+
         var self = Environment.ProcessId;
         _sock = OpenOrThrow($"event == CONNECT and tcp and !loopback and processId != {self}",
             WinDivertNative.Layer.Socket, WinDivertNative.OpenFlags.Sniff | WinDivertNative.OpenFlags.RecvOnly);
-        _net = OpenOrThrow("outbound and tcp and !loopback", WinDivertNative.Layer.Network, WinDivertNative.OpenFlags.None);
+        _net = OpenOrThrow("outbound and !loopback and (tcp or (udp and udp.DstPort == 53))",
+            WinDivertNative.Layer.Network, WinDivertNative.OpenFlags.None);
+
+        var policy = CurrentPolicy();
+        if (policy.Enabled)
+        {
+            FlushOsDnsCache();
+            _engine.Tracker.Write(LogLevel.Normal, "Name resolution through proxy is ON (fake IPs from 198.18.0.0/15)");
+        }
 
         _sockThread = new Thread(SocketLoop) { IsBackground = true, Name = "Sluice WinDivert socket" };
         _netThread = new Thread(NetworkLoop) { IsBackground = true, Name = "Sluice WinDivert network" };
@@ -113,6 +136,16 @@ public sealed class Interceptor : IAsyncDisposable
         return h;
     }
 
+    private DnsPolicy CurrentPolicy()
+    {
+        var profile = _engine.Profile;
+        var cached = _policy;
+        if (cached is { } c && ReferenceEquals(c.Profile, profile)) return c.Policy;
+        var p = new DnsPolicy(profile.Options.Resolve, profile.Options.LeakPreventionMode);
+        _policy = (profile, p);
+        return p;
+    }
+
     /// <summary>Called on the SYN of every new outbound flow.</summary>
     private (bool Redirect, int Pid) Decide(IPEndPoint local, IPEndPoint remote)
     {
@@ -121,12 +154,19 @@ public sealed class Interceptor : IAsyncDisposable
         if (pid == 0) pid = ProcessLookup.FindTcpOwner(local, remote);
 
         if (pid == Environment.ProcessId) return (false, pid);
-        if (pid == 0 && !_engine.Profile.Options.ProcessServices) return (false, 0);
+
+        // A fake address is unreachable by itself: always hand such flows to the engine,
+        // which connects by hostname (directly or through the proxy, per the rules).
+        var fake = _fakeIps.TryGetHost(remote.Address, out var hostname);
+        if (!fake && FakeIpPool.IsFake(remote.Address))
+            _engine.Tracker.Write(LogLevel.Error, $"Connection to unknown fake address {remote} (stale DNS cache?)");
+        if (!fake && pid == 0 && !_engine.Profile.Options.ProcessServices) return (false, 0);
 
         var path = pid == 0 ? null : ProcessLookup.GetProcessPath(pid);
-        var match = _engine.Classify(new InboundRequest(remote.Address.ToString(), remote.Port, pid, path));
-        var redirect = match.Action.Type != RuleActionType.Direct || _engine.Profile.Options.HandleDirectConnections;
-        _engine.Tracker.Write(LogLevel.Debug, $"SYN {local} -> {remote} pid {pid} ({Path.GetFileName(path) ?? "?"}) rule {match.Rule.Name} => {(redirect ? "redirect" : "pass")}");
+        var host = fake ? hostname : remote.Address.ToString();
+        var match = _engine.Classify(new InboundRequest(host, remote.Port, pid, path));
+        var redirect = fake || match.Action.Type != RuleActionType.Direct || _engine.Profile.Options.HandleDirectConnections;
+        _engine.Tracker.Write(LogLevel.Debug, $"SYN {local} -> {host}:{remote.Port} pid {pid} ({Path.GetFileName(path) ?? "?"}) rule {match.Rule.Name} => {(redirect ? "redirect" : "pass")}");
         if (!redirect)
             _engine.Tracker.Write(LogLevel.Verbose, $"{Path.GetFileName(path) ?? "?"} ({pid}) - {remote} direct (rule {match.Rule.Name}, not intercepted)");
         return (redirect, pid);
@@ -170,6 +210,26 @@ public sealed class Interceptor : IAsyncDisposable
                 _engine.Tracker.Write(LogLevel.Debug,
                     $"pkt len={len} outbound={addr.Outbound} loop={addr.Loopback} v6={addr.IPv6} head={Convert.ToHexString(buf, 0, (int)Math.Min(len, 48u))}");
 
+            // DNS query: answer locally with a fake IP and drop the original.
+            if ((buf[0] >> 4 == 4 && buf[9] == 17) || (buf[0] >> 4 == 6 && buf[6] == 17))
+            {
+                byte[]? reply = null;
+                try { reply = _dns!.TryAnswer(buf.AsSpan(0, (int)len)); }
+                catch (Exception ex) { _engine.Tracker.Write(LogLevel.Error, $"DNS handling failed, passing through: {ex.Message}"); }
+
+                if (reply is not null)
+                {
+                    var raddr = addr;
+                    raddr.SetOutbound(false);
+                    WinDivertNative.CalcChecksums(reply, (uint)reply.Length, ref raddr, 0);
+                    WinDivertNative.Send(_net, reply, (uint)reply.Length, out _, ref raddr);
+                    Interlocked.Increment(ref _dnsAnswered);
+                    continue;
+                }
+                WinDivertNative.Send(_net, buf, len, out _, ref addr);
+                continue;
+            }
+
             try
             {
                 if (_reflector!.ProcessOutbound(buf.AsSpan(0, (int)len)) == PacketReflector.Verdict.Reflected)
@@ -200,7 +260,8 @@ public sealed class Interceptor : IAsyncDisposable
             while (await timer.WaitForNextTickAsync(_cts.Token))
             {
                 _engine.Tracker.Write(LogLevel.Debug,
-                    $"Interception stats: {PacketsReflected:N0} reflected, {PacketsPassed:N0} passed, {_reflector?.FlowCount ?? 0} flows, {Interlocked.Read(ref _recvErrors)} recv errors");
+                    $"Interception stats: {PacketsReflected:N0} reflected, {PacketsPassed:N0} passed, {_reflector?.FlowCount ?? 0} flows, " +
+                    $"{DnsQueriesAnswered:N0} DNS answered, {_fakeIps.Count} fake IPs, {Interlocked.Read(ref _recvErrors)} recv errors");
                 _reflector?.Sweep(TimeSpan.FromMinutes(10));
                 var cutoff = DateTime.UtcNow - TimeSpan.FromMinutes(1);
                 foreach (var (k, v) in _socketPids)
@@ -224,15 +285,42 @@ public sealed class Interceptor : IAsyncDisposable
         _net = _sock = IntPtr.Zero;
         if (_sweeper is not null) await _sweeper;
         if (_relay is not null) await _relay.DisposeAsync();
-        _engine.Tracker.Write(LogLevel.Normal, $"Interception stopped ({PacketsReflected:N0} packets reflected)");
+        _engine.HostResolver = null;
+        _resolver?.Dispose();
+        // Fake answers are meaningless once we stop: drop them from the OS cache.
+        if (_fakeIps.Count > 0) FlushOsDnsCache();
+        _engine.Tracker.Write(LogLevel.Normal, $"Interception stopped ({PacketsReflected:N0} packets reflected, {DnsQueriesAnswered:N0} DNS queries answered)");
     }
 
-    /// <summary>The relay must exist before the reflector (it needs the port), so bind lazily.</summary>
-    private sealed class LateBoundTable(Func<PacketReflector?> get) : IRedirectTable
+    [DllImport("dnsapi.dll", EntryPoint = "DnsFlushResolverCache")]
+    private static extern bool DnsFlushResolverCache();
+
+    private void FlushOsDnsCache()
+    {
+        try
+        {
+            if (!DnsFlushResolverCache()) _engine.Tracker.Write(LogLevel.Error, "Could not flush the Windows DNS cache");
+        }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
+        {
+            _engine.Tracker.Write(LogLevel.Error, "Could not flush the Windows DNS cache (ipconfig /flushdns)");
+        }
+    }
+
+    /// <summary>
+    /// The relay must exist before the reflector (it needs the port), so bind lazily.
+    /// Adds the hostname for flows that targeted a fake IP.
+    /// </summary>
+    private sealed class LateBoundTable(Func<PacketReflector?> get, FakeIpPool fakes) : IRedirectTable
     {
         public bool TryGetOriginal(IPEndPoint clientEndPoint, out OriginalDestination original)
         {
-            if (get() is { } r) return r.TryGetOriginal(clientEndPoint, out original);
+            if (get() is { } r && r.TryGetOriginal(clientEndPoint, out original))
+            {
+                if (fakes.TryGetHost(original.Destination.Address, out var host))
+                    original = original with { Hostname = host };
+                return true;
+            }
             original = null!;
             return false;
         }

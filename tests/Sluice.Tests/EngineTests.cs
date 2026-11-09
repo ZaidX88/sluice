@@ -178,6 +178,44 @@ public class EngineTests
     }
 
     [Fact]
+    public async Task LoopPrevention_LocalProxyHostGoesDirect()
+    {
+        // Another process listens on a port; the profile routes everything through a proxy on that port.
+        using var host = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = "powershell.exe",
+            Arguments = "-NoProfile -Command \"$l=[Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback,0);$l.Start();" +
+                        "[Console]::Out.WriteLine($l.LocalEndpoint.Port);[Console]::Out.Flush();Start-Sleep 30\"",
+            RedirectStandardOutput = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        })!;
+        try
+        {
+            var port = int.Parse((await host.StandardOutput.ReadLineAsync().WaitAsync(TimeSpan.FromSeconds(20)))!.Trim());
+            var profile = Profile.CreateDefault();
+            profile.Proxies.Add(new ProxyServer { Id = 1, Type = ProxyType.Socks5, Address = "127.0.0.1", Port = port });
+            profile.Rules.Single(r => r.IsDefault).Action = RuleAction.ViaProxy(1);
+            var engine = new ProxyEngine(profile);
+
+            var fromProxyHost = engine.Classify(new InboundRequest("example.com", 443, host.Id, null));
+            Assert.Equal("Loop prevention", fromProxyHost.Rule.Name);
+            Assert.Equal(RuleActionType.Direct, fromProxyHost.Action.Type);
+
+            var fromOther = engine.Classify(new InboundRequest("example.com", 443, 999999, null));
+            Assert.Equal(RuleActionType.Proxy, fromOther.Action.Type);
+
+            profile.Options.ConnectionLoopDetection = false;
+            engine.Reload(profile);
+            Assert.Equal(RuleActionType.Proxy, engine.Classify(new InboundRequest("example.com", 443, host.Id, null)).Action.Type);
+        }
+        finally
+        {
+            host.Kill();
+        }
+    }
+
+    [Fact]
     public void ProcessLookup_ResolvesOwnPath() =>
         Assert.Equal(Environment.ProcessPath, ProcessLookup.GetProcessPath(Environment.ProcessId), ignoreCase: true);
 

@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Net;
 using System.Net.Sockets;
 using Sluice.Core.Profiles;
 
@@ -16,6 +17,12 @@ public sealed class ProxyConnector(Profile profile)
     private readonly ConcurrentDictionary<int, int> _pidAffinity = new();
 
     public TimeSpan DirectConnectTimeout { get; set; } = TimeSpan.FromSeconds(20);
+
+    /// <summary>
+    /// Resolves hostnames Sluice itself connects to (direct targets, proxy addresses).
+    /// Null = the OS resolver. While DNS faking is active this must bypass the OS cache.
+    /// </summary>
+    public Func<string, CancellationToken, Task<IPAddress[]>>? Resolver { get; set; }
 
     public async Task<TcpClient> ConnectAsync(RuleAction action, string ruleName, string host, int port,
         int processId = 0, CancellationToken ct = default)
@@ -101,7 +108,7 @@ public sealed class ProxyConnector(Profile profile)
     }
 
     /// <summary>Connect to hops[0], then tunnel hop-by-hop, finally to host:port.</summary>
-    private static async Task<TcpClient> ThroughHopsAsync(IReadOnlyList<ProxyServer> hops, string host, int port,
+    private async Task<TcpClient> ThroughHopsAsync(IReadOnlyList<ProxyServer> hops, string host, int port,
         TimeSpan timeout, CancellationToken ct)
     {
         var client = await OpenTcpAsync(hops[0].Address, hops[0].Port, timeout, ct);
@@ -129,14 +136,29 @@ public sealed class ProxyConnector(Profile profile)
         }
     }
 
-    private static async Task<TcpClient> OpenTcpAsync(string host, int port, TimeSpan timeout, CancellationToken ct)
+    private async Task<TcpClient> OpenTcpAsync(string host, int port, TimeSpan timeout, CancellationToken ct)
     {
-        var client = new TcpClient { NoDelay = true };
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         cts.CancelAfter(timeout);
+
+        IPAddress[] addrs;
+        if (IPAddress.TryParse(host, out var literal)) addrs = [literal];
+        else if (Resolver is not null)
+        {
+            try { addrs = await Resolver(host, cts.Token); }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            {
+                throw new TimeoutException($"Resolving {host} timed out");
+            }
+        }
+        else addrs = await System.Net.Dns.GetHostAddressesAsync(host, cts.Token);
+
+        // Dual-mode socket so both IPv4 and IPv6 results are usable.
+        var client = new TcpClient(AddressFamily.InterNetworkV6) { NoDelay = true };
+        client.Client.DualMode = true;
         try
         {
-            await client.ConnectAsync(host, port, cts.Token);
+            await client.ConnectAsync(addrs, port, cts.Token);
             return client;
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)

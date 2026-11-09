@@ -16,7 +16,8 @@ analysis and the build plan.
 | 3 | Transparent TCP interception with WinDivert (`--intercept`, needs Administrator) | done |
 | 4 | DNS through proxy: fake IPs (198.18.0.0/15), hostname rules for intercepted traffic, loop prevention | done |
 | 5 | Profile password encryption, byte-compatible with Proxifier (disabled / basic / account / master) | done |
-| 6–8 | Proxy checker, WPF UI, extras | planned |
+| 6 | Proxy checker (3 tests), statistics per app/target/rule, daily file log, clean shutdown | done |
+| 7–8 | WPF UI, extras | planned |
 
 ## Layout
 
@@ -45,6 +46,16 @@ Run it from an Administrator terminal, and quit Proxifier or any other redirecto
 
 ```bash
 dotnet run --project src/Sluice.Cli -- my-profile.ppx --intercept --log verbose
+```
+
+Check proxies like Proxifier's Proxy Checker: test a whole profile or a single proxy URL:
+
+```bash
+dotnet run --project src/Sluice.Cli -- check my-profile.ppx
+```
+
+```bash
+dotnet run --project src/Sluice.Cli -- check socks5://user:pass@proxy.example:1080 --target example.com:80
 ```
 
 WinDivert 2.2.2 (x64) is vendored in `lib/WinDivert` (LGPLv3 / GPLv2) and copied next to the build output.

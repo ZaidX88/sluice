@@ -6,16 +6,22 @@ namespace Sluice.Core.Profiles;
 /// <summary>
 /// Reads/writes Proxifier v4 ".ppx" profiles (ProxifierProfile version="102").
 /// Elements observed in real profiles: Options/Resolve, ProxyList/Proxy, RuleList/Rule.
-/// Chain and Authentication layout are best-effort (inferred from the UI) and
-/// may need adjusting once a profile using them is available.
+/// Password encryption (Options/Encryption mode + Hash, Authentication/Password) follows
+/// Proxifier.exe 4.14 exactly; see <see cref="ProxifierPasswordCodec"/>.
+/// Chain layout is best-effort (inferred from the UI).
 /// </summary>
 public static class PpxSerializer
 {
-    public static Profile Load(string path) => Parse(XDocument.Load(path));
+    /// <summary>How many times the master password is asked for before giving up.</summary>
+    public const int MasterPasswordAttempts = 3;
 
-    public static Profile Parse(string xml) => Parse(XDocument.Parse(xml));
+    public static Profile Load(string path, MasterPasswordProvider? masterPassword = null) =>
+        Parse(XDocument.Load(path), masterPassword, Path.GetFileNameWithoutExtension(path));
 
-    public static Profile Parse(XDocument doc)
+    public static Profile Parse(string xml, MasterPasswordProvider? masterPassword = null, string profileName = "profile") =>
+        Parse(XDocument.Parse(xml), masterPassword, profileName);
+
+    public static Profile Parse(XDocument doc, MasterPasswordProvider? masterPassword = null, string profileName = "profile")
     {
         var root = doc.Root ?? throw new FormatException("Empty profile");
         if (root.Name.LocalName != "ProxifierProfile")
@@ -24,8 +30,11 @@ public static class PpxSerializer
         var profile = new Profile();
         ReadOptions(root.Element("Options"), profile.Options);
 
+        var hash = root.Element("Options")?.Element("Encryption")?.Element("Hash")?.Value;
+        var codec = OpenCodec(profile, hash, masterPassword, profileName);
+
         foreach (var x in root.Element("ProxyList")?.Elements("Proxy") ?? [])
-            profile.Proxies.Add(ReadProxy(x));
+            profile.Proxies.Add(ReadProxy(x, codec));
 
         foreach (var x in root.Element("ChainList")?.Elements("Chain") ?? [])
             profile.Chains.Add(ReadChain(x));
@@ -39,6 +48,34 @@ public static class PpxSerializer
         return profile;
     }
 
+    /// <summary>Builds the password codec, checking the master password / Windows account against &lt;Hash&gt;.</summary>
+    private static ProxifierPasswordCodec OpenCodec(Profile profile, string? hash, MasterPasswordProvider? ask, string name)
+    {
+        var mode = profile.Options.PasswordEncryption;
+        if (mode != PasswordEncryptionMode.MasterPassword)
+        {
+            var codec = new ProxifierPasswordCodec(mode);
+            if (mode == PasswordEncryptionMode.CurrentUser && hash is not null && !codec.VerifyHash(hash))
+                throw new CryptographicFailure($"Profile '{name}' passwords were encrypted by a different Windows user account.");
+            return codec;
+        }
+
+        if (ask is null)
+            throw new CryptographicFailure($"Profile '{name}' is protected by a master password.");
+        for (var attempt = 1; attempt <= MasterPasswordAttempts; attempt++)
+        {
+            var pw = ask(name, false);
+            if (string.IsNullOrEmpty(pw)) throw new OperationCanceledException("Master password entry cancelled.");
+            var codec = new ProxifierPasswordCodec(mode, pw);
+            if (hash is null || codec.VerifyHash(hash))
+            {
+                profile.MasterPassword = pw;
+                return codec;
+            }
+        }
+        throw new CryptographicFailure($"Wrong master password for profile '{name}'.");
+    }
+
     public static void Save(Profile profile, string path)
     {
         var doc = ToXml(profile);
@@ -48,6 +85,9 @@ public static class PpxSerializer
     public static XDocument ToXml(Profile p)
     {
         var o = p.Options;
+        var codec = new ProxifierPasswordCodec(o.PasswordEncryption, p.MasterPassword);
+        var encryption = new XElement("Encryption", new XAttribute("mode", EncryptionToString(o.PasswordEncryption)));
+        if (codec.Hash is { } hash) encryption.Add(new XElement("Hash", hash));
         var root = new XElement("ProxifierProfile",
             new XAttribute("version", "102"),
             new XAttribute("platform", "Windows"),
@@ -60,7 +100,7 @@ public static class PpxSerializer
                     Flag("BlockNonATypes", o.Resolve.BlockNonATypes),
                     new XElement("ExclusionList", new XAttribute("OnlyFromListMode", B(o.Resolve.OnlyFromListMode)), o.Resolve.ExclusionList),
                     new XElement("DnsUdpMode", o.Resolve.DnsUdpMode)),
-                new XElement("Encryption", new XAttribute("mode", o.EncryptionMode)),
+                encryption,
                 new XElement("ConnectionLoopDetection", new XAttribute("enabled", B(o.ConnectionLoopDetection)), new XAttribute("resolve", B(o.ResolveLoopDetection))),
                 new XElement("Udp", new XAttribute("mode", UdpToString(o.Udp))),
                 Flag("LeakPreventionMode", o.LeakPreventionMode),
@@ -68,7 +108,7 @@ public static class PpxSerializer
                 Flag("ProcessServices", o.ProcessServices),
                 Flag("HandleDirectConnections", o.HandleDirectConnections),
                 Flag("HttpProxiesSupport", o.HttpProxiesSupport)),
-            new XElement("ProxyList", p.Proxies.Select(WriteProxy)),
+            new XElement("ProxyList", p.Proxies.Select(x => WriteProxy(x, codec))),
             new XElement("ChainList", p.Chains.Select(WriteChain)),
             new XElement("RuleList", p.Rules.Select(WriteRule)));
 
@@ -95,7 +135,7 @@ public static class PpxSerializer
             }
             o.Resolve.DnsUdpMode = Int(r.Element("DnsUdpMode")?.Value, 0);
         }
-        o.EncryptionMode = x.Element("Encryption")?.Attribute("mode")?.Value ?? "basic";
+        o.PasswordEncryption = EncryptionFromString(x.Element("Encryption")?.Attribute("mode")?.Value);
         var loop = x.Element("ConnectionLoopDetection");
         o.ConnectionLoopDetection = Enabled(loop, true);
         o.ResolveLoopDetection = Bool(loop?.Attribute("resolve")?.Value, true);
@@ -107,7 +147,7 @@ public static class PpxSerializer
         o.HttpProxiesSupport = Enabled(x.Element("HttpProxiesSupport"), false);
     }
 
-    private static ProxyServer ReadProxy(XElement x)
+    private static ProxyServer ReadProxy(XElement x, IPasswordCodec codec)
     {
         var p = new ProxyServer
         {
@@ -122,7 +162,15 @@ public static class PpxSerializer
         if (auth is not null && Enabled(auth, true))
         {
             p.Username = auth.Element("Username")?.Value;
-            p.Password = auth.Element("Password")?.Value;
+            var stored = auth.Element("Password")?.Value;
+            if (!string.IsNullOrEmpty(stored))
+            {
+                try { p.Password = codec.Decode(stored); }
+                catch (CryptographicFailure ex)
+                {
+                    throw new CryptographicFailure($"Cannot decrypt the password of proxy {p}: {ex.Message}");
+                }
+            }
         }
         return p;
     }
@@ -172,7 +220,7 @@ public static class PpxSerializer
 
     // ---------- writing ----------
 
-    private static XElement WriteProxy(ProxyServer p)
+    private static XElement WriteProxy(ProxyServer p, IPasswordCodec codec)
     {
         var x = new XElement("Proxy",
             new XAttribute("id", p.Id),
@@ -181,7 +229,7 @@ public static class PpxSerializer
         if (p.Username is not null || p.Password is not null)
             x.Add(new XElement("Authentication", new XAttribute("enabled", "true"),
                 new XElement("Username", p.Username ?? ""),
-                new XElement("Password", p.Password ?? "")));
+                new XElement("Password", string.IsNullOrEmpty(p.Password) ? "" : codec.Encode(p.Password))));
         x.Add(new XElement("Options", p.Options),
               new XElement("Port", p.Port),
               new XElement("Address", p.Address));
@@ -244,6 +292,23 @@ public static class PpxSerializer
         ProxyType.Https => "HTTPS",
         ProxyType.Http => "HTTP",
         _ => "SOCKS5",
+    };
+
+    // Values of Proxifier's mode table: disabled, basic, account, master.
+    private static PasswordEncryptionMode EncryptionFromString(string? s) => s?.ToLowerInvariant() switch
+    {
+        "disabled" => PasswordEncryptionMode.Disabled,
+        "account" => PasswordEncryptionMode.CurrentUser,
+        "master" => PasswordEncryptionMode.MasterPassword,
+        _ => PasswordEncryptionMode.Basic,
+    };
+
+    private static string EncryptionToString(PasswordEncryptionMode m) => m switch
+    {
+        PasswordEncryptionMode.Disabled => "disabled",
+        PasswordEncryptionMode.CurrentUser => "account",
+        PasswordEncryptionMode.MasterPassword => "master",
+        _ => "basic",
     };
 
     private static UdpMode UdpFromString(string? s) => s switch

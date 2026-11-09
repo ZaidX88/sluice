@@ -47,7 +47,12 @@ for (var i = 0; i < args.Length; i++)
 Profile profile;
 try
 {
-    profile = profilePath is null ? Profile.CreateDefault() : PpxSerializer.Load(profilePath);
+    profile = profilePath is null ? Profile.CreateDefault() : PpxSerializer.Load(profilePath, PromptMasterPassword);
+}
+catch (OperationCanceledException)
+{
+    Console.Error.WriteLine("Cancelled.");
+    return 1;
 }
 catch (Exception ex)
 {
@@ -101,3 +106,22 @@ if (interceptor is not null) await interceptor.DisposeAsync();
 
 Console.WriteLine($"Stopping. Total sent {tracker.TotalSent:N0} B, received {tracker.TotalReceived:N0} B.");
 return 0;
+
+// Reads the profile master password without echoing it.
+static string? PromptMasterPassword(string profileName, bool confirmNew)
+{
+    if (Console.IsInputRedirected)
+        return Console.ReadLine();
+    Console.Write($"Master password for profile '{profileName}': ");
+    var sb = new System.Text.StringBuilder();
+    while (true)
+    {
+        var key = Console.ReadKey(intercept: true);
+        if (key.Key == ConsoleKey.Enter) break;
+        if (key.Key == ConsoleKey.Escape) { Console.WriteLine(); return null; }
+        if (key.Key == ConsoleKey.Backspace) { if (sb.Length > 0) sb.Length--; continue; }
+        if (!char.IsControl(key.KeyChar)) sb.Append(key.KeyChar);
+    }
+    Console.WriteLine();
+    return sb.ToString();
+}

@@ -15,7 +15,8 @@ analysis and the build plan.
 | 2 | Engine and relay, connection tracking, local SOCKS5 listener, process detection, CLI | done |
 | 3 | Transparent TCP interception with WinDivert (`--intercept`, needs Administrator) | done |
 | 4 | DNS through proxy: fake IPs (198.18.0.0/15), hostname rules for intercepted traffic, loop prevention | done |
-| 5–8 | Password encryption, proxy checker, WPF UI, extras | planned |
+| 5 | Profile password encryption, byte-compatible with Proxifier (disabled / basic / account / master) | done |
+| 6–8 | Proxy checker, WPF UI, extras | planned |
 
 ## Layout
 

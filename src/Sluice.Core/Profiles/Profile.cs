@@ -91,7 +91,8 @@ public sealed class ResolveOptions
 public sealed class ProfileOptions
 {
     public ResolveOptions Resolve { get; } = new();
-    public string EncryptionMode { get; set; } = "basic";
+    /// <summary>How proxy passwords are stored in the profile file (Proxifier default: basic).</summary>
+    public PasswordEncryptionMode PasswordEncryption { get; set; } = PasswordEncryptionMode.Basic;
     public bool ConnectionLoopDetection { get; set; } = true;
     public bool ResolveLoopDetection { get; set; } = true;
     public UdpMode Udp { get; set; } = UdpMode.Bypass;
@@ -108,6 +109,9 @@ public sealed class Profile
     public List<ProxyServer> Proxies { get; } = new();
     public List<ProxyChain> Chains { get; } = new();
     public List<Rule> Rules { get; } = new();
+
+    /// <summary>Master password for <see cref="PasswordEncryptionMode.MasterPassword"/>; kept in memory only, never saved.</summary>
+    public string? MasterPassword { get; set; }
 
     public ProxyServer? FindProxy(int id) => Proxies.FirstOrDefault(p => p.Id == id);
     public ProxyChain? FindChain(int id) => Chains.FirstOrDefault(c => c.Id == id);

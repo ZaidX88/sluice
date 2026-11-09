@@ -45,6 +45,20 @@ public static class ProcessLookup
         return 0;
     }
 
+    /// <summary>PIDs with a TCP socket listening on <paramref name="port"/> (IPv4 and IPv6 tables).</summary>
+    public static HashSet<int> FindListeners(int port)
+    {
+        var pids = new HashSet<int>();
+        if (!OperatingSystem.IsWindows()) return pids;
+        foreach (var v6 in new[] { false, true })
+            foreach (var row in ReadTable(v6))
+                if (row.State == MIB_TCP_STATE_LISTEN && row.LocalPort == port)
+                    pids.Add(row.Pid);
+        return pids;
+    }
+
+    private const int MIB_TCP_STATE_LISTEN = 2;
+
     public static string? GetProcessPath(int pid)
     {
         if (pid <= 4) return pid == 4 ? "System" : null;
@@ -80,7 +94,7 @@ public static class ProcessLookup
         return a.Equals(b) || (IPAddress.Any.Equals(a) || IPAddress.IPv6Any.Equals(a));
     }
 
-    private readonly record struct Row(IPAddress Local, int LocalPort, IPAddress Remote, int RemotePort, int Pid);
+    private readonly record struct Row(IPAddress Local, int LocalPort, IPAddress Remote, int RemotePort, int Pid, int State);
 
     private static List<Row> ReadTable(bool v6)
     {
@@ -107,7 +121,7 @@ public static class ProcessLookup
                         var lp = PortFromNet(Marshal.ReadInt32(ptr + 8));
                         var ra = new IPAddress((uint)Marshal.ReadInt32(ptr + 12));
                         var rp = PortFromNet(Marshal.ReadInt32(ptr + 16));
-                        rows.Add(new Row(la, lp, ra, rp, Marshal.ReadInt32(ptr + 20)));
+                        rows.Add(new Row(la, lp, ra, rp, Marshal.ReadInt32(ptr + 20), Marshal.ReadInt32(ptr)));
                     }
                 }
                 else
@@ -119,7 +133,7 @@ public static class ProcessLookup
                         var lp = PortFromNet(Marshal.ReadInt32(ptr + 20));
                         var ra = new IPAddress(Bytes(ptr + 24, 16));
                         var rp = PortFromNet(Marshal.ReadInt32(ptr + 44));
-                        rows.Add(new Row(la, lp, ra, rp, Marshal.ReadInt32(ptr + 52)));
+                        rows.Add(new Row(la, lp, ra, rp, Marshal.ReadInt32(ptr + 52), Marshal.ReadInt32(ptr + 48)));
                     }
                 }
                 return rows;

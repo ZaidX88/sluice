@@ -38,6 +38,19 @@ public sealed class ProxyEngine
 
     public Profile Profile => _state.Profile;
 
+    private Func<string, CancellationToken, Task<IPAddress[]>>? _resolver;
+
+    /// <summary>Resolver for hostnames Sluice connects to itself; null = OS resolver.</summary>
+    public Func<string, CancellationToken, Task<IPAddress[]>>? HostResolver
+    {
+        get => _resolver;
+        set
+        {
+            _resolver = value;
+            _state = Build(_state.Profile);
+        }
+    }
+
     /// <summary>Swap in a new profile; existing connections keep running.</summary>
     public void Reload(Profile profile)
     {
@@ -45,7 +58,7 @@ public sealed class ProxyEngine
         Tracker.Write(LogLevel.Normal, $"Profile loaded: {profile.Proxies.Count} proxies, {profile.Chains.Count} chains, {profile.Rules.Count} rules");
     }
 
-    private static Snapshot Build(Profile p) => new(p, new RuleEngine(p.Rules), new ProxyConnector(p));
+    private Snapshot Build(Profile p) => new(p, new RuleEngine(p.Rules), new ProxyConnector(p) { Resolver = _resolver });
 
     /// <summary>Endpoints this app listens on; connections to them are refused (loop guard).</summary>
     public void RegisterOwnEndpoint(IPEndPoint ep) => _ownEndpoints[ep] = 0;
@@ -53,8 +66,58 @@ public sealed class ProxyEngine
 
     public RuleMatch Classify(InboundRequest req)
     {
+        if (req.ProcessId != 0 && _state.Profile.Options.ConnectionLoopDetection && IsLocalProxyHost(req.ProcessId))
+            return new RuleMatch(LoopPreventionRule, RuleAction.Direct);
         IPAddress.TryParse(req.Host, out var ip);
         return _state.Rules.Match(new ConnectionInfo(req.ProcessPath, req.Host, ip, req.Port));
+    }
+
+    // ---------- infinite connection loop detection ----------
+
+    private static readonly Rule LoopPreventionRule = new() { Name = "Loop prevention", Action = RuleAction.Direct };
+    private (Profile Profile, DateTime At, HashSet<int> Pids)? _proxyHosts;
+    private readonly HashSet<int> _loopReported = new();
+
+    /// <summary>
+    /// True when <paramref name="pid"/> hosts one of the profile's proxies on this machine (it listens on a
+    /// local proxy's port). Its own outgoing connections must not be sent to itself, or they would loop.
+    /// </summary>
+    public bool IsLocalProxyHost(int pid)
+    {
+        var state = _state;
+        var cache = _proxyHosts;
+        if (cache is not { } c || !ReferenceEquals(c.Profile, state.Profile) || DateTime.UtcNow - c.At > TimeSpan.FromSeconds(5))
+        {
+            var pids = new HashSet<int>();
+            foreach (var p in state.Profile.Proxies.Where(p => IsLocalAddress(p.Address)))
+                pids.UnionWith(Platform.ProcessLookup.FindListeners(p.Port));
+            pids.Remove(Environment.ProcessId);
+            c = (state.Profile, DateTime.UtcNow, pids);
+            _proxyHosts = c;
+        }
+
+        if (!c.Pids.Contains(pid)) return false;
+        lock (_loopReported)
+        {
+            if (_loopReported.Add(pid))
+                Tracker.Write(LogLevel.Normal,
+                    $"Loop prevention: {Path.GetFileName(Platform.ProcessLookup.GetProcessPath(pid)) ?? "?"} ({pid}) runs a proxy from this profile; its connections go direct");
+        }
+        return true;
+    }
+
+    private static bool IsLocalAddress(string address)
+    {
+        if (address.Equals("localhost", StringComparison.OrdinalIgnoreCase)) return true;
+        if (!IPAddress.TryParse(address, out var ip)) return false;
+        if (IPAddress.IsLoopback(ip) || ip.Equals(IPAddress.Any) || ip.Equals(IPAddress.IPv6Any)) return true;
+        try
+        {
+            return System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces()
+                .SelectMany(n => n.GetIPProperties().UnicastAddresses)
+                .Any(u => u.Address.Equals(ip));
+        }
+        catch { return false; }
     }
 
     public string Describe(RuleAction a) => a.Type switch

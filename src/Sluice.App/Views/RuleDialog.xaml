@@ -1,0 +1,39 @@
+<Window x:Class="Sluice.App.Views.RuleDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Rule" Width="520" SizeToContent="Height" ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
+        Background="{DynamicResource Bg}" Foreground="{DynamicResource Text}" FontFamily="{StaticResource UiFont}">
+    <StackPanel Margin="24,20,24,20">
+        <TextBlock x:Name="Heading" Text="Add rule" Style="{StaticResource PageTitle}" FontSize="20"/>
+        <TextBlock x:Name="DefaultNote" Style="{StaticResource PageSubtitle}" Visibility="Collapsed"
+                   Text="The Default rule applies to every connection no other rule matches. Only its action can change."/>
+
+        <TextBlock Text="Name" Style="{StaticResource FieldLabel}"/>
+        <TextBox x:Name="NameBox"/>
+
+        <StackPanel x:Name="Conditions">
+            <TextBlock Text="Applications" Style="{StaticResource FieldLabel}"/>
+            <TextBox x:Name="AppsBox"/>
+            <TextBlock Style="{StaticResource Muted}" Margin="0,4,0,0" Text="Empty = any app.   e.g.  chrome.exe; fire*.exe; &quot;C:\Program Files\App\app.exe&quot;"/>
+
+            <TextBlock Text="Target hosts" Style="{StaticResource FieldLabel}"/>
+            <TextBox x:Name="TargetsBox"/>
+            <TextBlock Style="{StaticResource Muted}" Margin="0,4,0,0" Text="Empty = any host.   e.g.  *.example.com; 192.168.1.*; 10.0.0.0/8; 10.1.0.0-10.5.255.255"/>
+
+            <TextBlock Text="Target ports" Style="{StaticResource FieldLabel}"/>
+            <TextBox x:Name="PortsBox"/>
+            <TextBlock Style="{StaticResource Muted}" Margin="0,4,0,0" Text="Empty = any port.   e.g.  80; 443; 8000-9000"/>
+        </StackPanel>
+
+        <TextBlock Text="Action" Style="{StaticResource FieldLabel}"/>
+        <ComboBox x:Name="ActionBox" DisplayMemberPath="Text"/>
+
+        <TextBlock x:Name="ErrorText" Foreground="{DynamicResource Danger}" Margin="0,12,0,0" TextWrapping="Wrap" Visibility="Collapsed"/>
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,22,0,0">
+            <Button Content="Cancel" Style="{StaticResource SecondaryButton}" IsCancel="True" MinWidth="90"/>
+            <Button Content="Save" Style="{StaticResource PrimaryButton}" IsDefault="True" Click="OnSave" MinWidth="90" Margin="10,0,0,0"/>
+        </StackPanel>
+    </StackPanel>
+</Window>

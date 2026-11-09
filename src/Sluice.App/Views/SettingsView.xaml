@@ -1,0 +1,98 @@
+<UserControl x:Class="Sluice.App.Views.SettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,0,8,0">
+        <StackPanel MaxWidth="760" HorizontalAlignment="Left">
+
+            <!-- Name resolution -->
+            <Border Style="{StaticResource CardBox}" Margin="0,0,0,16">
+                <StackPanel>
+                    <TextBlock Text="Name resolution" Style="{StaticResource SectionTitle}"/>
+                    <TextBlock Style="{StaticResource Muted}" Text="Send hostnames to the proxy instead of resolving them on this PC. Apps receive placeholder addresses (198.18.x.x) while Sluice is capturing."/>
+                    <CheckBox Style="{StaticResource Switch}" Margin="0,16,0,0" IsChecked="{Binding ResolveViaProxy}">
+                        <StackPanel>
+                            <TextBlock Text="Resolve hostnames through the proxy" FontWeight="Bold"/>
+                            <TextBlock Style="{StaticResource Muted}" Text="Needed for host rules like *.example.com to match captured traffic."/>
+                        </StackPanel>
+                    </CheckBox>
+                    <TextBlock Text="Resolve these names locally" Style="{StaticResource FieldLabel}" Margin="0,16,0,4"/>
+                    <TextBox Text="{Binding ExclusionList}"/>
+                    <CheckBox Content="Invert: resolve ONLY the names above through the proxy" IsChecked="{Binding OnlyListed}" Margin="0,8,0,0"/>
+                    <Border Height="1" Background="{DynamicResource Divider}" Margin="0,16"/>
+                    <CheckBox Style="{StaticResource Switch}" IsChecked="{Binding LeakPrevention}">
+                        <StackPanel>
+                            <TextBlock Text="DNS and IP leak prevention" FontWeight="Bold"/>
+                            <TextBlock Style="{StaticResource Muted}" Text="Never resolve names locally, whatever the setting above says."/>
+                        </StackPanel>
+                    </CheckBox>
+                    <CheckBox Style="{StaticResource Switch}" Margin="0,14,0,0" IsChecked="{Binding BlockNonATypes}">
+                        <StackPanel>
+                            <TextBlock Text="Block other DNS query types" FontWeight="Bold"/>
+                            <TextBlock Style="{StaticResource Muted}" Text="Answer TXT, MX, SRV… with no data for names resolved through the proxy."/>
+                        </StackPanel>
+                    </CheckBox>
+                </StackPanel>
+            </Border>
+
+            <!-- Connections -->
+            <Border Style="{StaticResource CardBox}" Margin="0,0,0,16">
+                <StackPanel>
+                    <TextBlock Text="Connections" Style="{StaticResource SectionTitle}"/>
+                    <CheckBox Style="{StaticResource Switch}" Margin="0,12,0,0" IsChecked="{Binding LoopDetection}">
+                        <StackPanel>
+                            <TextBlock Text="Infinite connection loop detection" FontWeight="Bold"/>
+                            <TextBlock Style="{StaticResource Muted}" Text="A proxy running on this PC always connects directly, so it never routes into itself."/>
+                        </StackPanel>
+                    </CheckBox>
+                    <CheckBox Style="{StaticResource Switch}" Margin="0,14,0,0" IsChecked="{Binding HandleDirect}">
+                        <StackPanel>
+                            <TextBlock Text="Handle direct connections" FontWeight="Bold"/>
+                            <TextBlock Style="{StaticResource Muted}" Text="Route Direct connections through Sluice too, so they appear in Connections and Statistics."/>
+                        </StackPanel>
+                    </CheckBox>
+                    <CheckBox Style="{StaticResource Switch}" Margin="0,14,0,0" IsChecked="{Binding ProcessServices}">
+                        <StackPanel>
+                            <TextBlock Text="Include Windows services" FontWeight="Bold"/>
+                            <TextBlock Style="{StaticResource Muted}" Text="Also apply rules to system processes whose owner cannot be identified."/>
+                        </StackPanel>
+                    </CheckBox>
+                </StackPanel>
+            </Border>
+
+            <!-- Passwords -->
+            <Border Style="{StaticResource CardBox}" Margin="0,0,0,16">
+                <StackPanel>
+                    <TextBlock Text="Proxy passwords in the profile" Style="{StaticResource SectionTitle}"/>
+                    <TextBlock Style="{StaticResource Muted}" Text="Uses the same encryption as Proxifier, so profiles stay interchangeable."/>
+                    <ComboBox ItemsSource="{Binding EncryptionModes}" SelectedIndex="{Binding EncryptionIndex}" Margin="0,12,0,0" HorizontalAlignment="Left" MinWidth="420"/>
+                </StackPanel>
+            </Border>
+
+            <!-- App -->
+            <Border Style="{StaticResource CardBox}" Margin="0,0,0,16">
+                <StackPanel>
+                    <TextBlock Text="Sluice on this PC" Style="{StaticResource SectionTitle}"/>
+                    <CheckBox Style="{StaticResource Switch}" Margin="0,12,0,0" IsChecked="{Binding StartInterceptionOnLaunch}"
+                              Content="Start capturing traffic when Sluice opens"/>
+                    <CheckBox Style="{StaticResource Switch}" Margin="0,14,0,0" IsChecked="{Binding MinimizeToTray}"
+                              Content="Keep running in the notification area when the window is closed"/>
+                    <CheckBox Style="{StaticResource Switch}" Margin="0,14,0,0" IsChecked="{Binding FileLog}">
+                        <StackPanel>
+                            <TextBlock Text="Write a log file"/>
+                            <TextBlock Style="{StaticResource Muted}" Text="{Binding LogDirectory}"/>
+                        </StackPanel>
+                    </CheckBox>
+                    <Button Style="{StaticResource GhostButton}" Content="Open log folder" Command="{Binding OpenLogFolderCommand}"
+                            HorizontalAlignment="Left" Margin="-8,6,0,0"/>
+
+                    <TextBlock Text="Local SOCKS5 server port" Style="{StaticResource FieldLabel}" Margin="0,14,0,4"/>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBox Text="{Binding SocksPortText, UpdateSourceTrigger=PropertyChanged}" Width="110"/>
+                        <Button Style="{StaticResource SecondaryButton}" Content="Apply" Command="{Binding ApplySocksPortCommand}" Margin="8,0,0,0"/>
+                    </StackPanel>
+                    <TextBlock Style="{StaticResource Muted}" Margin="0,6,0,0" Text="Apps you point at 127.0.0.1 on this port use Sluice's rules even without capturing."/>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

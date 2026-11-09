@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/Sluice.App/Sluice.App.csproj" />
     <Project Path="src/Sluice.Cli/Sluice.Cli.csproj" />
     <Project Path="src/Sluice.Core/Sluice.Core.csproj" />
   </Folder>

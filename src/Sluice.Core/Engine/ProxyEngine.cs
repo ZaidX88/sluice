@@ -165,6 +165,12 @@ public sealed class ProxyEngine
             await SafeFail(reply, ex, ct);
             Tracker.End(entry, ConnectionState.Blocked, ex.Message);
         }
+        catch (OperationCanceledException) when (linked.IsCancellationRequested)
+        {
+            // Deliberate: the user pressed Disconnect, or Sluice is shutting down.
+            Tracker.Write(LogLevel.Verbose, $"{who} - {target} disconnected, {entry.BytesSent} bytes sent, {entry.BytesReceived} bytes received");
+            Tracker.End(entry, ConnectionState.Closed, "disconnected");
+        }
         catch (Exception ex)
         {
             Tracker.Write(LogLevel.Error, $"{who} - {target} error via {via}: {ex.Message}");

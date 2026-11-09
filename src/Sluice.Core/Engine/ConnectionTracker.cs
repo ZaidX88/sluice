@@ -77,6 +77,24 @@ public sealed class ConnectionTracker
         if (_active.TryRemove(e.Id, out _)) Closed?.Invoke(e);
     }
 
+    /// <summary>Disconnect every open connection (used on shutdown / profile switch).</summary>
+    public void DisconnectAll()
+    {
+        foreach (var e in _active.Values) e.Disconnect();
+    }
+
+    /// <summary>Wait until no connections are open, up to <paramref name="timeout"/>. True if idle.</summary>
+    public async Task<bool> WaitIdleAsync(TimeSpan timeout)
+    {
+        var until = DateTime.UtcNow + timeout;
+        while (!_active.IsEmpty)
+        {
+            if (DateTime.UtcNow >= until) return false;
+            await Task.Delay(25);
+        }
+        return true;
+    }
+
     public void Write(LogLevel level, string message)
     {
         if (level <= Level) Log?.Invoke(level, message);

@@ -24,6 +24,12 @@
                 <TextBlock Text="Protocol" Style="{StaticResource FieldLabel}"/>
                 <ComboBox x:Name="TypeBox" SelectionChanged="OnTypeChanged">
                     <ComboBoxItem Content="SSH" Tag="Ssh"/>
+                    <ComboBoxItem Content="VLESS" Tag="VLess"/>
+                    <ComboBoxItem Content="VMess" Tag="VMess"/>
+                    <ComboBoxItem Content="Trojan" Tag="Trojan"/>
+                    <ComboBoxItem Content="Shadowsocks" Tag="Shadowsocks"/>
+                    <ComboBoxItem Content="Hysteria2" Tag="Hysteria2"/>
+                    <ComboBoxItem Content="TUIC" Tag="Tuic"/>
                     <ComboBoxItem Content="SOCKS5" Tag="Socks5"/>
                     <ComboBoxItem Content="SOCKS4 / 4a" Tag="Socks4"/>
                     <ComboBoxItem Content="HTTPS (CONNECT)" Tag="Https"/>
@@ -49,21 +55,173 @@
                 <CheckBox x:Name="Socks4aBox" Content="Let the server resolve hostnames (SOCKS4a)" Margin="0,12,0,0" IsChecked="True"/>
 
                 <TextBlock x:Name="AuthTitle" Text="Authentication (optional)" Style="{StaticResource FieldLabel}" Margin="0,18,0,4"/>
-                <Grid>
+                <StackPanel x:Name="UuidPanel">
+                    <TextBlock Text="UUID" Style="{StaticResource Muted}" Margin="0,0,0,4"/>
+                    <TextBox x:Name="UuidBox" Margin="0,0,0,10"/>
+                </StackPanel>
+                <Grid x:Name="UserPassGrid">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="12"/>
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
-                    <StackPanel>
+                    <StackPanel x:Name="UserPanel">
                         <TextBlock Text="Username" Style="{StaticResource Muted}" Margin="0,0,0,4"/>
                         <TextBox x:Name="UserBox"/>
                     </StackPanel>
-                    <StackPanel Grid.Column="2">
+                    <StackPanel x:Name="PassPanel" Grid.Column="2">
                         <TextBlock Text="Password" Style="{StaticResource Muted}" Margin="0,0,0,4"/>
                         <PasswordBox x:Name="PassBox"/>
                     </StackPanel>
                 </Grid>
+
+                <!-- ============ sing-box protocols ============ -->
+                <StackPanel x:Name="V2Panel">
+                    <StackPanel x:Name="MethodPanel">
+                        <TextBlock Text="Cipher" Style="{StaticResource FieldLabel}"/>
+                        <ComboBox x:Name="MethodBox" IsEditable="True">
+                            <ComboBoxItem Content="2022-blake3-aes-128-gcm"/>
+                            <ComboBoxItem Content="2022-blake3-aes-256-gcm"/>
+                            <ComboBoxItem Content="2022-blake3-chacha20-poly1305"/>
+                            <ComboBoxItem Content="aes-128-gcm"/>
+                            <ComboBoxItem Content="aes-256-gcm"/>
+                            <ComboBoxItem Content="chacha20-ietf-poly1305"/>
+                        </ComboBox>
+                    </StackPanel>
+                    <StackPanel x:Name="VmessCipherPanel">
+                        <TextBlock Text="Security (encryption)" Style="{StaticResource FieldLabel}"/>
+                        <ComboBox x:Name="VmessCipherBox" IsEditable="True">
+                            <ComboBoxItem Content="auto"/>
+                            <ComboBoxItem Content="aes-128-gcm"/>
+                            <ComboBoxItem Content="chacha20-poly1305"/>
+                            <ComboBoxItem Content="none"/>
+                        </ComboBox>
+                    </StackPanel>
+                    <StackPanel x:Name="FlowPanel">
+                        <TextBlock Text="Flow" Style="{StaticResource FieldLabel}"/>
+                        <ComboBox x:Name="FlowBox" IsEditable="True">
+                            <ComboBoxItem Content=""/>
+                            <ComboBoxItem Content="xtls-rprx-vision"/>
+                        </ComboBox>
+                    </StackPanel>
+
+                    <StackPanel x:Name="SecurityPanel">
+                        <Border Height="1" Background="{DynamicResource Divider}" Margin="0,18,0,0"/>
+                        <TextBlock Text="TLS" Style="{StaticResource FieldLabel}"/>
+                        <ComboBox x:Name="SecurityBox" SelectionChanged="OnSecurityChanged">
+                            <ComboBoxItem Content="None" Tag="none"/>
+                            <ComboBoxItem Content="TLS" Tag="tls"/>
+                            <ComboBoxItem Content="REALITY" Tag="reality"/>
+                        </ComboBox>
+                    </StackPanel>
+                    <StackPanel x:Name="TlsPanel">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="12"/>
+                                <ColumnDefinition Width="160"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="SNI (empty = server name)" Style="{StaticResource FieldLabel}"/>
+                                <TextBox x:Name="V2SniBox"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="Fingerprint" Style="{StaticResource FieldLabel}"/>
+                                <ComboBox x:Name="FingerprintBox" IsEditable="True">
+                                    <ComboBoxItem Content=""/>
+                                    <ComboBoxItem Content="chrome"/>
+                                    <ComboBoxItem Content="firefox"/>
+                                    <ComboBoxItem Content="safari"/>
+                                    <ComboBoxItem Content="edge"/>
+                                    <ComboBoxItem Content="ios"/>
+                                    <ComboBoxItem Content="android"/>
+                                    <ComboBoxItem Content="randomized"/>
+                                </ComboBox>
+                            </StackPanel>
+                        </Grid>
+                        <TextBlock Text="ALPN (comma separated, e.g. h2,http/1.1)" Style="{StaticResource FieldLabel}"/>
+                        <TextBox x:Name="AlpnBox"/>
+                        <CheckBox x:Name="InsecureBox" Content="Allow insecure (skip certificate check)" Margin="0,10,0,0"/>
+                    </StackPanel>
+                    <StackPanel x:Name="RealityPanel">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="12"/>
+                                <ColumnDefinition Width="160"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="REALITY public key" Style="{StaticResource FieldLabel}"/>
+                                <TextBox x:Name="PublicKeyBox"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="Short ID" Style="{StaticResource FieldLabel}"/>
+                                <TextBox x:Name="ShortIdBox"/>
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+
+                    <StackPanel x:Name="TransportPanel">
+                        <Border Height="1" Background="{DynamicResource Divider}" Margin="0,18,0,0"/>
+                        <TextBlock Text="Transport" Style="{StaticResource FieldLabel}"/>
+                        <ComboBox x:Name="TransportBox" SelectionChanged="OnSecurityChanged">
+                            <ComboBoxItem Content="TCP" Tag="tcp"/>
+                            <ComboBoxItem Content="WebSocket" Tag="ws"/>
+                            <ComboBoxItem Content="gRPC" Tag="grpc"/>
+                            <ComboBoxItem Content="HTTP/2" Tag="http"/>
+                            <ComboBoxItem Content="HTTPUpgrade" Tag="httpupgrade"/>
+                        </ComboBox>
+                        <Grid x:Name="PathHostGrid">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="12"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="Path" Style="{StaticResource FieldLabel}"/>
+                                <TextBox x:Name="PathBox"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="Host header" Style="{StaticResource FieldLabel}"/>
+                                <TextBox x:Name="HostBox"/>
+                            </StackPanel>
+                        </Grid>
+                        <StackPanel x:Name="ServiceNamePanel">
+                            <TextBlock Text="gRPC service name" Style="{StaticResource FieldLabel}"/>
+                            <TextBox x:Name="ServiceNameBox"/>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <StackPanel x:Name="HysteriaPanel">
+                        <Border Height="1" Background="{DynamicResource Divider}" Margin="0,18,0,0"/>
+                        <TextBlock Text="Obfuscation password (salamander, optional)" Style="{StaticResource FieldLabel}"/>
+                        <PasswordBox x:Name="ObfsBox"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="12"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="Upload Mbps (optional)" Style="{StaticResource FieldLabel}"/>
+                                <TextBox x:Name="UpBox"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="Download Mbps (optional)" Style="{StaticResource FieldLabel}"/>
+                                <TextBox x:Name="DownBox"/>
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+
+                    <StackPanel x:Name="TuicPanel">
+                        <TextBlock Text="Congestion control" Style="{StaticResource FieldLabel}"/>
+                        <ComboBox x:Name="CongestionBox" IsEditable="True">
+                            <ComboBoxItem Content="bbr"/>
+                            <ComboBoxItem Content="cubic"/>
+                            <ComboBoxItem Content="new_reno"/>
+                        </ComboBox>
+                    </StackPanel>
+                </StackPanel>
 
                 <!-- ============ SSH only ============ -->
                 <StackPanel x:Name="SshPanel">

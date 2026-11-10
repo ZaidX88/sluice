@@ -74,6 +74,9 @@ public sealed class RoutingEngine : IAsyncDisposable
 
     public RuleMatch Classify(InboundRequest req)
     {
+        // Sluice's own tunnel helpers (sing-box) talk to tunnel servers: always direct, never into a tunnel.
+        if (Backends.IsHelperProcess(req.ProcessId))
+            return new RuleMatch(HelperRule, RuleAction.Direct);
         if (req.ProcessId != 0 && _state.Profile.Options.ConnectionLoopDetection && IsLocalProxyHost(req.ProcessId))
             return new RuleMatch(LoopPreventionRule, RuleAction.Direct);
         IPAddress.TryParse(req.Host, out var ip);
@@ -83,6 +86,7 @@ public sealed class RoutingEngine : IAsyncDisposable
     // ---------- infinite connection loop detection ----------
 
     private static readonly Rule LoopPreventionRule = new() { Name = "Loop prevention", Action = RuleAction.Direct };
+    private static readonly Rule HelperRule = new() { Name = "Tunnel helper", Action = RuleAction.Direct };
     private (Profile Profile, DateTime At, HashSet<int> Pids)? _proxyHosts;
     private readonly HashSet<int> _loopReported = new();
 

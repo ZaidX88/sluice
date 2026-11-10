@@ -14,7 +14,7 @@ namespace Sluice.Core.Tunnels;
 /// any SOCKS tunnel. The raw link to the server goes through a local bridge so that HTTP Injector
 /// style transports (payload, remote proxy, TLS with SNI) and Sluice's own DNS resolver apply.
 /// </summary>
-internal sealed class SshSession : IAsyncDisposable
+internal sealed class SshSession : IBackendSession
 {
     private readonly Tunnel _tunnel;
     private readonly TransportOptions _transport;
@@ -31,6 +31,9 @@ internal sealed class SshSession : IAsyncDisposable
     public string Fingerprint { get; }
 
     public bool IsAlive => _client is { IsConnected: true } && _forward is { IsStarted: true };
+
+    /// <summary>SSH runs inside Sluice itself, not in a helper process.</summary>
+    public int? ProcessId => null;
 
     public SshSession(Tunnel tunnel, string fingerprint, TunnelTransport.Resolver? resolve, Action<string> log,
         Action<Tunnel, string>? hostKeyLearned)

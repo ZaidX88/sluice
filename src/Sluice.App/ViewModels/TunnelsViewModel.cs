@@ -16,7 +16,14 @@ public sealed class TunnelRow(Tunnel tunnel) : ObservableObject
     public string Name => Tunnel.Label ?? $"{Tunnel.Address}:{Tunnel.Port}";
     public string Endpoint => $"{Tunnel.Address}:{Tunnel.Port}";
     public string Type => Tunnel.Type.DisplayName().ToUpperInvariant();
-    public string Auth => string.IsNullOrEmpty(Tunnel.Username) ? "None" : Tunnel.Username!;
+    public string Auth => Tunnel.Type switch
+    {
+        TunnelType.VLess or TunnelType.VMess => "UUID",
+        TunnelType.Tuic => "UUID + password",
+        TunnelType.Shadowsocks or TunnelType.Trojan or TunnelType.Hysteria2 => "Password",
+        TunnelType.Ssh when Tunnel.Settings.ContainsKey("privatekey") => $"{Tunnel.Username} (key)",
+        _ => string.IsNullOrEmpty(Tunnel.Username) ? "None" : Tunnel.Username!,
+    };
     public string Status { get => _status; set => Set(ref _status, value); }
     public bool? Ok { get => _ok; set => Set(ref _ok, value); }
 }
@@ -30,7 +37,7 @@ public sealed class TunnelsViewModel : PageViewModel
     private bool _checking;
 
     public TunnelsViewModel(EngineHost host)
-        : base(host, "Tunnels", "", "Routes out of this PC — SSH, SOCKS and HTTP (Shadowsocks, VLESS and more next). Rules choose which traffic uses which tunnel.")
+        : base(host, "Tunnels", "", "Routes out of this PC — SSH, VLESS, VMess, Trojan, Shadowsocks, Hysteria2, TUIC, SOCKS and HTTP. Rules choose which traffic uses which tunnel.")
     {
         AddCommand = new RelayCommand(Add);
         EditCommand = new RelayCommand(Edit, () => Selected is not null);

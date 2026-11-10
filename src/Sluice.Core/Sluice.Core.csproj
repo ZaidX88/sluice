@@ -15,6 +15,12 @@
     <None Include="..\..\lib\WinDivert\x64\WinDivert.dll" Link="WinDivert.dll" CopyToOutputDirectory="PreserveNewest" Condition="Exists('..\..\lib\WinDivert\x64\WinDivert.dll')" />
     <None Include="..\..\lib\WinDivert\x64\WinDivert64.sys" Link="WinDivert64.sys" CopyToOutputDirectory="PreserveNewest" Condition="Exists('..\..\lib\WinDivert\x64\WinDivert64.sys')" />
   </ItemGroup>
+  <!-- sing-box helper (GPL-3.0) for encrypted tunnels; fetched by scripts/get-sing-box.ps1, not committed. -->
+  <ItemGroup>
+    <None Include="..\..\lib\sing-box\sing-box.exe" Link="sing-box.exe" CopyToOutputDirectory="PreserveNewest" Condition="Exists('..\..\lib\sing-box\sing-box.exe')" />
+    <None Include="..\..\lib\sing-box\LICENSE" Link="sing-box-LICENSE.txt" CopyToOutputDirectory="PreserveNewest" Condition="Exists('..\..\lib\sing-box\LICENSE')" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="SSH.NET" Version="2026.0.0" />
   </ItemGroup>

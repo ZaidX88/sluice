@@ -15,7 +15,7 @@ public static class SluiceProfileSerializer
 
     /// <summary>Setting keys whose values are secrets (encrypted like passwords).</summary>
     public static readonly IReadOnlySet<string> SecretSettings =
-        new HashSet<string>(["password", "passphrase", "privatekey", "uuid", "auth", "psk", "token"], StringComparer.OrdinalIgnoreCase);
+        new HashSet<string>(["password", "passphrase", "privatekey", "uuid", "auth", "psk", "token", "obfspassword"], StringComparer.OrdinalIgnoreCase);
 
     private static readonly JsonSerializerOptions Json = new()
     {

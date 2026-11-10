@@ -54,8 +54,8 @@
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTextColumn Header="Address" Binding="{Binding Endpoint}" Width="1.3*"/>
-                        <DataGridTextColumn Header="Login" Binding="{Binding Auth}" Width="0.7*"/>
+                        <DataGridTextColumn Header="Address" Binding="{Binding Endpoint}" Width="1.7*"/>
+                        <DataGridTextColumn Header="Login" Binding="{Binding Auth}" Width="0.8*"/>
                         <DataGridTemplateColumn Header="Status" Width="110">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>

@@ -35,6 +35,15 @@ internal static class ScreenshotMode
         ssh.Settings["payload"] = "GET / [protocol][crlf]Host: cdn.example.net[crlf]Upgrade: websocket[crlf][crlf]";
         ssh.Settings["hostkey"] = "ssh-ed25519 SHA256:1o9IWCf9i53pEF2bhPW204/arxb+ZCkGAIz7w4w2PyQ";
         p.Tunnels.Add(ssh);
+        var vless = new Tunnel { Id = 103, Type = TunnelType.VLess, Address = "reality.example.net", Port = 443, Label = "VLESS REALITY" };
+        vless.Settings["uuid"] = "6c0a5c1e-9a3b-4b6f-8c2d-123456789abc";
+        vless.Settings["flow"] = "xtls-rprx-vision";
+        vless.Settings["security"] = "reality";
+        vless.Settings["sni"] = "www.microsoft.com";
+        vless.Settings["fingerprint"] = "chrome";
+        vless.Settings["publickey"] = "jNXHt1yRo0vDuchQlIP6Z0ZvjT3KtzVI-T4E7RoLJS0";
+        vless.Settings["shortid"] = "0123abcd";
+        p.Tunnels.Add(vless);
         if (!directOnly)
         {
             p.Rules.Insert(0, new Rule { Name = "Browsers", Applications = "chrome.exe; firefox.exe; msedge.exe", Action = RuleAction.ViaTunnel(100) });
@@ -92,6 +101,7 @@ internal static class ScreenshotMode
                  {
                      ("dialog-tunnel", new Views.TunnelDialog(p.Tunnels[1])),
                      ("dialog-tunnel-ssh", new Views.TunnelDialog(p.Tunnels[2])),
+                     ("dialog-tunnel-vless", new Views.TunnelDialog(p.Tunnels[3])),
                      ("dialog-rule", new Views.RuleDialog(p.Rules[1], p)),
                      ("dialog-password", new Views.PasswordDialog("Work", confirmNew: true)),
                  })

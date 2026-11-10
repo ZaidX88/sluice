@@ -483,3 +483,6 @@ $RECYCLE.BIN/
 
 # Vendored WinDivert runtime (must be committed)
 !lib/WinDivert/x64/
+
+# sing-box helper binary: fetched by scripts/get-sing-box.ps1, not committed (keep its licence/source notes)
+lib/sing-box/sing-box.exe

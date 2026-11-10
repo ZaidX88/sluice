@@ -1,8 +1,8 @@
 # Sluice
 
 A rule-based tunnelling client for Windows. Sluice decides, per application, host and port, whether
-traffic goes direct, gets blocked, or flows through a tunnel (SSH, SOCKS and HTTP today; Shadowsocks,
-VMess/VLESS, Trojan and Hysteria2 next) or a chain of tunnels.
+traffic goes direct, gets blocked, or flows through a tunnel (SSH, VLESS, VMess, Trojan, Shadowsocks,
+Hysteria2, TUIC, SOCKS or HTTP) or a chain of tunnels.
 
 Built with C# / .NET 10: WinDivert for interception, WPF for the app. Profiles are saved as
 `.sluice` (JSON); Proxifier 4 `.ppx` files can be imported and exported. See [ANALYSIS.md](ANALYSIS.md) for the reference
@@ -21,7 +21,7 @@ analysis and the build plan.
 | 7 | WPF app: Fluent light/dark UI, connections, statistics, log, tunnels (+checker), rules, settings, tray | done |
 | 8.1 | Proxy → **Tunnel** model, Sluice `.sluice` profile format, `.ppx` import/export | done |
 | 8.2 | SSH tunnels: password/key login, host-key pinning, modes direct / payload / SSL / SSL+payload / payload+SSL | done |
-| 8.3 | sing-box: Shadowsocks, VMess, VLESS (+REALITY), Trojan, Hysteria2, TUIC | planned |
+| 8.3 | sing-box helper: Shadowsocks (incl. 2022), VMess, VLESS (+REALITY/Vision), Trojan, Hysteria2, TUIC; WS/gRPC/HTTP transports | done |
 | 8.4 | Import share links / subscriptions; 8.5 UDP through tunnels | planned |
 
 ![Rules](docs/screenshots/rules-light.png)
@@ -78,6 +78,12 @@ dotnet run --project src/Sluice.Cli -- check my-profile.sluice
 
 ```bash
 dotnet run --project src/Sluice.Cli -- check socks5://user:pass@proxy.example:1080 --target example.com:80
+```
+
+Encrypted tunnels other than SSH use [sing-box](https://github.com/SagerNet/sing-box) (GPL-3.0) as a helper process. It is not committed; fetch the pinned, SHA-256-checked build with:
+
+```bash
+powershell -ExecutionPolicy Bypass -File scripts/get-sing-box.ps1
 ```
 
 WinDivert 2.2.2 (x64) is vendored in `lib/WinDivert` (LGPLv3 / GPLv2) and copied next to the build output.

@@ -13,6 +13,8 @@
     <!-- Only for the tray icon (System.Windows.Forms.NotifyIcon). -->
     <UseWindowsForms>true</UseWindowsForms>
     <AssemblyName>Sluice</AssemblyName>
+    <!-- Generated from the in-code mark by running Sluice.exe with the write-icon option (see App.xaml.cs). -->
+    <ApplicationIcon>Sluice.ico</ApplicationIcon>
     <RootNamespace>Sluice.App</RootNamespace>
     <!-- WPF0001: Application.ThemeMode (Fluent theme) is marked experimental. -->
     <NoWarn>$(NoWarn);WPF0001</NoWarn>

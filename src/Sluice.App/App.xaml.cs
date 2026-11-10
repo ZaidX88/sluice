@@ -17,15 +17,33 @@ public partial class App : Application
     private TrayIcon? _tray;
     private MainWindow? _window;
 
-    [System.Runtime.InteropServices.DllImport("shell32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
-    private static extern int SetCurrentProcessExplicitAppUserModelID(string appId);
-
     protected override async void OnStartup(StartupEventArgs e)
     {
-        // Windows names notifications by the app identity; without one it shows a random GUID.
-        try { SetCurrentProcessExplicitAppUserModelID("Sluice"); } catch { /* cosmetic */ }
+        // Windows names notifications (title and icon) after a Start Menu shortcut with our app ID.
+        StartMenuShortcut.Ensure();
         base.OnStartup(e);
         var args = e.Args;
+        if (args.Contains("--write-shortcut"))   // developer tool
+        {
+            StartMenuShortcut.WriteForThisExe();
+            Shutdown();
+            return;
+        }
+        if (args.Contains("--notify-test"))      // developer tool: one notification, then exit
+        {
+            using var icon = new System.Windows.Forms.NotifyIcon { Icon = AppIcon.TrayIcon(true), Text = "Sluice", Visible = true };
+            icon.ShowBalloonTip(5000, "ssh.example.net:22 connected", "SSH tunnel is up.", System.Windows.Forms.ToolTipIcon.Info);
+            await Task.Delay(6000);
+            icon.Visible = false;
+            Shutdown();
+            return;
+        }
+        if (Arg(args, "--write-icon") is { } icoPath)   // developer tool: regenerate Sluice.ico
+        {
+            AppIcon.WriteIco(icoPath);
+            Shutdown();
+            return;
+        }
         string? screenshotDir = Arg(args, "--screenshot");
         var forcedTheme = Arg(args, "--theme");
 

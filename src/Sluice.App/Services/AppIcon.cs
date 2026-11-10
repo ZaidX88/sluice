@@ -1,3 +1,4 @@
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
@@ -65,6 +66,64 @@ public static class AppIcon
         var icon = (Drawing.Icon)Drawing.Icon.FromHandle(h).Clone();
         DestroyIcon(h);
         return icon;
+    }
+
+    /// <summary>
+    /// Writes a multi-size .ico: classic 32-bit bitmap entries up to 128 px and a PNG entry for 256 px (what every
+    /// part of Windows reads). Used once to produce Sluice.ico, which is embedded in Sluice.exe so Windows shows
+    /// the mark on the taskbar, Start Menu and notifications.
+    /// </summary>
+    public static void WriteIco(string path)
+    {
+        int[] sizes = [16, 20, 24, 32, 40, 48, 64, 96, 128, 256];
+        var images = sizes.Select(size => size >= 256 ? Png(Image(size)) : Dib(Image(size), size)).ToList();
+        using var w = new BinaryWriter(File.Create(path));
+        w.Write((ushort)0);                 // reserved
+        w.Write((ushort)1);                 // type: icon
+        w.Write((ushort)sizes.Length);
+        var offset = 6 + 16 * sizes.Length;
+        for (var i = 0; i < sizes.Length; i++)
+        {
+            w.Write((byte)(sizes[i] >= 256 ? 0 : sizes[i]));   // 0 means 256
+            w.Write((byte)(sizes[i] >= 256 ? 0 : sizes[i]));
+            w.Write((byte)0);               // palette
+            w.Write((byte)0);               // reserved
+            w.Write((ushort)1);             // planes
+            w.Write((ushort)32);            // bits per pixel
+            w.Write(images[i].Length);
+            w.Write(offset);
+            offset += images[i].Length;
+        }
+        foreach (var img in images) w.Write(img);
+    }
+
+    private static byte[] Png(BitmapSource src)
+    {
+        var enc = new PngBitmapEncoder();
+        enc.Frames.Add(BitmapFrame.Create(src));
+        using var ms = new MemoryStream();
+        enc.Save(ms);
+        return ms.ToArray();
+    }
+
+    /// <summary>Icon bitmap entry: BITMAPINFOHEADER (double height), bottom-up BGRA rows, then an all-clear AND mask.</summary>
+    private static byte[] Dib(BitmapSource src, int size)
+    {
+        var bgra = new FormatConvertedBitmap(src, PixelFormats.Bgra32, null, 0);   // icons are not premultiplied
+        var stride = size * 4;
+        var pixels = new byte[stride * size];
+        bgra.CopyPixels(pixels, stride, 0);
+        var maskStride = (size + 31) / 32 * 4;
+        using var ms = new MemoryStream();
+        using var w = new BinaryWriter(ms);
+        w.Write(40); w.Write(size); w.Write(size * 2);           // header size, width, height (image + mask)
+        w.Write((ushort)1); w.Write((ushort)32);                 // planes, bit count
+        w.Write(0); w.Write(stride * size + maskStride * size);  // BI_RGB, image size
+        w.Write(0); w.Write(0); w.Write(0); w.Write(0);          // resolution, colours
+        for (var y = size - 1; y >= 0; y--) w.Write(pixels, y * stride, stride);
+        w.Write(new byte[maskStride * size]);
+        w.Flush();
+        return ms.ToArray();
     }
 
     [DllImport("user32.dll")]

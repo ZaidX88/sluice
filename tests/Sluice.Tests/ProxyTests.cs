@@ -17,11 +17,11 @@ public class ProxyTests
         Assert.Equal(msg, back);
     }
 
-    private static (Profile, ProxyConnector) Setup(params ProxyServer[] proxies)
+    private static (Profile, TunnelConnector) Setup(params Tunnel[] proxies)
     {
         var p = Profile.CreateDefault();
-        p.Proxies.AddRange(proxies);
-        return (p, new ProxyConnector(p));
+        p.Tunnels.AddRange(proxies);
+        return (p, new TunnelConnector(p));
     }
 
     [Fact]
@@ -29,9 +29,9 @@ public class ProxyTests
     {
         await using var echo = new EchoServer();
         await using var socks = new Socks5TestServer();
-        var (_, conn) = Setup(new ProxyServer { Id = 100, Type = ProxyType.Socks5, Address = "127.0.0.1", Port = socks.Port });
+        var (_, conn) = Setup(new Tunnel { Id = 100, Type = TunnelType.Socks5, Address = "127.0.0.1", Port = socks.Port });
 
-        using var c = await conn.ConnectAsync(RuleAction.ViaProxy(100), "t", "echo.test", echo.Port);
+        using var c = await conn.ConnectAsync(RuleAction.ViaTunnel(100), "t", "echo.test", echo.Port);
         await AssertEchoes(c);
         Assert.Equal($"echo.test:{echo.Port}", socks.LastTarget);
     }
@@ -41,9 +41,9 @@ public class ProxyTests
     {
         await using var echo = new EchoServer();
         await using var socks = new Socks5TestServer("alice", "s3cret");
-        var (_, conn) = Setup(new ProxyServer { Id = 1, Type = ProxyType.Socks5, Address = "127.0.0.1", Port = socks.Port, Username = "alice", Password = "s3cret" });
+        var (_, conn) = Setup(new Tunnel { Id = 1, Type = TunnelType.Socks5, Address = "127.0.0.1", Port = socks.Port, Username = "alice", Password = "s3cret" });
 
-        using var c = await conn.ConnectAsync(RuleAction.ViaProxy(1), "t", "127.0.0.1", echo.Port);
+        using var c = await conn.ConnectAsync(RuleAction.ViaTunnel(1), "t", "127.0.0.1", echo.Port);
         await AssertEchoes(c);
     }
 
@@ -51,9 +51,9 @@ public class ProxyTests
     public async Task Socks5_WrongPassword_Fails()
     {
         await using var socks = new Socks5TestServer("alice", "s3cret");
-        var (_, conn) = Setup(new ProxyServer { Id = 1, Type = ProxyType.Socks5, Address = "127.0.0.1", Port = socks.Port, Username = "alice", Password = "nope" });
+        var (_, conn) = Setup(new Tunnel { Id = 1, Type = TunnelType.Socks5, Address = "127.0.0.1", Port = socks.Port, Username = "alice", Password = "nope" });
 
-        var ex = await Assert.ThrowsAsync<ProxyException>(() => conn.ConnectAsync(RuleAction.ViaProxy(1), "t", "127.0.0.1", 1));
+        var ex = await Assert.ThrowsAsync<ProxyException>(() => conn.ConnectAsync(RuleAction.ViaTunnel(1), "t", "127.0.0.1", 1));
         Assert.Contains("authentication failed", ex.Message);
     }
 
@@ -61,9 +61,9 @@ public class ProxyTests
     public async Task Socks5_RefusedReply_Surfaces()
     {
         await using var socks = new Socks5TestServer();
-        var (_, conn) = Setup(new ProxyServer { Id = 1, Type = ProxyType.Socks5, Address = "127.0.0.1", Port = socks.Port });
+        var (_, conn) = Setup(new Tunnel { Id = 1, Type = TunnelType.Socks5, Address = "127.0.0.1", Port = socks.Port });
 
-        var ex = await Assert.ThrowsAsync<ProxyException>(() => conn.ConnectAsync(RuleAction.ViaProxy(1), "t", "refuse.test", 80));
+        var ex = await Assert.ThrowsAsync<ProxyException>(() => conn.ConnectAsync(RuleAction.ViaTunnel(1), "t", "refuse.test", 80));
         Assert.Contains("connection refused", ex.Message);
     }
 
@@ -72,9 +72,9 @@ public class ProxyTests
     {
         await using var echo = new EchoServer();
         await using var socks = new Socks4TestServer();
-        var (_, conn) = Setup(new ProxyServer { Id = 1, Type = ProxyType.Socks4, Address = "127.0.0.1", Port = socks.Port });
+        var (_, conn) = Setup(new Tunnel { Id = 1, Type = TunnelType.Socks4, Address = "127.0.0.1", Port = socks.Port });
 
-        using var c = await conn.ConnectAsync(RuleAction.ViaProxy(1), "t", "echo.test", echo.Port);
+        using var c = await conn.ConnectAsync(RuleAction.ViaTunnel(1), "t", "echo.test", echo.Port);
         await AssertEchoes(c);
         Assert.Equal($"echo.test:{echo.Port}", socks.LastTarget);
     }
@@ -84,9 +84,9 @@ public class ProxyTests
     {
         await using var echo = new EchoServer();
         await using var socks = new Socks4TestServer();
-        var (_, conn) = Setup(new ProxyServer { Id = 1, Type = ProxyType.Socks4, Address = "127.0.0.1", Port = socks.Port, Socks4aRemoteResolve = false });
+        var (_, conn) = Setup(new Tunnel { Id = 1, Type = TunnelType.Socks4, Address = "127.0.0.1", Port = socks.Port, Socks4aRemoteResolve = false });
 
-        using var c = await conn.ConnectAsync(RuleAction.ViaProxy(1), "t", "127.0.0.1", echo.Port);
+        using var c = await conn.ConnectAsync(RuleAction.ViaTunnel(1), "t", "127.0.0.1", echo.Port);
         await AssertEchoes(c);
     }
 
@@ -95,9 +95,9 @@ public class ProxyTests
     {
         await using var echo = new EchoServer();
         await using var http = new HttpConnectTestServer("bob", "pw");
-        var (_, conn) = Setup(new ProxyServer { Id = 1, Type = ProxyType.Https, Address = "127.0.0.1", Port = http.Port, Username = "bob", Password = "pw" });
+        var (_, conn) = Setup(new Tunnel { Id = 1, Type = TunnelType.Https, Address = "127.0.0.1", Port = http.Port, Username = "bob", Password = "pw" });
 
-        using var c = await conn.ConnectAsync(RuleAction.ViaProxy(1), "t", "echo.test", echo.Port);
+        using var c = await conn.ConnectAsync(RuleAction.ViaTunnel(1), "t", "echo.test", echo.Port);
         await AssertEchoes(c);
     }
 
@@ -105,9 +105,9 @@ public class ProxyTests
     public async Task HttpsConnect_407_Fails()
     {
         await using var http = new HttpConnectTestServer("bob", "pw");
-        var (_, conn) = Setup(new ProxyServer { Id = 1, Type = ProxyType.Https, Address = "127.0.0.1", Port = http.Port });
+        var (_, conn) = Setup(new Tunnel { Id = 1, Type = TunnelType.Https, Address = "127.0.0.1", Port = http.Port });
 
-        var ex = await Assert.ThrowsAsync<ProxyException>(() => conn.ConnectAsync(RuleAction.ViaProxy(1), "t", "echo.test", 1));
+        var ex = await Assert.ThrowsAsync<ProxyException>(() => conn.ConnectAsync(RuleAction.ViaTunnel(1), "t", "echo.test", 1));
         Assert.Contains("407", ex.Message);
     }
 
@@ -119,11 +119,11 @@ public class ProxyTests
         await using var b = new HttpConnectTestServer();
         await using var c4 = new Socks4TestServer();
         var (profile, conn) = Setup(
-            new ProxyServer { Id = 1, Type = ProxyType.Socks5, Address = "127.0.0.1", Port = a.Port },
-            new ProxyServer { Id = 2, Type = ProxyType.Https, Address = "127.0.0.1", Port = b.Port },
-            new ProxyServer { Id = 3, Type = ProxyType.Socks4, Address = "127.0.0.1", Port = c4.Port });
-        var chain = new ProxyChain { Id = 200, Name = "three-hop" };
-        chain.Hops.AddRange([new ChainHop { ProxyId = 1 }, new ChainHop { ProxyId = 2 }, new ChainHop { ProxyId = 3 }]);
+            new Tunnel { Id = 1, Type = TunnelType.Socks5, Address = "127.0.0.1", Port = a.Port },
+            new Tunnel { Id = 2, Type = TunnelType.Https, Address = "127.0.0.1", Port = b.Port },
+            new Tunnel { Id = 3, Type = TunnelType.Socks4, Address = "127.0.0.1", Port = c4.Port });
+        var chain = new TunnelChain { Id = 200, Name = "three-hop" };
+        chain.Hops.AddRange([new ChainHop { TunnelId = 1 }, new ChainHop { TunnelId = 2 }, new ChainHop { TunnelId = 3 }]);
         profile.Chains.Add(chain);
 
         using var c = await conn.ConnectAsync(RuleAction.ViaChain(200), "t", "echo.test", echo.Port);
@@ -142,10 +142,10 @@ public class ProxyTests
         using (var l = new TcpListener(System.Net.IPAddress.Loopback, 0)) { l.Start(); deadPort = ((System.Net.IPEndPoint)l.LocalEndpoint).Port; }
 
         var (profile, conn) = Setup(
-            new ProxyServer { Id = 1, Type = ProxyType.Socks5, Address = "127.0.0.1", Port = deadPort },
-            new ProxyServer { Id = 2, Type = ProxyType.Socks5, Address = "127.0.0.1", Port = live.Port });
-        var chain = new ProxyChain { Id = 300, Name = "failover", Type = ChainType.Redundancy, RedundancyTimeoutSeconds = 2 };
-        chain.Hops.AddRange([new ChainHop { ProxyId = 1 }, new ChainHop { ProxyId = 2 }]);
+            new Tunnel { Id = 1, Type = TunnelType.Socks5, Address = "127.0.0.1", Port = deadPort },
+            new Tunnel { Id = 2, Type = TunnelType.Socks5, Address = "127.0.0.1", Port = live.Port });
+        var chain = new TunnelChain { Id = 300, Name = "failover", Type = ChainType.Redundancy, RedundancyTimeoutSeconds = 2 };
+        chain.Hops.AddRange([new ChainHop { TunnelId = 1 }, new ChainHop { TunnelId = 2 }]);
         profile.Chains.Add(chain);
 
         using var c = await conn.ConnectAsync(RuleAction.ViaChain(300), "t", "echo.test", echo.Port);
@@ -156,7 +156,7 @@ public class ProxyTests
     [Fact]
     public async Task BlockAction_Throws()
     {
-        var conn = new ProxyConnector(Profile.CreateDefault());
+        var conn = new TunnelConnector(Profile.CreateDefault());
         await Assert.ThrowsAsync<ConnectionBlockedException>(() => conn.ConnectAsync(RuleAction.Block, "ads", "x", 1));
     }
 }

@@ -19,15 +19,15 @@ public partial class RuleDialog : Window
 
         var choices = new List<ActionChoice>
         {
-            new("Direct — connect without a proxy", RuleAction.Direct),
+            new("Direct — connect without a tunnel", RuleAction.Direct),
             new("Block — refuse the connection", RuleAction.Block),
         };
-        choices.AddRange(profile.Proxies.Select(p => new ActionChoice(
-            $"Proxy — {p.Type.ToString().ToUpperInvariant()} {p}", RuleAction.ViaProxy(p.Id))));
+        choices.AddRange(profile.Tunnels.Select(p => new ActionChoice(
+            $"Tunnel — {p.Type.DisplayName()} {p}", RuleAction.ViaTunnel(p.Id))));
         choices.AddRange(profile.Chains.Select(c => new ActionChoice($"Chain — {c.Name}", RuleAction.ViaChain(c.Id))));
         ActionBox.ItemsSource = choices;
 
-        var current = existing?.Action ?? (profile.Proxies.Count > 0 ? RuleAction.ViaProxy(profile.Proxies[0].Id) : RuleAction.Direct);
+        var current = existing?.Action ?? (profile.Tunnels.Count > 0 ? RuleAction.ViaTunnel(profile.Tunnels[0].Id) : RuleAction.Direct);
         ActionBox.SelectedItem = choices.FirstOrDefault(c => c.Action.Type == current.Type && c.Action.TargetId == current.TargetId)
                                  ?? choices[0];
 

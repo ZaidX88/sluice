@@ -7,15 +7,15 @@ using Sluice.Core.Interception;
 using Sluice.Core.Profiles;
 
 const string Usage = """
-    Sluice.Cli [profile.ppx] [options]          run the proxy engine
+    Sluice.Cli [profile.sluice|.ppx] [options]  run the routing engine
       --socks 127.0.0.1:1080      local SOCKS5 listener address
       --intercept                 capture all applications' TCP traffic with WinDivert (needs Administrator)
       --log errors|normal|verbose|debug           on-screen log level (default normal)
       --log-file DIR [--log-file-level LEVEL]     also write a daily log file in DIR (default level verbose)
       --duration N                stop cleanly after N seconds
 
-    Sluice.Cli check <profile.ppx | scheme://[user:pass@]host:port> [options]
-                                  test proxies like Proxifier's Proxy Checker
+    Sluice.Cli check <profile.sluice|.ppx | scheme://[user:pass@]host:port> [options]
+                                  test tunnels (SOCKS/HTTP) like Proxifier's Proxy Checker
       scheme: socks5, socks4, socks4a, https, http
       --target host:port          host reached through the proxy (default www.google.com:80)
       --no-page                   do not load a web page through the proxy
@@ -81,7 +81,7 @@ static async Task<int> RunEngineAsync(string[] args)
     using var fileLog = logDir is null ? null : new FileLog(tracker, logDir, fileLevel);
     var stats = new Statistics(tracker);
 
-    var engine = new ProxyEngine(profile!, tracker);
+    var engine = new RoutingEngine(profile!, tracker);
     engine.Reload(profile!);
 
     await using var socks = new Socks5Inbound(engine, socksBind);
@@ -165,7 +165,7 @@ static async Task<int> RunCheckAsync(string[] args)
     }
     if (subject is null) { Console.Error.WriteLine(Usage); return 1; }
 
-    List<ProxyServer> proxies;
+    List<Tunnel> proxies;
     if (subject.Contains("://"))
     {
         if (!TryParseProxyUrl(subject, out var single, out var error)) { Console.Error.WriteLine(error); return 1; }
@@ -174,8 +174,8 @@ static async Task<int> RunCheckAsync(string[] args)
     else
     {
         if (!TryLoadProfile(subject, out var profile)) return 1;
-        proxies = profile!.Proxies;
-        if (proxies.Count == 0) { Console.WriteLine("The profile has no proxy servers."); return 0; }
+        proxies = profile!.Tunnels;
+        if (proxies.Count == 0) { Console.WriteLine("The profile has no tunnels."); return 0; }
     }
 
     Console.WriteLine($"Target: {settings.TargetHost}:{settings.TargetPort}{(settings.LoadWebPage ? " (loading a web page)" : "")}\n");
@@ -199,33 +199,33 @@ static async Task<int> RunCheckAsync(string[] args)
             var time = s.Elapsed is { } t && s.Number != 3 ? $" [{t.TotalMilliseconds:F0} ms]" : "";
             Console.WriteLine($" Test {s.Number}: {s.Name}{time}\n        {s.Detail}");
         });
-        var report = await ProxyChecker.CheckAsync(proxy, settings, progress);
+        var report = await TunnelChecker.CheckAsync(proxy, settings, progress);
         allPassed &= report.Passed;
-        Console.WriteLine(report.Passed ? "  => Proxy is working\n" : "  => Testing failed\n");
+        Console.WriteLine(report.Passed ? "  => Tunnel is working\n" : "  => Testing failed\n");
     }
     return allPassed ? 0 : 3;
 }
 
-static bool TryParseProxyUrl(string url, out ProxyServer? proxy, out string error)
+static bool TryParseProxyUrl(string url, out Tunnel? proxy, out string error)
 {
     proxy = null;
     error = "";
     if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Port <= 0)
     {
-        error = $"Invalid proxy URL '{url}'. Expected scheme://[user:pass@]host:port";
+        error = $"Invalid tunnel URL '{url}'. Expected scheme://[user:pass@]host:port";
         return false;
     }
-    ProxyType? type = uri.Scheme.ToLowerInvariant() switch
+    TunnelType? type = uri.Scheme.ToLowerInvariant() switch
     {
-        "socks5" or "socks5h" => ProxyType.Socks5,
-        "socks4" or "socks4a" => ProxyType.Socks4,
-        "https" => ProxyType.Https,
-        "http" => ProxyType.Http,
+        "socks5" or "socks5h" => TunnelType.Socks5,
+        "socks4" or "socks4a" => TunnelType.Socks4,
+        "https" => TunnelType.Https,
+        "http" => TunnelType.Http,
         _ => null,
     };
     if (type is null)
     {
-        error = $"Unknown proxy scheme '{uri.Scheme}' (use socks5, socks4, socks4a, https or http)";
+        error = $"Unknown tunnel scheme '{uri.Scheme}' (use socks5, socks4, socks4a, https or http)";
         return false;
     }
     string? user = null, pass = null;
@@ -235,7 +235,7 @@ static bool TryParseProxyUrl(string url, out ProxyServer? proxy, out string erro
         user = Uri.UnescapeDataString(parts[0]);
         pass = parts.Length > 1 ? Uri.UnescapeDataString(parts[1]) : null;
     }
-    proxy = new ProxyServer
+    proxy = new Tunnel
     {
         Type = type.Value,
         Address = uri.Host.Trim('[', ']'),
@@ -255,7 +255,7 @@ static bool TryLoadProfile(string? path, out Profile? profile)
 {
     try
     {
-        profile = path is null ? Profile.CreateDefault() : PpxSerializer.Load(path, PromptMasterPassword);
+        profile = path is null ? Profile.CreateDefault() : ProfileFile.Load(path, PromptMasterPassword);
         return true;
     }
     catch (OperationCanceledException)

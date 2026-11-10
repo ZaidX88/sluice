@@ -36,7 +36,7 @@ public class EngineTests
     public async Task LocalSocks_Direct_RelaysAndCounts()
     {
         await using var echo = new EchoServer();
-        var engine = new ProxyEngine(Profile.CreateDefault());
+        var engine = new RoutingEngine(Profile.CreateDefault());
         await using var inbound = new Socks5Inbound(engine, AnyLoopback);
         inbound.Start();
 
@@ -64,10 +64,10 @@ public class EngineTests
         await using var echo = new EchoServer();
         await using var upstream = new Socks5TestServer();
         var profile = Profile.CreateDefault();
-        profile.Proxies.Add(new ProxyServer { Id = 100, Type = ProxyType.Socks5, Address = "127.0.0.1", Port = upstream.Port });
-        profile.Rules.Insert(0, new Rule { Name = "Test", Targets = "*.test", Action = RuleAction.ViaProxy(100) });
+        profile.Tunnels.Add(new Tunnel { Id = 100, Type = TunnelType.Socks5, Address = "127.0.0.1", Port = upstream.Port });
+        profile.Rules.Insert(0, new Rule { Name = "Test", Targets = "*.test", Action = RuleAction.ViaTunnel(100) });
 
-        var engine = new ProxyEngine(profile);
+        var engine = new RoutingEngine(profile);
         await using var inbound = new Socks5Inbound(engine, AnyLoopback);
         inbound.Start();
 
@@ -83,7 +83,7 @@ public class EngineTests
     {
         var profile = Profile.CreateDefault();
         profile.Rules.Insert(0, new Rule { Name = "NoAds", Targets = "*.ads.test", Action = RuleAction.Block });
-        var engine = new ProxyEngine(profile);
+        var engine = new RoutingEngine(profile);
         await using var inbound = new Socks5Inbound(engine, AnyLoopback);
         inbound.Start();
 
@@ -96,7 +96,7 @@ public class EngineTests
     {
         int deadPort;
         using (var l = new TcpListener(IPAddress.Loopback, 0)) { l.Start(); deadPort = ((IPEndPoint)l.LocalEndpoint).Port; }
-        var engine = new ProxyEngine(Profile.CreateDefault());
+        var engine = new RoutingEngine(Profile.CreateDefault());
         await using var inbound = new Socks5Inbound(engine, AnyLoopback);
         inbound.Start();
 
@@ -107,7 +107,7 @@ public class EngineTests
     [Fact]
     public async Task LoopGuard_RefusesConnectionToOwnListener()
     {
-        var engine = new ProxyEngine(Profile.CreateDefault());
+        var engine = new RoutingEngine(Profile.CreateDefault());
         await using var inbound = new Socks5Inbound(engine, AnyLoopback);
         inbound.Start();
 
@@ -121,7 +121,7 @@ public class EngineTests
         var exe = Path.GetFileName(Environment.ProcessPath)!;
         var profile = Profile.CreateDefault();
         profile.Rules.Insert(0, new Rule { Name = "Me", Applications = exe, Action = RuleAction.Block });
-        var engine = new ProxyEngine(profile);
+        var engine = new RoutingEngine(profile);
         await using var inbound = new Socks5Inbound(engine, AnyLoopback);
         inbound.Start();
 
@@ -139,7 +139,7 @@ public class EngineTests
     public async Task Disconnect_TearsDownLiveConnection()
     {
         await using var echo = new EchoServer();
-        var engine = new ProxyEngine(Profile.CreateDefault());
+        var engine = new RoutingEngine(Profile.CreateDefault());
         await using var inbound = new Socks5Inbound(engine, AnyLoopback);
         inbound.Start();
 
@@ -157,7 +157,7 @@ public class EngineTests
     {
         await using var echo = new EchoServer();
         var table = new FakeRedirectTable();
-        var engine = new ProxyEngine(Profile.CreateDefault());
+        var engine = new RoutingEngine(Profile.CreateDefault());
         engine.Tracker.Level = LogLevel.Debug;
         var log = new ConcurrentQueue<string>();
         engine.Tracker.Log += (_, m) => log.Enqueue(m);
@@ -194,20 +194,20 @@ public class EngineTests
         {
             var port = int.Parse((await host.StandardOutput.ReadLineAsync().WaitAsync(TimeSpan.FromSeconds(20)))!.Trim());
             var profile = Profile.CreateDefault();
-            profile.Proxies.Add(new ProxyServer { Id = 1, Type = ProxyType.Socks5, Address = "127.0.0.1", Port = port });
-            profile.Rules.Single(r => r.IsDefault).Action = RuleAction.ViaProxy(1);
-            var engine = new ProxyEngine(profile);
+            profile.Tunnels.Add(new Tunnel { Id = 1, Type = TunnelType.Socks5, Address = "127.0.0.1", Port = port });
+            profile.Rules.Single(r => r.IsDefault).Action = RuleAction.ViaTunnel(1);
+            var engine = new RoutingEngine(profile);
 
             var fromProxyHost = engine.Classify(new InboundRequest("example.com", 443, host.Id, null));
             Assert.Equal("Loop prevention", fromProxyHost.Rule.Name);
             Assert.Equal(RuleActionType.Direct, fromProxyHost.Action.Type);
 
             var fromOther = engine.Classify(new InboundRequest("example.com", 443, 999999, null));
-            Assert.Equal(RuleActionType.Proxy, fromOther.Action.Type);
+            Assert.Equal(RuleActionType.Tunnel, fromOther.Action.Type);
 
             profile.Options.ConnectionLoopDetection = false;
             engine.Reload(profile);
-            Assert.Equal(RuleActionType.Proxy, engine.Classify(new InboundRequest("example.com", 443, host.Id, null)).Action.Type);
+            Assert.Equal(RuleActionType.Tunnel, engine.Classify(new InboundRequest("example.com", 443, host.Id, null)).Action.Type);
         }
         finally
         {

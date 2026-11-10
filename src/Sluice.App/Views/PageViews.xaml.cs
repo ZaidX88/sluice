@@ -37,13 +37,13 @@ public partial class LogView : UserControl
     }
 }
 
-public partial class ProxiesView : UserControl
+public partial class TunnelsView : UserControl
 {
-    public ProxiesView() => InitializeComponent();
+    public TunnelsView() => InitializeComponent();
 
     private void OnRowDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
-        if (DataContext is ProxiesViewModel vm && vm.EditCommand.CanExecute(null)) vm.EditCommand.Execute(null);
+        if (DataContext is TunnelsViewModel vm && vm.EditCommand.CanExecute(null)) vm.EditCommand.Execute(null);
     }
 }
 

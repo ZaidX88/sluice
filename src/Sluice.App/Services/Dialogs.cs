@@ -15,9 +15,9 @@ public static class Dialogs
         MessageBox.Show(Owner!, message, title, MessageBoxButton.OKCancel, MessageBoxImage.Question, MessageBoxResult.Cancel)
         == MessageBoxResult.OK;
 
-    public static ProxyServer? EditProxy(ProxyServer? existing)
+    public static Tunnel? EditTunnel(Tunnel? existing)
     {
-        var d = new ProxyDialog(existing) { Owner = Owner };
+        var d = new TunnelDialog(existing) { Owner = Owner };
         return d.ShowDialog() == true ? d.Result : null;
     }
 
@@ -38,7 +38,7 @@ public static class Dialogs
         var d = new OpenFileDialog
         {
             Title = "Open profile",
-            Filter = "Proxifier / Sluice profiles (*.ppx)|*.ppx|All files (*.*)|*.*",
+            Filter = "Profiles (*.sluice; *.ppx)|*.sluice;*.ppx;*.prx|Sluice profiles (*.sluice)|*.sluice|Proxifier profiles — imported (*.ppx)|*.ppx;*.prx|All files (*.*)|*.*",
             InitialDirectory = DefaultFolder(),
         };
         return d.ShowDialog(Owner) == true ? d.FileName : null;
@@ -49,12 +49,27 @@ public static class Dialogs
         var d = new SaveFileDialog
         {
             Title = "Save profile as",
-            Filter = "Profile (*.ppx)|*.ppx",
+            Filter = "Sluice profile (*.sluice)|*.sluice",
+            FileName = name + ".sluice",
+            InitialDirectory = DefaultFolder(),
+        };
+        return d.ShowDialog(Owner) == true ? d.FileName : null;
+    }
+
+    public static string? ExportProxifier(string name)
+    {
+        var d = new SaveFileDialog
+        {
+            Title = "Export for Proxifier",
+            Filter = "Proxifier profile (*.ppx)|*.ppx",
             FileName = name + ".ppx",
             InitialDirectory = DefaultFolder(),
         };
         return d.ShowDialog(Owner) == true ? d.FileName : null;
     }
+
+    public static void Info(string title, string message) =>
+        MessageBox.Show(Owner!, message, title, MessageBoxButton.OK, MessageBoxImage.Information);
 
     private static string DefaultFolder()
     {

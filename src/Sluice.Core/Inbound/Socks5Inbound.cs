@@ -10,7 +10,7 @@ namespace Sluice.Core.Inbound;
 /// Local SOCKS5 server (no auth, CONNECT only). Applications configured to use it
 /// (or curl --socks5-hostname) go through the rule engine like intercepted traffic.
 /// </summary>
-public sealed class Socks5Inbound(ProxyEngine engine, IPEndPoint bind) : InboundListener(engine, bind)
+public sealed class Socks5Inbound(RoutingEngine engine, IPEndPoint bind) : InboundListener(engine, bind)
 {
     protected override async Task ServeAsync(Socket client, CancellationToken ct)
     {

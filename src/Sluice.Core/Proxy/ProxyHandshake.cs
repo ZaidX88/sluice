@@ -13,13 +13,13 @@ public sealed class ProxyException(string message) : IOException(message);
 /// </summary>
 public static class ProxyHandshake
 {
-    public static Task ConnectAsync(Stream s, ProxyServer proxy, string host, int port, CancellationToken ct = default) =>
+    public static Task ConnectAsync(Stream s, Tunnel proxy, string host, int port, CancellationToken ct = default) =>
         proxy.Type switch
         {
-            ProxyType.Socks5 => Socks5Async(s, host, port, proxy.Username, proxy.Password, ct),
-            ProxyType.Socks4 => Socks4Async(s, host, port, proxy.Username, proxy.Socks4aRemoteResolve, ct),
-            ProxyType.Https or ProxyType.Http => HttpConnectAsync(s, host, port, proxy.Username, proxy.Password, ct),
-            _ => throw new NotSupportedException(proxy.Type.ToString()),
+            TunnelType.Socks5 => Socks5Async(s, host, port, proxy.Username, proxy.Password, ct),
+            TunnelType.Socks4 => Socks4Async(s, host, port, proxy.Username, proxy.Socks4aRemoteResolve, ct),
+            TunnelType.Https or TunnelType.Http => HttpConnectAsync(s, host, port, proxy.Username, proxy.Password, ct),
+            _ => throw new ProxyException($"{proxy.Type.DisplayName()} tunnels are not supported by this version of Sluice yet"),
         };
 
     // ---------------- SOCKS5 (RFC 1928 / RFC 1929) ----------------

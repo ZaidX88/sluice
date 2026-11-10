@@ -266,7 +266,7 @@ public class DnsTests
         await using var echo = new EchoServer();
         using var server = new FakeDnsServer(new() { ["echo.test"] = IPAddress.Loopback });
         using var resolver = ResolverFor(server);
-        var engine = new ProxyEngine(Profile.CreateDefault()) { HostResolver = resolver.ResolveAsync };
+        var engine = new RoutingEngine(Profile.CreateDefault()) { HostResolver = resolver.ResolveAsync };
         await using var inbound = new Socks5Inbound(engine, new IPEndPoint(IPAddress.Loopback, 0));
         inbound.Start();
 

@@ -8,16 +8,16 @@
             <Border Style="{StaticResource CardBox}" Margin="0,0,0,16">
                 <StackPanel>
                     <TextBlock Text="Name resolution" Style="{StaticResource SectionTitle}"/>
-                    <TextBlock Style="{StaticResource Muted}" Text="Send hostnames to the proxy instead of resolving them on this PC. Apps receive placeholder addresses (198.18.x.x) while Sluice is capturing."/>
+                    <TextBlock Style="{StaticResource Muted}" Text="Send hostnames through the tunnel instead of resolving them on this PC. Apps receive placeholder addresses (198.18.x.x) while Sluice is capturing."/>
                     <CheckBox Style="{StaticResource Switch}" Margin="0,16,0,0" IsChecked="{Binding ResolveViaProxy}">
                         <StackPanel>
-                            <TextBlock Text="Resolve hostnames through the proxy" FontWeight="Bold"/>
+                            <TextBlock Text="Resolve hostnames through the tunnel" FontWeight="Bold"/>
                             <TextBlock Style="{StaticResource Muted}" Text="Needed for host rules like *.example.com to match captured traffic."/>
                         </StackPanel>
                     </CheckBox>
                     <TextBlock Text="Resolve these names locally" Style="{StaticResource FieldLabel}" Margin="0,16,0,4"/>
                     <TextBox Text="{Binding ExclusionList}"/>
-                    <CheckBox Content="Invert: resolve ONLY the names above through the proxy" IsChecked="{Binding OnlyListed}" Margin="0,8,0,0"/>
+                    <CheckBox Content="Invert: resolve ONLY the names above through the tunnel" IsChecked="{Binding OnlyListed}" Margin="0,8,0,0"/>
                     <Border Height="1" Background="{DynamicResource Divider}" Margin="0,16"/>
                     <CheckBox Style="{StaticResource Switch}" IsChecked="{Binding LeakPrevention}">
                         <StackPanel>
@@ -28,7 +28,7 @@
                     <CheckBox Style="{StaticResource Switch}" Margin="0,14,0,0" IsChecked="{Binding BlockNonATypes}">
                         <StackPanel>
                             <TextBlock Text="Block other DNS query types" FontWeight="Bold"/>
-                            <TextBlock Style="{StaticResource Muted}" Text="Answer TXT, MX, SRV… with no data for names resolved through the proxy."/>
+                            <TextBlock Style="{StaticResource Muted}" Text="Answer TXT, MX, SRV… with no data for names resolved through the tunnel."/>
                         </StackPanel>
                     </CheckBox>
                 </StackPanel>
@@ -41,7 +41,7 @@
                     <CheckBox Style="{StaticResource Switch}" Margin="0,12,0,0" IsChecked="{Binding LoopDetection}">
                         <StackPanel>
                             <TextBlock Text="Infinite connection loop detection" FontWeight="Bold"/>
-                            <TextBlock Style="{StaticResource Muted}" Text="A proxy running on this PC always connects directly, so it never routes into itself."/>
+                            <TextBlock Style="{StaticResource Muted}" Text="A tunnel client running on this PC (e.g. SSH or Xray) always connects directly, so it never routes into itself."/>
                         </StackPanel>
                     </CheckBox>
                     <CheckBox Style="{StaticResource Switch}" Margin="0,14,0,0" IsChecked="{Binding HandleDirect}">
@@ -62,7 +62,7 @@
             <!-- Passwords -->
             <Border Style="{StaticResource CardBox}" Margin="0,0,0,16">
                 <StackPanel>
-                    <TextBlock Text="Proxy passwords in the profile" Style="{StaticResource SectionTitle}"/>
+                    <TextBlock Text="Tunnel passwords in the profile" Style="{StaticResource SectionTitle}"/>
                     <TextBlock Style="{StaticResource Muted}" Text="Uses the same encryption as Proxifier, so profiles stay interchangeable."/>
                     <ComboBox ItemsSource="{Binding EncryptionModes}" SelectedIndex="{Binding EncryptionIndex}" Margin="0,12,0,0" HorizontalAlignment="Left" MinWidth="420"/>
                 </StackPanel>

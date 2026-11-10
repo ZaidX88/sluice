@@ -1,10 +1,11 @@
 # Sluice
 
-A rule-based proxy client for Windows. Sluice decides, per application, host and port, whether
-traffic goes direct, gets blocked, or flows through a proxy or proxy chain.
+A rule-based tunnelling client for Windows. Sluice decides, per application, host and port, whether
+traffic goes direct, gets blocked, or flows through a tunnel (SOCKS and HTTP today; SSH, Shadowsocks,
+VMess/VLESS, Trojan and Hysteria2 next) or a chain of tunnels.
 
-Built with C# / .NET 10. Interception will use WinDivert, and the UI will be WPF. Profiles are
-compatible with Proxifier 4 `.ppx` files. See [ANALYSIS.md](ANALYSIS.md) for the reference
+Built with C# / .NET 10: WinDivert for interception, WPF for the app. Profiles are saved as
+`.sluice` (JSON); Proxifier 4 `.ppx` files can be imported and exported. See [ANALYSIS.md](ANALYSIS.md) for the reference
 analysis and the build plan.
 
 ## Status
@@ -17,16 +18,19 @@ analysis and the build plan.
 | 4 | DNS through proxy: fake IPs (198.18.0.0/15), hostname rules for intercepted traffic, loop prevention | done |
 | 5 | Profile password encryption, byte-compatible with Proxifier (disabled / basic / account / master) | done |
 | 6 | Proxy checker (3 tests), statistics per app/target/rule, daily file log, clean shutdown | done |
-| 7 | WPF app: Fluent light/dark UI, connections, statistics, log, proxies (+checker), rules, settings, tray | done |
-| 8 | Extras: chains editor, UDP via SOCKS5, NTLM/Kerberos, service mode, profile auto-update | planned |
+| 7 | WPF app: Fluent light/dark UI, connections, statistics, log, tunnels (+checker), rules, settings, tray | done |
+| 8.1 | Proxy → **Tunnel** model, Sluice `.sluice` profile format, `.ppx` import/export | done |
+| 8.2 | SSH tunnels (payload, TLS with SNI) | next |
+| 8.3 | sing-box: Shadowsocks, VMess, VLESS (+REALITY), Trojan, Hysteria2, TUIC | planned |
+| 8.4 | Import share links / subscriptions; 8.5 UDP through tunnels | planned |
 
 ![Rules](docs/screenshots/rules-light.png)
-![Proxies, dark theme](docs/screenshots/proxies-dark.png)
+![Tunnels, dark theme](docs/screenshots/proxies-dark.png)
 
 ## Layout
 
 ```
-src/Sluice.Core    engine: profiles, rules, proxy protocols, relay, listeners (no UI)
+src/Sluice.Core    engine: profiles, rules, tunnels, relay, listeners (no UI)
 src/Sluice.App     WPF desktop app (Sluice.exe)
 src/Sluice.Cli     console host
 tests/Sluice.Tests xUnit tests with in-process SOCKS/HTTP test servers
@@ -59,17 +63,17 @@ dotnet run --project src/Sluice.Cli -- "%APPDATA%\Proxifier4\Profiles\Default.pp
 curl --socks5-hostname 127.0.0.1:1080 https://example.com/
 ```
 
-Transparent mode captures every application's TCP traffic, with no proxy settings needed in the apps.
+Transparent mode captures every application's TCP traffic, with no settings needed in the apps.
 Run it from an Administrator terminal, and quit Proxifier or any other redirector first:
 
 ```bash
-dotnet run --project src/Sluice.Cli -- my-profile.ppx --intercept --log verbose
+dotnet run --project src/Sluice.Cli -- my-profile.sluice --intercept --log verbose
 ```
 
-Check proxies like Proxifier's Proxy Checker: test a whole profile or a single proxy URL:
+Check tunnels like Proxifier's Proxy Checker: test a whole profile or a single tunnel URL:
 
 ```bash
-dotnet run --project src/Sluice.Cli -- check my-profile.ppx
+dotnet run --project src/Sluice.Cli -- check my-profile.sluice
 ```
 
 ```bash

@@ -34,7 +34,7 @@ public static class PpxSerializer
         var codec = OpenCodec(profile, hash, masterPassword, profileName);
 
         foreach (var x in root.Element("ProxyList")?.Elements("Proxy") ?? [])
-            profile.Proxies.Add(ReadProxy(x, codec));
+            profile.Tunnels.Add(ReadProxy(x, codec));
 
         foreach (var x in root.Element("ChainList")?.Elements("Chain") ?? [])
             profile.Chains.Add(ReadChain(x));
@@ -49,7 +49,8 @@ public static class PpxSerializer
     }
 
     /// <summary>Builds the password codec, checking the master password / Windows account against &lt;Hash&gt;.</summary>
-    private static ProxifierPasswordCodec OpenCodec(Profile profile, string? hash, MasterPasswordProvider? ask, string name)
+    /// <summary>Shared with the .sluice format, which uses the same password modes.</summary>
+    internal static ProxifierPasswordCodec OpenCodec(Profile profile, string? hash, MasterPasswordProvider? ask, string name)
     {
         var mode = profile.Options.PasswordEncryption;
         if (mode != PasswordEncryptionMode.MasterPassword)
@@ -82,9 +83,18 @@ public static class PpxSerializer
         doc.Save(path);
     }
 
-    public static XDocument ToXml(Profile p)
+    /// <summary>
+    /// Proxifier only knows plain proxy protocols. Encrypted tunnels (SSH, VLESS, …) are left out;
+    /// rules that used them become Direct and chains lose those hops. Each loss is reported in
+    /// <paramref name="warnings"/>.
+    /// </summary>
+    public static XDocument ToXml(Profile p, List<string>? warnings = null)
     {
         var o = p.Options;
+        var exportable = p.Tunnels.Where(t => t.Type.IsSimple()).ToList();
+        var ids = exportable.Select(t => t.Id).ToHashSet();
+        foreach (var t in p.Tunnels.Where(t => !t.Type.IsSimple()))
+            warnings?.Add($"Tunnel \"{t}\" ({t.Type.DisplayName()}) is not supported by Proxifier and was left out.");
         var codec = new ProxifierPasswordCodec(o.PasswordEncryption, p.MasterPassword);
         var encryption = new XElement("Encryption", new XAttribute("mode", EncryptionToString(o.PasswordEncryption)));
         if (codec.Hash is { } hash) encryption.Add(new XElement("Hash", hash));
@@ -108,9 +118,9 @@ public static class PpxSerializer
                 Flag("ProcessServices", o.ProcessServices),
                 Flag("HandleDirectConnections", o.HandleDirectConnections),
                 Flag("HttpProxiesSupport", o.HttpProxiesSupport)),
-            new XElement("ProxyList", p.Proxies.Select(x => WriteProxy(x, codec))),
-            new XElement("ChainList", p.Chains.Select(WriteChain)),
-            new XElement("RuleList", p.Rules.Select(WriteRule)));
+            new XElement("ProxyList", exportable.Select(x => WriteProxy(x, codec))),
+            new XElement("ChainList", p.Chains.Select(c => WriteChain(c, ids, warnings))),
+            new XElement("RuleList", p.Rules.Select(r => WriteRule(r, ids, warnings))));
 
         return new XDocument(new XDeclaration("1.0", "UTF-8", "yes"), root);
     }
@@ -147,9 +157,9 @@ public static class PpxSerializer
         o.HttpProxiesSupport = Enabled(x.Element("HttpProxiesSupport"), false);
     }
 
-    private static ProxyServer ReadProxy(XElement x, IPasswordCodec codec)
+    private static Tunnel ReadProxy(XElement x, IPasswordCodec codec)
     {
-        var p = new ProxyServer
+        var p = new Tunnel
         {
             Id = Int(x.Attribute("id")?.Value, 0),
             Type = ProxyTypeFromString(x.Attribute("type")?.Value),
@@ -168,16 +178,16 @@ public static class PpxSerializer
                 try { p.Password = codec.Decode(stored); }
                 catch (CryptographicFailure ex)
                 {
-                    throw new CryptographicFailure($"Cannot decrypt the password of proxy {p}: {ex.Message}");
+                    throw new CryptographicFailure($"Cannot decrypt the password of tunnel {p}: {ex.Message}");
                 }
             }
         }
         return p;
     }
 
-    private static ProxyChain ReadChain(XElement x)
+    private static TunnelChain ReadChain(XElement x)
     {
-        var c = new ProxyChain
+        var c = new TunnelChain
         {
             Id = Int(x.Attribute("id")?.Value, 0),
             Type = (x.Attribute("type")?.Value ?? "simple").ToLowerInvariant() switch
@@ -189,7 +199,7 @@ public static class PpxSerializer
             Name = x.Element("Name")?.Value ?? "",
         };
         foreach (var hop in x.Elements("Proxy"))
-            c.Hops.Add(new ChainHop { ProxyId = Int(hop.Value, 0), Enabled = Enabled(hop, true) });
+            c.Hops.Add(new ChainHop { TunnelId = Int(hop.Value, 0), Enabled = Enabled(hop, true) });
         return c;
     }
 
@@ -199,7 +209,7 @@ public static class PpxSerializer
         var type = (action?.Attribute("type")?.Value ?? "Direct") switch
         {
             "Block" => RuleActionType.Block,
-            "Proxy" => RuleActionType.Proxy,
+            "Proxy" => RuleActionType.Tunnel,
             "Chain" => RuleActionType.Chain,
             _ => RuleActionType.Direct,
         };
@@ -213,14 +223,14 @@ public static class PpxSerializer
             Action = new RuleAction
             {
                 Type = type,
-                TargetId = type is RuleActionType.Proxy or RuleActionType.Chain ? Int(action?.Value, 0) : null,
+                TargetId = type is RuleActionType.Tunnel or RuleActionType.Chain ? Int(action?.Value, 0) : null,
             },
         };
     }
 
     // ---------- writing ----------
 
-    private static XElement WriteProxy(ProxyServer p, IPasswordCodec codec)
+    private static XElement WriteProxy(Tunnel p, IPasswordCodec codec)
     {
         var x = new XElement("Proxy",
             new XAttribute("id", p.Id),
@@ -236,8 +246,12 @@ public static class PpxSerializer
         return x;
     }
 
-    private static XElement WriteChain(ProxyChain c) =>
-        new("Chain",
+    private static XElement WriteChain(TunnelChain c, HashSet<int> exportable, List<string>? warnings)
+    {
+        var hops = c.Hops.Where(h => exportable.Contains(h.TunnelId)).ToList();
+        if (hops.Count < c.Hops.Count)
+            warnings?.Add($"Chain \"{c.Name}\" lost {c.Hops.Count - hops.Count} hop(s) that Proxifier does not support.");
+        return new("Chain",
             new XAttribute("id", c.Id),
             new XAttribute("type", c.Type switch
             {
@@ -245,14 +259,24 @@ public static class PpxSerializer
                 ChainType.LoadBalancing => "load_balancing",
                 _ => "simple",
             }),
-            c.Hops.Select(h => new XElement("Proxy", new XAttribute("enabled", B(h.Enabled)), h.ProxyId)),
+            hops.Select(h => new XElement("Proxy", new XAttribute("enabled", B(h.Enabled)), h.TunnelId)),
             new XElement("Name", c.Name));
+    }
 
-    private static XElement WriteRule(Rule r)
+    private static XElement WriteRule(Rule r, HashSet<int> exportable, List<string>? warnings)
     {
         var x = new XElement("Rule", new XAttribute("enabled", B(r.Enabled)));
-        var action = new XElement("Action", new XAttribute("type", r.Action.Type.ToString()));
-        if (r.Action.TargetId is int id) action.Value = id.ToString(CultureInfo.InvariantCulture);
+        var type = r.Action.Type;
+        var target = r.Action.TargetId;
+        if (type == RuleActionType.Tunnel && target is int t && !exportable.Contains(t))
+        {
+            warnings?.Add($"Rule \"{r.Name}\" used a tunnel Proxifier does not support; it is exported as Direct.");
+            type = RuleActionType.Direct;
+            target = null;
+        }
+        // Proxifier's wording: "Proxy" for what Sluice calls a tunnel.
+        var action = new XElement("Action", new XAttribute("type", type == RuleActionType.Tunnel ? "Proxy" : type.ToString()));
+        if (target is int id) action.Value = id.ToString(CultureInfo.InvariantCulture);
         x.Add(action);
         if (!string.IsNullOrWhiteSpace(r.Applications)) x.Add(new XElement("Applications", r.Applications));
         if (!string.IsNullOrWhiteSpace(r.Targets)) x.Add(new XElement("Targets", r.Targets));
@@ -278,19 +302,19 @@ public static class PpxSerializer
 
     private static string? NullIfEmpty(string? s) => string.IsNullOrWhiteSpace(s) ? null : s;
 
-    private static ProxyType ProxyTypeFromString(string? s) => (s ?? "").ToUpperInvariant() switch
+    private static TunnelType ProxyTypeFromString(string? s) => (s ?? "").ToUpperInvariant() switch
     {
-        "SOCKS4" => ProxyType.Socks4,
-        "HTTPS" => ProxyType.Https,
-        "HTTP" => ProxyType.Http,
-        _ => ProxyType.Socks5,
+        "SOCKS4" => TunnelType.Socks4,
+        "HTTPS" => TunnelType.Https,
+        "HTTP" => TunnelType.Http,
+        _ => TunnelType.Socks5,
     };
 
-    private static string ProxyTypeToString(ProxyType t) => t switch
+    private static string ProxyTypeToString(TunnelType t) => t switch
     {
-        ProxyType.Socks4 => "SOCKS4",
-        ProxyType.Https => "HTTPS",
-        ProxyType.Http => "HTTP",
+        TunnelType.Socks4 => "SOCKS4",
+        TunnelType.Https => "HTTPS",
+        TunnelType.Http => "HTTP",
         _ => "SOCKS5",
     };
 

@@ -27,12 +27,12 @@ internal static class ScreenshotMode
         await using var host = new EngineHost(settings);
 
         var p = Profile.CreateDefault();
-        p.Proxies.Add(new ProxyServer { Id = 100, Type = ProxyType.Socks5, Address = "127.0.0.1", Port = 6002, Label = "Local tunnel" });
-        p.Proxies.Add(new ProxyServer { Id = 101, Type = ProxyType.Https, Address = "proxy.corp.example", Port = 3128, Username = "alice", Password = "x" });
+        p.Tunnels.Add(new Tunnel { Id = 100, Type = TunnelType.Socks5, Address = "127.0.0.1", Port = 6002, Label = "Local tunnel" });
+        p.Tunnels.Add(new Tunnel { Id = 101, Type = TunnelType.Https, Address = "proxy.corp.example", Port = 3128, Username = "alice", Password = "x" });
         if (!directOnly)
         {
-            p.Rules.Insert(0, new Rule { Name = "Browsers", Applications = "chrome.exe; firefox.exe; msedge.exe", Action = RuleAction.ViaProxy(100) });
-            p.Rules.Insert(1, new Rule { Name = "Work sites", Targets = "*.corp.example; 10.0.0.0/8", Action = RuleAction.ViaProxy(101) });
+            p.Rules.Insert(0, new Rule { Name = "Browsers", Applications = "chrome.exe; firefox.exe; msedge.exe", Action = RuleAction.ViaTunnel(100) });
+            p.Rules.Insert(1, new Rule { Name = "Work sites", Targets = "*.corp.example; 10.0.0.0/8", Action = RuleAction.ViaTunnel(101) });
             p.Rules.Insert(2, new Rule { Name = "No trackers", Targets = "*.doubleclick.net; *.ads.example", Action = RuleAction.Block });
             p.Rules.Insert(3, new Rule { Name = "Old VPN", Enabled = false, Ports = "1194", Action = RuleAction.Direct });
         }
@@ -70,7 +70,7 @@ internal static class ScreenshotMode
         foreach (var page in vm.Pages)
         {
             vm.CurrentPage = page;
-            if (page is ProxiesViewModel proxies)
+            if (page is TunnelsViewModel proxies)
             {
                 proxies.Selected = proxies.Rows.FirstOrDefault();
                 proxies.CheckCommand.Execute(null);
@@ -84,7 +84,7 @@ internal static class ScreenshotMode
         // Dialogs (shown non-modally just to render them).
         foreach (var (name, dialog) in new (string, Window)[]
                  {
-                     ("dialog-proxy", new Views.ProxyDialog(p.Proxies[1])),
+                     ("dialog-tunnel", new Views.TunnelDialog(p.Tunnels[1])),
                      ("dialog-rule", new Views.RuleDialog(p.Rules[1], p)),
                      ("dialog-password", new Views.PasswordDialog("Work", confirmNew: true)),
                  })

@@ -11,7 +11,7 @@ public sealed class ConnectionBlockedException(string rule) : IOException($"Bloc
 /// Opens an outgoing TCP connection to host:port according to a rule action:
 /// direct, a single proxy, or a chain (simple / redundancy / load balancing).
 /// </summary>
-public sealed class ProxyConnector(Profile profile)
+public sealed class TunnelConnector(Profile profile)
 {
     private readonly ConcurrentDictionary<int, DateTime> _failedUntil = new();
     private readonly ConcurrentDictionary<int, int> _pidAffinity = new();
@@ -35,9 +35,9 @@ public sealed class ProxyConnector(Profile profile)
             case RuleActionType.Direct:
                 return await OpenTcpAsync(host, port, DirectConnectTimeout, ct);
 
-            case RuleActionType.Proxy:
-                var proxy = profile.FindProxy(action.TargetId ?? -1)
-                            ?? throw new InvalidOperationException($"Rule '{ruleName}' references missing proxy {action.TargetId}");
+            case RuleActionType.Tunnel:
+                var proxy = profile.FindTunnel(action.TargetId ?? -1)
+                            ?? throw new InvalidOperationException($"Rule '{ruleName}' references missing tunnel {action.TargetId}");
                 return await ThroughHopsAsync([proxy], host, port, DirectConnectTimeout, ct);
 
             case RuleActionType.Chain:
@@ -50,13 +50,13 @@ public sealed class ProxyConnector(Profile profile)
         }
     }
 
-    private async Task<TcpClient> ThroughChainAsync(ProxyChain chain, string host, int port, int pid, CancellationToken ct)
+    private async Task<TcpClient> ThroughChainAsync(TunnelChain chain, string host, int port, int pid, CancellationToken ct)
     {
         var hops = chain.Hops.Where(h => h.Enabled)
-            .Select(h => profile.FindProxy(h.ProxyId))
-            .OfType<ProxyServer>()
+            .Select(h => profile.FindTunnel(h.TunnelId))
+            .OfType<Tunnel>()
             .ToList();
-        if (hops.Count == 0) throw new InvalidOperationException($"Chain '{chain.Name}' has no enabled proxies");
+        if (hops.Count == 0) throw new InvalidOperationException($"Chain '{chain.Name}' has no enabled tunnels");
 
         switch (chain.Type)
         {
@@ -85,12 +85,12 @@ public sealed class ProxyConnector(Profile profile)
                 }
                 if (chain.RedundancyDirectFallback)
                     return await OpenTcpAsync(host, port, DirectConnectTimeout, ct);
-                throw new ProxyException($"All proxies in chain '{chain.Name}' failed: {string.Join("; ", errors)}");
+                throw new ProxyException($"All tunnels in chain '{chain.Name}' failed: {string.Join("; ", errors)}");
             }
 
             case ChainType.LoadBalancing:
             {
-                ProxyServer pick;
+                Tunnel pick;
                 if (chain.LoadBalanceSamePerPid && pid != 0 &&
                     _pidAffinity.TryGetValue(pid, out var id) && hops.FirstOrDefault(h => h.Id == id) is { } sticky)
                     pick = sticky;
@@ -108,7 +108,7 @@ public sealed class ProxyConnector(Profile profile)
     }
 
     /// <summary>Connect to hops[0], then tunnel hop-by-hop, finally to host:port.</summary>
-    private async Task<TcpClient> ThroughHopsAsync(IReadOnlyList<ProxyServer> hops, string host, int port,
+    private async Task<TcpClient> ThroughHopsAsync(IReadOnlyList<Tunnel> hops, string host, int port,
         TimeSpan timeout, CancellationToken ct)
     {
         var client = await OpenTcpAsync(hops[0].Address, hops[0].Port, timeout, ct);
@@ -127,7 +127,7 @@ public sealed class ProxyConnector(Profile profile)
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
             client.Dispose();
-            throw new TimeoutException($"Proxy handshake timed out via {hops[0]}");
+            throw new TimeoutException($"Tunnel handshake timed out via {hops[0]}");
         }
         catch
         {

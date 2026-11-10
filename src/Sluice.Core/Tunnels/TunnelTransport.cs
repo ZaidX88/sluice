@@ -201,18 +201,7 @@ public static class TunnelTransport
         IPAddress[] addrs = IPAddress.TryParse(host, out var ip) ? [ip]
             : resolve is not null ? await resolve(host, ct)
             : await System.Net.Dns.GetHostAddressesAsync(host, ct);
-        var tcp = new TcpClient(AddressFamily.InterNetworkV6) { NoDelay = true };
-        tcp.Client.DualMode = true;
-        try
-        {
-            await tcp.ConnectAsync(addrs, port, ct);
-            return tcp;
-        }
-        catch
-        {
-            tcp.Dispose();
-            throw;
-        }
+        return await Proxy.HappyEyeballs.ConnectAsync(addrs, port, ct);
     }
 
     public static (string Host, int Port) SplitHostPort(string s, int defaultPort)

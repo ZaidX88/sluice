@@ -21,7 +21,7 @@
                     <TextBlock Text="Add tunnel"/>
                 </StackPanel>
             </Button>
-            <Button Style="{StaticResource SecondaryButton}" Command="{Binding ImportCommand}" Margin="0,0,8,0" ToolTip="Paste share links (vless://, vmess://, ss://, trojan://, hy2://, tuic://…) or add a subscription">
+            <Button Style="{StaticResource SecondaryButton}" Command="{Binding ImportCommand}" Margin="0,0,8,0" ToolTip="Paste share links (vless://, vmess://, ss://, trojan://, hy2://, tuic://â€¦) or add a subscription">
                 <StackPanel Orientation="Horizontal">
                     <TextBlock Style="{StaticResource Icon}" Text="&#xE896;" FontSize="12" Margin="0,0,8,0"/>
                     <TextBlock Text="Import"/>
@@ -56,18 +56,15 @@
                 <DataGrid Style="{StaticResource Grid}" ItemsSource="{Binding Rows}" SelectedItem="{Binding Selected}"
                           MouseDoubleClick="OnRowDoubleClick">
                     <DataGrid.Columns>
-                        <DataGridTemplateColumn Header="Tunnel" Width="1.3*">
+                        <DataGridTemplateColumn Header="Tunnel" Width="1.4*" MinWidth="120">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <StackPanel VerticalAlignment="Center">
                                         <TextBlock Text="{Binding Name}" FontWeight="Bold" TextTrimming="CharacterEllipsis"/>
-                                        <TextBlock Text="{Binding Source, StringFormat=from {0}}" FontSize="11" TextTrimming="CharacterEllipsis">
+                                        <TextBlock Text="{Binding Subtitle}" FontSize="11" TextTrimming="CharacterEllipsis">
                                             <TextBlock.Style>
                                                 <Style TargetType="TextBlock" BasedOn="{StaticResource Muted}">
                                                     <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding Source}" Value="{x:Null}">
-                                                            <Setter Property="Visibility" Value="Collapsed"/>
-                                                        </DataTrigger>
                                                     </Style.Triggers>
                                                 </Style>
                                             </TextBlock.Style>
@@ -85,8 +82,28 @@
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTextColumn Header="Address" Binding="{Binding Endpoint}" Width="1.7*"/>
-                        <DataGridTextColumn Header="Login" Binding="{Binding Auth}" Width="0.8*"/>
+                        <DataGridTextColumn Header="Address" Binding="{Binding Endpoint}" Width="1.3*"/>
+                        <DataGridTemplateColumn Header="Session" Width="150">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Session}" ToolTip="{Binding SessionTip}">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding SessionOk}" Value="True">
+                                                        <Setter Property="Foreground" Value="{DynamicResource Success}"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding SessionOk}" Value="False">
+                                                        <Setter Property="Foreground" Value="{DynamicResource Danger}"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
                         <DataGridTemplateColumn Header="Status" Width="110">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>

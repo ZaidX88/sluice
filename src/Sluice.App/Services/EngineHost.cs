@@ -38,6 +38,37 @@ public sealed class EngineHost : IAsyncDisposable
     /// <summary>A neutral notice for the banner (e.g. "3 tunnels imported").</summary>
     public event Action<string>? Notice;
 
+    /// <summary>Capture is redirecting connections but none arrive: Windows Firewall blocks Sluice.</summary>
+    public event Action? FirewallBlocked;
+
+    /// <summary>
+    /// Adds a Windows Firewall rule allowing incoming connections to this Sluice.exe on every network type,
+    /// replacing earlier allow/block choices for it. Only called when the user presses the button.
+    /// Returns an error message, or null on success.
+    /// </summary>
+    public static string? AllowThroughFirewall()
+    {
+        var exe = Environment.ProcessPath!;
+        string Run(string args)
+        {
+            var psi = new ProcessStartInfo("netsh.exe", args) { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
+            using var p = Process.Start(psi)!;
+            var output = p.StandardOutput.ReadToEnd() + p.StandardError.ReadToEnd();
+            p.WaitForExit();
+            return p.ExitCode == 0 ? "" : output.Trim();
+        }
+        try
+        {
+            Run($"advfirewall firewall delete rule name=all program=\"{exe}\"");   // "no rules match" is fine
+            var error = Run($"advfirewall firewall add rule name=\"Sluice\" dir=in action=allow program=\"{exe}\" enable=yes profile=any");
+            return error.Length == 0 ? null : error;
+        }
+        catch (Exception ex)
+        {
+            return ex.Message;
+        }
+    }
+
     public void Notify(string text) => Notice?.Invoke(text);
 
     public static bool IsElevated
@@ -218,6 +249,7 @@ public sealed class EngineHost : IAsyncDisposable
         var i = new Interceptor(Engine);
         try
         {
+            i.RelayUnreachable += () => System.Windows.Application.Current?.Dispatcher.BeginInvoke(() => FirewallBlocked?.Invoke());
             i.Start();
         }
         catch (Exception ex)

@@ -57,7 +57,9 @@ internal sealed class SingBoxSession : IBackendSession
             try
             {
                 var addrs = _resolve is not null ? await _resolve(_tunnel.Address, ct) : await System.Net.Dns.GetHostAddressesAsync(_tunnel.Address, ct);
-                ip = addrs.FirstOrDefault()?.ToString();
+                // sing-box gets one address: prefer IPv4, since a listed IPv6 address may not be routable
+                // (e.g. NAT64 answers on a network without working IPv6).
+                ip = (addrs.FirstOrDefault(a => a.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork) ?? addrs.FirstOrDefault())?.ToString();
             }
             catch (Exception ex) when (ex is SocketException or TimeoutException)
             {

@@ -7,6 +7,14 @@ using Sluice.Core.Proxy;
 
 namespace Sluice.Core.Tunnels;
 
+public enum SessionState { NotStarted, Connecting, Connected, Failed, Lost }
+
+/// <summary>Live state of an encrypted tunnel's session, for display.</summary>
+public sealed record SessionStatus(SessionState State, string? Detail, DateTime Since)
+{
+    public static readonly SessionStatus None = new(SessionState.NotStarted, null, DateTime.MinValue);
+}
+
 /// <summary>
 /// Runs the client side of encrypted tunnels: SSH inside Sluice, and Shadowsocks / VMess / VLESS /
 /// Trojan / Hysteria2 / TUIC through a sing-box helper process. Each is exposed to the router as a
@@ -17,6 +25,26 @@ public sealed class TunnelBackends : IAsyncDisposable
 {
     private readonly ConcurrentDictionary<int, IBackendSession> _sessions = new();
     private readonly ConcurrentDictionary<int, SemaphoreSlim> _locks = new();
+    private readonly ConcurrentDictionary<int, SessionStatus> _status = new();
+
+    /// <summary>Raised whenever a tunnel's session state changes (tunnel id, new status).</summary>
+    public event Action<int, SessionStatus>? StatusChanged;
+
+    /// <summary>Current session state; a session that died since it connected reports Lost.</summary>
+    public SessionStatus GetStatus(int tunnelId)
+    {
+        if (!_status.TryGetValue(tunnelId, out var st)) return SessionStatus.None;
+        if (st.State == SessionState.Connected && _sessions.TryGetValue(tunnelId, out var s) && !s.IsAlive)
+            return st with { State = SessionState.Lost, Detail = "connection lost; reconnects on next use" };
+        return st;
+    }
+
+    private void SetStatus(int id, SessionState state, string? detail = null)
+    {
+        var st = new SessionStatus(state, detail, DateTime.Now);
+        _status[id] = st;
+        StatusChanged?.Invoke(id, st);
+    }
 
     public TunnelBackends(Action<string>? log = null) => Log = log ?? (_ => { });
 
@@ -66,16 +94,21 @@ public sealed class TunnelBackends : IAsyncDisposable
             IBackendSession session = t.Type == TunnelType.Ssh
                 ? new SshSession(t, fp, Resolver, Log, (tun, key) => HostKeyLearned?.Invoke(tun, key))
                 : new SingBoxSession(t, fp, SingBoxPath, Resolver, Log);
+            Log($"{t.Type.DisplayName()} {t}: starting session");
+            SetStatus(t.Id, SessionState.Connecting);
             try
             {
                 await session.StartAsync(ct);
             }
-            catch
+            catch (Exception ex)
             {
                 await session.DisposeAsync();
+                if (ex is not OperationCanceledException) Log($"{t.Type.DisplayName()} {t}: could not connect: {ex.Message}");
+                SetStatus(t.Id, ex is OperationCanceledException ? SessionState.NotStarted : SessionState.Failed, ex.Message);
                 throw;
             }
             _sessions[t.Id] = session;
+            SetStatus(t.Id, SessionState.Connected, $"local SOCKS {session.SocksEndPoint}");
             return session.SocksEndPoint!;
         }
         finally
@@ -91,7 +124,11 @@ public sealed class TunnelBackends : IAsyncDisposable
         foreach (var (id, s) in _sessions)
         {
             if (current.TryGetValue(id, out var fp) && fp == s.Fingerprint) continue;
-            if (_sessions.TryRemove(id, out var gone)) await gone.DisposeAsync();
+            if (_sessions.TryRemove(id, out var gone))
+            {
+                await gone.DisposeAsync();
+                SetStatus(id, SessionState.NotStarted, "closed (tunnel edited or removed)");
+            }
         }
     }
 

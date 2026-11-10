@@ -36,11 +36,13 @@ public sealed record CheckReport(Tunnel Proxy, IReadOnlyList<CheckStep> Steps)
 /// </summary>
 public static class TunnelChecker
 {
+    /// <param name="backends">Runs encrypted tunnels (SSH, …); required to check those.</param>
     public static async Task<CheckReport> CheckAsync(Tunnel proxy, CheckSettings? settings = null,
-        IProgress<CheckStep>? progress = null, CancellationToken ct = default)
+        IProgress<CheckStep>? progress = null, CancellationToken ct = default, Tunnels.TunnelBackends? backends = null)
     {
         settings ??= new CheckSettings();
         var steps = new List<CheckStep>();
+        var original = proxy;
 
         void Add(CheckStep s)
         {
@@ -48,19 +50,34 @@ public static class TunnelChecker
             progress?.Report(s);
         }
 
-        // ---- Test 1: TCP connection to the proxy itself.
-        var t1 = await Timed(async c =>
+        // ---- Test 1: reach the tunnel server (for SSH: transport, host key and login).
+        Result t1;
+        if (Tunnels.TunnelBackends.Handles(proxy.Type))
         {
-            using var tcp = await ConnectAsync(proxy.Address, proxy.Port, c);
-            return $"Connected to {proxy.Address}:{proxy.Port} ({tcp.Client.RemoteEndPoint})";
-        }, settings.Timeout, ct);
+            Tunnel? local = null;
+            t1 = await Timed(async c =>
+            {
+                if (backends is null) throw new ProxyException($"{proxy.Type.DisplayName()} tunnels cannot be checked here");
+                local = await backends.AsLocalSocksAsync(original, c);
+                return $"{original.Type.DisplayName()} session to {original.Address}:{original.Port} established as {original.Username}";
+            }, TimeSpan.FromSeconds(Math.Max(settings.Timeout.TotalSeconds, 30)), ct);
+            if (local is not null) proxy = local;   // tests 2 and 3 run through the session
+        }
+        else
+        {
+            t1 = await Timed(async c =>
+            {
+                using var tcp = await ConnectAsync(proxy.Address, proxy.Port, c);
+                return $"Connected to {proxy.Address}:{proxy.Port} ({tcp.Client.RemoteEndPoint})";
+            }, settings.Timeout, ct);
+        }
         Add(new CheckStep(1, "Connection to the tunnel server", t1.Ok ? CheckStatus.Passed : CheckStatus.Failed, t1.Detail, t1.Elapsed));
 
         if (!t1.Ok)
         {
             Add(new CheckStep(2, "Connection through the tunnel", CheckStatus.Skipped, "Skipped: the tunnel server is not reachable"));
             Add(new CheckStep(3, "Tunnel latency", CheckStatus.Skipped, "Skipped: the tunnel server is not reachable"));
-            return new CheckReport(proxy, steps);
+            return new CheckReport(original, steps);
         }
 
         // ---- Test 2: tunnel to the target (+ optional page load).
@@ -70,7 +87,7 @@ public static class TunnelChecker
             using var tcp = await ConnectAsync(proxy.Address, proxy.Port, c);
             var s = tcp.GetStream();
             await ProxyHandshake.ConnectAsync(s, proxy, settings.TargetHost, settings.TargetPort, c);
-            var detail = $"Connected to {target} through the tunnel" + AuthNote(proxy);
+            var detail = $"Connected to {target} through the tunnel" + AuthNote(original);
             if (settings.LoadWebPage)
                 detail += $"; web server replied \"{await FetchStatusLineAsync(s, settings.TargetHost, c)}\"";
             return detail;
@@ -80,7 +97,7 @@ public static class TunnelChecker
         if (!t2.Ok)
         {
             Add(new CheckStep(3, "Tunnel latency", CheckStatus.Skipped, "Skipped: tunnelling failed"));
-            return new CheckReport(proxy, steps);
+            return new CheckReport(original, steps);
         }
 
         // ---- Test 3: average time for a full exchange with the target through the proxy.
@@ -111,7 +128,7 @@ public static class TunnelChecker
                 $"(min {samples.Min().TotalMilliseconds:F0} ms, max {samples.Max().TotalMilliseconds:F0} ms)", avg));
         }
 
-        return new CheckReport(proxy, steps);
+        return new CheckReport(original, steps);
     }
 
     private static string AuthNote(Tunnel p) =>
@@ -156,7 +173,7 @@ public static class TunnelChecker
         return line;
     }
 
-    private readonly record struct Result(bool Ok, string Detail, TimeSpan Elapsed);
+    internal readonly record struct Result(bool Ok, string Detail, TimeSpan Elapsed);
 
     private static async Task<Result> Timed(Func<CancellationToken, Task<string>> action, TimeSpan timeout, CancellationToken ct)
     {

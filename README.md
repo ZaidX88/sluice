@@ -1,7 +1,7 @@
 # Sluice
 
 A rule-based tunnelling client for Windows. Sluice decides, per application, host and port, whether
-traffic goes direct, gets blocked, or flows through a tunnel (SOCKS and HTTP today; SSH, Shadowsocks,
+traffic goes direct, gets blocked, or flows through a tunnel (SSH, SOCKS and HTTP today; Shadowsocks,
 VMess/VLESS, Trojan and Hysteria2 next) or a chain of tunnels.
 
 Built with C# / .NET 10: WinDivert for interception, WPF for the app. Profiles are saved as
@@ -20,7 +20,7 @@ analysis and the build plan.
 | 6 | Proxy checker (3 tests), statistics per app/target/rule, daily file log, clean shutdown | done |
 | 7 | WPF app: Fluent light/dark UI, connections, statistics, log, tunnels (+checker), rules, settings, tray | done |
 | 8.1 | Proxy → **Tunnel** model, Sluice `.sluice` profile format, `.ppx` import/export | done |
-| 8.2 | SSH tunnels (payload, TLS with SNI) | next |
+| 8.2 | SSH tunnels: password/key login, host-key pinning, modes direct / payload / SSL / SSL+payload / payload+SSL | done |
 | 8.3 | sing-box: Shadowsocks, VMess, VLESS (+REALITY), Trojan, Hysteria2, TUIC | planned |
 | 8.4 | Import share links / subscriptions; 8.5 UDP through tunnels | planned |
 

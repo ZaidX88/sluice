@@ -81,7 +81,7 @@ static async Task<int> RunEngineAsync(string[] args)
     using var fileLog = logDir is null ? null : new FileLog(tracker, logDir, fileLevel);
     var stats = new Statistics(tracker);
 
-    var engine = new RoutingEngine(profile!, tracker);
+    await using var engine = new RoutingEngine(profile!, tracker);
     engine.Reload(profile!);
 
     await using var socks = new Socks5Inbound(engine, socksBind);
@@ -180,6 +180,7 @@ static async Task<int> RunCheckAsync(string[] args)
 
     Console.WriteLine($"Target: {settings.TargetHost}:{settings.TargetPort}{(settings.LoadWebPage ? " (loading a web page)" : "")}\n");
     var allPassed = true;
+    await using var backends = new Sluice.Core.Tunnels.TunnelBackends(line => Console.WriteLine($"  · {line}"));
     foreach (var proxy in proxies)
     {
         Console.WriteLine($"{proxy.Type.ToString().ToUpperInvariant()} {proxy.Address}:{proxy.Port}" +
@@ -199,7 +200,7 @@ static async Task<int> RunCheckAsync(string[] args)
             var time = s.Elapsed is { } t && s.Number != 3 ? $" [{t.TotalMilliseconds:F0} ms]" : "";
             Console.WriteLine($" Test {s.Number}: {s.Name}{time}\n        {s.Detail}");
         });
-        var report = await TunnelChecker.CheckAsync(proxy, settings, progress);
+        var report = await TunnelChecker.CheckAsync(proxy, settings, progress, backends: backends);
         allPassed &= report.Passed;
         Console.WriteLine(report.Passed ? "  => Tunnel is working\n" : "  => Testing failed\n");
     }

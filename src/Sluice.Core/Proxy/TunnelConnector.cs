@@ -9,9 +9,11 @@ public sealed class ConnectionBlockedException(string rule) : IOException($"Bloc
 
 /// <summary>
 /// Opens an outgoing TCP connection to host:port according to a rule action:
-/// direct, a single proxy, or a chain (simple / redundancy / load balancing).
+/// direct, a single tunnel, or a chain (simple / redundancy / load balancing).
+/// Encrypted tunnels (SSH, …) are run by <see cref="Tunnels.TunnelBackends"/> and reached through
+/// their local SOCKS5 endpoint.
 /// </summary>
-public sealed class TunnelConnector(Profile profile)
+public sealed class TunnelConnector(Profile profile, Tunnels.TunnelBackends? backends = null)
 {
     private readonly ConcurrentDictionary<int, DateTime> _failedUntil = new();
     private readonly ConcurrentDictionary<int, int> _pidAffinity = new();
@@ -107,10 +109,26 @@ public sealed class TunnelConnector(Profile profile)
         }
     }
 
+    /// <summary>
+    /// Replaces an encrypted first hop by the local SOCKS5 endpoint of its running session.
+    /// (Later hops would need the session's transport to run through the earlier hops; not supported yet.)
+    /// </summary>
+    private async Task<IReadOnlyList<Tunnel>> ResolveBackendHopsAsync(IReadOnlyList<Tunnel> hops, CancellationToken ct)
+    {
+        for (var i = 1; i < hops.Count; i++)
+            if (Tunnels.TunnelBackends.Handles(hops[i].Type))
+                throw new ProxyException($"{hops[i].Type.DisplayName()} tunnel \"{hops[i]}\" can only be the first hop of a chain");
+        if (!Tunnels.TunnelBackends.Handles(hops[0].Type)) return hops;
+        if (backends is null) throw new ProxyException($"{hops[0].Type.DisplayName()} tunnels are not available here");
+        var local = await backends.AsLocalSocksAsync(hops[0], ct);
+        return [local, .. hops.Skip(1)];
+    }
+
     /// <summary>Connect to hops[0], then tunnel hop-by-hop, finally to host:port.</summary>
     private async Task<TcpClient> ThroughHopsAsync(IReadOnlyList<Tunnel> hops, string host, int port,
         TimeSpan timeout, CancellationToken ct)
     {
+        hops = await ResolveBackendHopsAsync(hops, ct);
         var client = await OpenTcpAsync(hops[0].Address, hops[0].Port, timeout, ct);
         try
         {

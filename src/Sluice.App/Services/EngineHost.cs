@@ -50,6 +50,13 @@ public sealed class EngineHost : IAsyncDisposable
         Statistics = new Statistics(Tracker);
         Profile = Profile.CreateDefault();
         Engine = new RoutingEngine(Profile, Tracker);
+        // Trust-on-first-use: remember an SSH server's host key in the profile (checked from then on).
+        Engine.Backends.HostKeyLearned += (tunnel, key) => System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
+        {
+            if (Profile.FindTunnel(tunnel.Id) is not { } t || t.Settings.ContainsKey("hostkey")) return;
+            t.Settings["hostkey"] = key;
+            CommitProfileEdit(notify: false);
+        });
         ApplyFileLog();
     }
 
@@ -240,6 +247,7 @@ public sealed class EngineHost : IAsyncDisposable
         await Tracker.WaitIdleAsync(TimeSpan.FromSeconds(2));
         await StopInterceptionAsync();
         if (_socks is not null) await _socks.DisposeAsync();
+        await Engine.DisposeAsync();   // closes SSH sessions
         _fileLog?.Dispose();
     }
 }

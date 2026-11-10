@@ -87,11 +87,18 @@ public sealed class EngineHost : IAsyncDisposable
         Profile = Profile.CreateDefault();
         Engine = new RoutingEngine(Profile, Tracker);
         // Trust-on-first-use: remember an SSH server's host key in the profile (checked from then on).
-        Engine.Backends.HostKeyLearned += (tunnel, key) => System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
+        Engine.Backends.HostKeyLearned += (tunnel, fingerprint, publicKey) => System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
         {
-            if (Profile.FindTunnel(tunnel.Id) is not { } t || t.Settings.ContainsKey("hostkey")) return;
-            t.Settings["hostkey"] = key;
-            CommitProfileEdit(notify: false);
+            if (Profile.FindTunnel(tunnel.Id) is not { } t) return;
+            var changed = false;
+            if (!t.Settings.TryGetValue("hostkey", out var pinned)) { t.Settings["hostkey"] = fingerprint; pinned = fingerprint; changed = true; }
+            // The full key (needed by sing-box's SSH client) is only added for the server already pinned.
+            if (publicKey is not null && pinned == fingerprint && (!t.Settings.TryGetValue("hostpubkey", out var old) || old != publicKey))
+            {
+                t.Settings["hostpubkey"] = publicKey;
+                changed = true;
+            }
+            if (changed) CommitProfileEdit(notify: false);
         });
         ApplyFileLog();
     }
@@ -232,6 +239,7 @@ public sealed class EngineHost : IAsyncDisposable
     {
         Engine.Reload(Profile);
         if (_interceptor is { } i && i.NeedsRestartFor(Profile)) _ = RestartInterceptionAsync();
+        else if (_interceptor is not null) Engine.WarmUpTunnels();   // rules may now use other tunnels
     }
 
     private async Task RestartInterceptionAsync()
@@ -259,6 +267,7 @@ public sealed class EngineHost : IAsyncDisposable
         }
         _interceptor = i;
         StateChanged?.Invoke();
+        Engine.WarmUpTunnels();   // connect the rules' tunnels now, not on the first captured connection
         return null;
     }
 
@@ -270,6 +279,15 @@ public sealed class EngineHost : IAsyncDisposable
         await i.DisposeAsync();
         StateChanged?.Invoke();
     }
+
+    /// <summary>Extra diagnostic log file for this run only (--log-file DIR); not saved in settings.</summary>
+    public void StartDiagnosticLog(string directory)
+    {
+        Tracker.Level = LogLevel.Debug;
+        _diagLog = new FileLog(Tracker, directory, LogLevel.Debug);
+    }
+
+    private FileLog? _diagLog;
 
     public void ApplyFileLog()
     {

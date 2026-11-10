@@ -48,6 +48,38 @@ public static class SingBoxConfig
         return config.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
     }
 
+    /// <summary>
+    /// SSH through sing-box's client: SOCKS inbound + "ssh" outbound to <paramref name="server"/>:<paramref name="port"/>
+    /// (the real server, or Sluice's local transport bridge), pinned to <paramref name="hostKey"/>.
+    /// </summary>
+    public static string BuildSsh(Tunnel t, int socksPort, string server, int port, string hostKey, string hostKeyAlgorithm, string logLevel = "warn")
+    {
+        var o = new JsonObject
+        {
+            ["type"] = "ssh",
+            ["tag"] = "out",
+            ["server"] = server,
+            ["server_port"] = port,
+            ["user"] = t.Username,
+            ["host_key"] = new JsonArray(hostKey),
+            ["host_key_algorithms"] = new JsonArray(hostKeyAlgorithm),
+        };
+        if (!string.IsNullOrEmpty(t.Password)) o["password"] = t.Password;
+        if (t.Settings.TryGetValue("privatekey", out var key) && !string.IsNullOrWhiteSpace(key))
+        {
+            o["private_key"] = key.Trim() + "\n";
+            if (t.Settings.TryGetValue("passphrase", out var pass) && pass.Length > 0) o["private_key_passphrase"] = pass;
+        }
+        var config = new JsonObject
+        {
+            ["log"] = new JsonObject { ["level"] = logLevel, ["timestamp"] = false },
+            ["inbounds"] = new JsonArray(new JsonObject { ["type"] = "socks", ["tag"] = "in", ["listen"] = "127.0.0.1", ["listen_port"] = socksPort }),
+            ["outbounds"] = new JsonArray(o),
+            ["route"] = new JsonObject { ["final"] = "out" },
+        };
+        return config.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+    }
+
     public static JsonObject Outbound(Tunnel t, string? serverIp = null)
     {
         var s = t.Settings;

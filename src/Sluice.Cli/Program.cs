@@ -120,6 +120,7 @@ static async Task<int> RunEngineAsync(string[] args)
         try
         {
             interceptor.Start();
+            engine.WarmUpTunnels();
         }
         catch (Exception ex)
         {

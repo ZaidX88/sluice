@@ -137,6 +137,30 @@ public sealed class RoutingEngine : IAsyncDisposable
         catch { return false; }
     }
 
+    /// <summary>
+    /// Starts the sessions of encrypted tunnels (SSH, sing-box) that enabled rules route to, so they are ready
+    /// before the first connection. Runs in the background; failures are logged and retried on first use.
+    /// </summary>
+    public void WarmUpTunnels()
+    {
+        var p = _state.Profile;
+        var ids = new HashSet<int>();
+        foreach (var r in p.Rules.Where(r => r.Enabled))
+        {
+            if (r.Action.Type == RuleActionType.Tunnel && r.Action.TargetId is { } id) ids.Add(id);
+            else if (r.Action.Type == RuleActionType.Chain && p.FindChain(r.Action.TargetId ?? -1) is { } c)
+                foreach (var h in c.Hops.Where(h => h.Enabled)) ids.Add(h.TunnelId);
+        }
+        foreach (var t in ids.Select(p.FindTunnel).OfType<Tunnel>().Where(t => Tunnels.TunnelBackends.Handles(t.Type)))
+        {
+            _ = Task.Run(async () =>
+            {
+                try { await Backends.GetLocalSocksAsync(t, CancellationToken.None); }
+                catch { /* already logged by the backends; the next connection retries */ }
+            });
+        }
+    }
+
     // ---------- UDP ----------
 
     /// <summary>Decides an application's UDP flow per its rule and the profile's UDP mode.</summary>
@@ -229,7 +253,8 @@ public sealed class RoutingEngine : IAsyncDisposable
             await Relay.RunAsync(app, upstream.Client,
                 n => Tracker.CountSent(entry, n),
                 n => Tracker.CountReceived(entry, n),
-                linked.Token);
+                linked.Token,
+                UsesSsh(state.Profile, match.Action) ? SshDownstreamBuffer : 0);
 
             Tracker.Write(LogLevel.Verbose, $"{who} - {target} closed, {entry.BytesSent} bytes sent, {entry.BytesReceived} bytes received");
             Tracker.End(entry, ConnectionState.Closed);
@@ -257,6 +282,18 @@ public sealed class RoutingEngine : IAsyncDisposable
             app.Dispose();
         }
     }
+
+    /// <summary>Per-connection download buffer for SSH routes (see <see cref="Relay.RunAsync"/>).</summary>
+    public const int SshDownstreamBuffer = 16 * 1024 * 1024;
+
+    /// <summary>True when the route's first hop is an SSH tunnel (SSH.NET channels have no flow control).</summary>
+    internal static bool UsesSsh(Profile p, RuleAction a) => a.Type switch
+    {
+        RuleActionType.Tunnel => p.FindTunnel(a.TargetId ?? -1)?.Type == TunnelType.Ssh,
+        RuleActionType.Chain => p.FindChain(a.TargetId ?? -1) is { } c &&
+                                c.Hops.Where(h => h.Enabled).Select(h => p.FindTunnel(h.TunnelId)).Any(t => t?.Type == TunnelType.Ssh),
+        _ => false,
+    };
 
     private bool IsLoop(InboundRequest req)
     {

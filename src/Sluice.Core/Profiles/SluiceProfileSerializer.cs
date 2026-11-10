@@ -60,6 +60,7 @@ public static class SluiceProfileSerializer
         public int? ProxifierOptions { get; set; }
         public Dictionary<string, string>? Settings { get; set; }
         public int? Subscription { get; set; }
+        public bool? Enabled { get; set; }
     }
 
     // ---------------- reading ----------------
@@ -98,6 +99,7 @@ public static class SluiceProfileSerializer
                 Socks4aRemoteResolve = d.Socks4aRemoteResolve ?? true,
                 Options = d.ProxifierOptions ?? 0,
                 SubscriptionId = d.Subscription,
+                Enabled = d.Enabled ?? true,
             };
             t.Password = Decode(codec, d.Password, t, "password");
             foreach (var (k, v) in d.Settings ?? [])
@@ -151,6 +153,7 @@ public static class SluiceProfileSerializer
                 Socks4aRemoteResolve = t.Type == TunnelType.Socks4 ? t.Socks4aRemoteResolve : null,
                 ProxifierOptions = t.Options == 0 ? null : t.Options,
                 Subscription = t.SubscriptionId,
+                Enabled = t.Enabled ? null : false,
                 Settings = t.Settings.Count == 0
                     ? null
                     : t.Settings.ToDictionary(kv => kv.Key, kv => SecretSettings.Contains(kv.Key) && kv.Value.Length > 0 ? codec.Encode(kv.Value) : kv.Value),

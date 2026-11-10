@@ -59,6 +59,23 @@
                 </StackPanel>
             </Border>
 
+            <!-- Tunnels -->
+            <Border Style="{StaticResource CardBox}" Margin="0,0,0,16">
+                <StackPanel>
+                    <TextBlock Text="Tunnels" Style="{StaticResource SectionTitle}"/>
+                    <TextBlock Style="{StaticResource Muted}" TextWrapping="Wrap"
+                               Text="Encrypted tunnels (SSH, VLESS, …) connect when capture starts or on first use, are checked every 30 seconds, and reconnect on their own. After 5 failed attempts in a row Sluice stops trying until you press Check or turn the tunnel off and on."/>
+                    <TextBlock Text="Stop a tunnel nothing uses" Style="{StaticResource FieldLabel}" Margin="0,14,0,4"/>
+                    <ComboBox ItemsSource="{Binding IdleOptions}" SelectedIndex="{Binding IdleIndex}" HorizontalAlignment="Left" MinWidth="420"/>
+                    <CheckBox Style="{StaticResource Switch}" Margin="0,16,0,0" IsChecked="{Binding TunnelNotifications}">
+                        <StackPanel>
+                            <TextBlock Text="Tunnel notifications" FontWeight="Bold"/>
+                            <TextBlock Style="{StaticResource Muted}" Text="Show a Windows notification when a tunnel connects, disconnects or gives up."/>
+                        </StackPanel>
+                    </CheckBox>
+                </StackPanel>
+            </Border>
+
             <!-- UDP -->
             <Border Style="{StaticResource CardBox}" Margin="0,0,0,16">
                 <StackPanel>

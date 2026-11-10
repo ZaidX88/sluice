@@ -11,6 +11,12 @@ public sealed class AppSettings
     public bool StartInterceptionOnLaunch { get; set; }
     public bool MinimizeToTray { get; set; } = true;
     public bool FileLogEnabled { get; set; }
+
+    /// <summary>Stop a tunnel nothing has used for this many minutes (0 = never).</summary>
+    public int TunnelIdleMinutes { get; set; } = 10;
+
+    /// <summary>Windows notifications when tunnels connect, disconnect or give up.</summary>
+    public bool TunnelNotifications { get; set; } = true;
     public string LogDirectory { get; set; } = Path.Combine(Folder, "Logs");
 
     public static string Folder =>

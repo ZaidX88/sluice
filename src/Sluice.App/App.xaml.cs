@@ -17,8 +17,13 @@ public partial class App : Application
     private TrayIcon? _tray;
     private MainWindow? _window;
 
+    [System.Runtime.InteropServices.DllImport("shell32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    private static extern int SetCurrentProcessExplicitAppUserModelID(string appId);
+
     protected override async void OnStartup(StartupEventArgs e)
     {
+        // Windows names notifications by the app identity; without one it shows a random GUID.
+        try { SetCurrentProcessExplicitAppUserModelID("Sluice"); } catch { /* cosmetic */ }
         base.OnStartup(e);
         var args = e.Args;
         string? screenshotDir = Arg(args, "--screenshot");
@@ -56,6 +61,7 @@ public partial class App : Application
         _window = new MainWindow(vm, settings);
         MainWindow = _window;
         _tray = new TrayIcon(vm, ShowWindow, ExitApp);
+        _host.TunnelNotice += (title, text, error) => _tray?.Notify(title, text, error);
 
         _window.Show();
 

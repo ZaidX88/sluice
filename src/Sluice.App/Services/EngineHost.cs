@@ -38,6 +38,57 @@ public sealed class EngineHost : IAsyncDisposable
     /// <summary>A neutral notice for the banner (e.g. "3 tunnels imported").</summary>
     public event Action<string>? Notice;
 
+    /// <summary>A tunnel connected, disconnected or gave up: (title, message, isError). Shown as a notification.</summary>
+    public event Action<string, string, bool>? TunnelNotice;
+
+    private readonly Dictionary<int, Sluice.Core.Tunnels.SessionState> _lastTunnelState = new();
+
+    /// <summary>Turns state changes into notices, only on real transitions (a retry loop must not flood the user).</summary>
+    private void OnTunnelStatus(Tunnel t, Sluice.Core.Tunnels.SessionStatus st)
+    {
+        string? title = null, text = null;
+        var error = false;
+        lock (_lastTunnelState)
+        {
+            _lastTunnelState.TryGetValue(t.Id, out var prev);
+            _lastTunnelState[t.Id] = st.State;
+            var name = t.Label ?? $"{t.Address}:{t.Port}";
+            switch (st.State)
+            {
+                case Sluice.Core.Tunnels.SessionState.Connected when prev != Sluice.Core.Tunnels.SessionState.Connected:
+                    var again = prev is Sluice.Core.Tunnels.SessionState.Reconnecting;
+                    title = again ? $"{name} reconnected" : $"{name} connected";
+                    text = $"{t.Type.DisplayName()} tunnel is up.";
+                    break;
+                case Sluice.Core.Tunnels.SessionState.Reconnecting when prev == Sluice.Core.Tunnels.SessionState.Connected:
+                    title = $"{name} disconnected";
+                    text = $"{st.Detail}. Reconnecting…";
+                    error = true;
+                    break;
+                case Sluice.Core.Tunnels.SessionState.Reconnecting when prev is Sluice.Core.Tunnels.SessionState.Connecting && st.Detail?.StartsWith("attempt 1 ") == true:
+                    title = $"{name} could not connect";
+                    text = $"{st.Detail}. Retrying…";
+                    error = true;
+                    break;
+                case Sluice.Core.Tunnels.SessionState.Failed:
+                    title = $"{name} stopped";
+                    text = $"{st.Detail}. Check the tunnel, or turn it off and on, to try again.";
+                    error = true;
+                    break;
+                case Sluice.Core.Tunnels.SessionState.Idle when prev == Sluice.Core.Tunnels.SessionState.Connected:
+                    title = $"{name} disconnected";
+                    text = $"{st.Detail}.";
+                    break;
+            }
+        }
+        if (title is not null && Settings.TunnelNotifications)
+            System.Windows.Application.Current?.Dispatcher.BeginInvoke(() => TunnelNotice?.Invoke(title, text!, error));
+    }
+
+    /// <summary>Applies the tunnel settings (idle stop) to the engine.</summary>
+    public void ApplyTunnelSettings() =>
+        Engine.Backends.IdleTimeout = Settings.TunnelIdleMinutes > 0 ? TimeSpan.FromMinutes(Settings.TunnelIdleMinutes) : TimeSpan.Zero;
+
     /// <summary>Capture is redirecting connections but none arrive: Windows Firewall blocks Sluice.</summary>
     public event Action? FirewallBlocked;
 
@@ -101,6 +152,8 @@ public sealed class EngineHost : IAsyncDisposable
             if (changed) CommitProfileEdit(notify: false);
         });
         ApplyFileLog();
+        Engine.Backends.StatusChanged += OnTunnelStatus;
+        ApplyTunnelSettings();
     }
 
     public string ProfileName => ProfilePath is null ? "Untitled profile" : Path.GetFileNameWithoutExtension(ProfilePath);

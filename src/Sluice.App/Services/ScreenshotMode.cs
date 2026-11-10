@@ -48,6 +48,7 @@ internal static class ScreenshotMode
         p.Subscriptions.Add(sub);
         var hy = new Tunnel { Id = 104, Type = TunnelType.Hysteria2, Address = "de1.provider.example", Port = 443, Password = "x", Label = "Germany 01", SubscriptionId = 1 };
         p.Tunnels.Add(hy);
+        p.Tunnels[1].Enabled = false;   // show the switch in both positions
         if (!directOnly)
         {
             p.Rules.Insert(0, new Rule { Name = "Browsers", Applications = "chrome.exe; firefox.exe; msedge.exe", Action = RuleAction.ViaTunnel(100) });

@@ -71,6 +71,9 @@ public sealed class Tunnel
     /// </summary>
     public Dictionary<string, string> Settings { get; } = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>Turned off: rules that use it fail (no traffic leaks out directly) and chains skip it.</summary>
+    public bool Enabled { get; set; } = true;
+
     /// <summary>The subscription this tunnel came from (refreshing it may update or remove the tunnel).</summary>
     public int? SubscriptionId { get; set; }
 

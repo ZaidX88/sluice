@@ -45,6 +45,7 @@ public sealed class UdpNat : IAsyncDisposable
         public readonly ConcurrentDictionary<int, Flow> LastByPort = new();
         public DateTime FailedAt;
         public volatile bool Dead;
+        public IDisposable? Lease;
     }
 
     private readonly RoutingEngine _engine;
@@ -160,8 +161,12 @@ public sealed class UdpNat : IAsyncDisposable
         while (true)
         {
             var c = _clients.GetOrAdd(key, _ => new Client { Src = src, Tunnel = t });
-            if (!c.Dead) return c;
-            _clients.TryRemove(new KeyValuePair<(IPEndPoint, int), Client>(key, c));
+            if (!c.Dead)
+            {
+                lock (c) c.Lease ??= _engine.Backends.Lease(t.Id);   // after the add: the factory may run twice
+                return c;
+            }
+            if (_clients.TryRemove(new KeyValuePair<(IPEndPoint, int), Client>(key, c))) c.Lease?.Dispose();
         }
     }
 
@@ -183,7 +188,7 @@ public sealed class UdpNat : IAsyncDisposable
             {
                 c.Dead = true;
                 c.FailedAt = DateTime.UtcNow;
-                _clients.TryRemove(new KeyValuePair<(IPEndPoint, int), Client>((c.Src, c.Tunnel.Id), c));
+                if (_clients.TryRemove(new KeyValuePair<(IPEndPoint, int), Client>((c.Src, c.Tunnel.Id), c))) c.Lease?.Dispose();
                 Report($"fail:{c.Tunnel.Id}:{ex.Message}", LogLevel.Error, $"UDP through {c.Tunnel.Type.DisplayName()} {c.Tunnel} failed: {ex.Message}");
             }
         }
@@ -195,7 +200,7 @@ public sealed class UdpNat : IAsyncDisposable
         a.Closed += () =>
         {
             c.Dead = true;
-            _clients.TryRemove(new KeyValuePair<(IPEndPoint, int), Client>((c.Src, c.Tunnel.Id), c));
+            if (_clients.TryRemove(new KeyValuePair<(IPEndPoint, int), Client>((c.Src, c.Tunnel.Id), c))) c.Lease?.Dispose();
         };
         return a;
     }
@@ -248,6 +253,7 @@ public sealed class UdpNat : IAsyncDisposable
     private static async Task CloseAsync(Client c)
     {
         c.Dead = true;
+        c.Lease?.Dispose();
         try
         {
             if (c.Association is { } t) await (await t).DisposeAsync();

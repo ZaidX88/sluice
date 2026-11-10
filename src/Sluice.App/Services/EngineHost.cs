@@ -35,6 +35,11 @@ public sealed class EngineHost : IAsyncDisposable
     public event Action? StateChanged;
     public event Action? ProfileChanged;
 
+    /// <summary>A neutral notice for the banner (e.g. "3 tunnels imported").</summary>
+    public event Action<string>? Notice;
+
+    public void Notify(string text) => Notice?.Invoke(text);
+
     public static bool IsElevated
     {
         get

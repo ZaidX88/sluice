@@ -44,6 +44,7 @@ public static class SluiceProfileSerializer
         public List<TunnelDoc> Tunnels { get; set; } = [];
         public List<TunnelChain> Chains { get; set; } = [];
         public List<Rule> Rules { get; set; } = [];
+        public List<Subscription>? Subscriptions { get; set; }
     }
 
     private sealed class TunnelDoc
@@ -58,6 +59,7 @@ public static class SluiceProfileSerializer
         public bool? Socks4aRemoteResolve { get; set; }
         public int? ProxifierOptions { get; set; }
         public Dictionary<string, string>? Settings { get; set; }
+        public int? Subscription { get; set; }
     }
 
     // ---------------- reading ----------------
@@ -95,6 +97,7 @@ public static class SluiceProfileSerializer
                 Username = d.Username,
                 Socks4aRemoteResolve = d.Socks4aRemoteResolve ?? true,
                 Options = d.ProxifierOptions ?? 0,
+                SubscriptionId = d.Subscription,
             };
             t.Password = Decode(codec, d.Password, t, "password");
             foreach (var (k, v) in d.Settings ?? [])
@@ -103,6 +106,7 @@ public static class SluiceProfileSerializer
         }
         profile.Chains.AddRange(doc.Chains);
         profile.Rules.AddRange(doc.Rules);
+        profile.Subscriptions.AddRange(doc.Subscriptions ?? []);
         if (!profile.Rules.Any(r => r.IsDefault))
             profile.Rules.Add(new Rule { Name = "Default", Action = RuleAction.Direct });
         return profile;
@@ -134,6 +138,7 @@ public static class SluiceProfileSerializer
             Options = p.Options,
             Chains = p.Chains,
             Rules = p.Rules,
+            Subscriptions = p.Subscriptions.Count == 0 ? null : p.Subscriptions,
             Tunnels = p.Tunnels.Select(t => new TunnelDoc
             {
                 Id = t.Id,
@@ -145,6 +150,7 @@ public static class SluiceProfileSerializer
                 Password = string.IsNullOrEmpty(t.Password) ? null : codec.Encode(t.Password),
                 Socks4aRemoteResolve = t.Type == TunnelType.Socks4 ? t.Socks4aRemoteResolve : null,
                 ProxifierOptions = t.Options == 0 ? null : t.Options,
+                Subscription = t.SubscriptionId,
                 Settings = t.Settings.Count == 0
                     ? null
                     : t.Settings.ToDictionary(kv => kv.Key, kv => SecretSettings.Contains(kv.Key) && kv.Value.Length > 0 ? codec.Encode(kv.Value) : kv.Value),

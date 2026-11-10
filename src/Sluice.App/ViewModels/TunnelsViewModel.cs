@@ -4,10 +4,11 @@ using Sluice.App.Mvvm;
 using Sluice.App.Services;
 using Sluice.Core.Checker;
 using Sluice.Core.Profiles;
+using Sluice.Core.Tunnels;
 
 namespace Sluice.App.ViewModels;
 
-public sealed class TunnelRow(Tunnel tunnel) : ObservableObject
+public sealed class TunnelRow(Tunnel tunnel, string? source = null) : ObservableObject
 {
     private string _status = "Not checked";
     private bool? _ok;
@@ -15,6 +16,8 @@ public sealed class TunnelRow(Tunnel tunnel) : ObservableObject
     public Tunnel Tunnel { get; } = tunnel;
     public string Name => Tunnel.Label ?? $"{Tunnel.Address}:{Tunnel.Port}";
     public string Endpoint => $"{Tunnel.Address}:{Tunnel.Port}";
+    /// <summary>Subscription the tunnel came from, if any.</summary>
+    public string? Source { get; } = source;
     public string Type => Tunnel.Type.DisplayName().ToUpperInvariant();
     public string Auth => Tunnel.Type switch
     {
@@ -35,6 +38,7 @@ public sealed class TunnelsViewModel : PageViewModel
     private TunnelRow? _selected;
     private string _checkTitle = "";
     private bool _checking;
+    private bool _updating;
 
     public TunnelsViewModel(EngineHost host)
         : base(host, "Tunnels", "", "Routes out of this PC — SSH, VLESS, VMess, Trojan, Shadowsocks, Hysteria2, TUIC, SOCKS and HTTP. Rules choose which traffic uses which tunnel.")
@@ -42,6 +46,9 @@ public sealed class TunnelsViewModel : PageViewModel
         AddCommand = new RelayCommand(Add);
         EditCommand = new RelayCommand(Edit, () => Selected is not null);
         RemoveCommand = new RelayCommand(Remove, () => Selected is not null);
+        ImportCommand = new RelayCommand(Import);
+        CopyLinkCommand = new RelayCommand(CopyLink, () => Selected is not null);
+        UpdateCommand = new AsyncCommand(UpdateSubscriptionsAsync, () => !_updating && Host.Profile.Subscriptions.Count > 0);
         CheckCommand = new AsyncCommand(CheckSelectedAsync, () => Selected is not null && !_checking);
         OnProfileChanged();
     }
@@ -52,6 +59,11 @@ public sealed class TunnelsViewModel : PageViewModel
     public ICommand EditCommand { get; }
     public ICommand RemoveCommand { get; }
     public ICommand CheckCommand { get; }
+    public ICommand ImportCommand { get; }
+    public ICommand CopyLinkCommand { get; }
+    public ICommand UpdateCommand { get; }
+    public bool HasSubscriptions => Host.Profile.Subscriptions.Count > 0;
+    public string UpdateLabel => _updating ? "Updating…" : Host.Profile.Subscriptions.Count == 1 ? "Update subscription" : "Update subscriptions";
 
     public TunnelRow? Selected { get => _selected; set => Set(ref _selected, value); }
     public string CheckTitle { get => _checkTitle; private set => Set(ref _checkTitle, value); }
@@ -64,11 +76,14 @@ public sealed class TunnelsViewModel : PageViewModel
         Rows.Clear();
         foreach (var p in Host.Profile.Tunnels)
         {
-            var row = new TunnelRow(p);
+            var source = p.SubscriptionId is { } sid ? Host.Profile.Subscriptions.FirstOrDefault(s => s.Id == sid)?.Name : null;
+            var row = new TunnelRow(p, source);
             if (keep.TryGetValue(p, out var k)) { row.Status = k.Status; row.Ok = k.Ok; }
             Rows.Add(row);
         }
         Raise(nameof(IsEmpty));
+        Raise(nameof(HasSubscriptions));
+        Raise(nameof(UpdateLabel));
     }
 
     private void Add()
@@ -93,6 +108,61 @@ public sealed class TunnelsViewModel : PageViewModel
 
         Host.CommitProfileEdit();
         Selected = Rows.FirstOrDefault(r => r.Tunnel == p);
+    }
+
+    private void Import()
+    {
+        var hadRouting = Host.Profile.Rules.Any(r => r.Action.Type is RuleActionType.Tunnel or RuleActionType.Chain);
+        var result = Dialogs.Import(Host.Profile, Host.Engine.Backends.Resolver);
+        if (result is null) return;
+        Host.CommitProfileEdit();
+        Selected = Rows.FirstOrDefault(r => result.Added.Count > 0 && r.Tunnel == result.Added[0]);
+        var note = $"Import: {result.Summary}.";
+        if (result.Warnings.Count > 0) note += " " + string.Join(" · ", result.Warnings.Take(3)) + (result.Warnings.Count > 3 ? " …" : "");
+        if (!hadRouting && result.Added.Count > 0) note += " Point a rule at a tunnel to use it.";
+        Host.Notify(note);
+    }
+
+    private void CopyLink()
+    {
+        if (Selected is null) return;
+        try
+        {
+            System.Windows.Clipboard.SetText(ShareLinks.ToLink(Selected.Tunnel));
+            Host.Notify($"Share link for {Selected.Name} copied. It contains the tunnel's password or key — share it only with people you trust.");
+        }
+        catch (System.Runtime.InteropServices.ExternalException)
+        {
+            Host.Notify("The clipboard is busy; try again.");
+        }
+    }
+
+    private async Task UpdateSubscriptionsAsync()
+    {
+        _updating = true;
+        Raise(nameof(UpdateLabel));
+        var notes = new List<string>();
+        try
+        {
+            foreach (var sub in Host.Profile.Subscriptions.ToList())
+            {
+                try
+                {
+                    var r = await Subscriptions.UpdateAsync(Host.Profile, sub, Host.Engine.Backends.Resolver);
+                    notes.Add($"{sub.Name}: {r.Summary}" + (r.Warnings.Count > 0 ? $" ({string.Join("; ", r.Warnings.Take(2))})" : ""));
+                }
+                catch (Exception ex) when (ex is System.Net.Http.HttpRequestException or System.IO.InvalidDataException)
+                {
+                    notes.Add($"{ex.Message} — kept the current tunnels");
+                }
+            }
+        }
+        finally
+        {
+            _updating = false;
+            Host.CommitProfileEdit();
+        }
+        Host.Notify(string.Join(" · ", notes));
     }
 
     private void Edit()
@@ -120,6 +190,21 @@ public sealed class TunnelsViewModel : PageViewModel
         var p = Selected.Tunnel;
         var rules = Host.Profile.Rules.Where(r => r.Action.Type == RuleActionType.Tunnel && r.Action.TargetId == p.Id).ToList();
         var chains = Host.Profile.Chains.Where(c => c.Hops.Any(h => h.TunnelId == p.Id)).ToList();
+
+        if (p.SubscriptionId is { } subId && Host.Profile.Subscriptions.FirstOrDefault(s => s.Id == subId) is { } sub)
+        {
+            var count = Host.Profile.Tunnels.Count(t => t.SubscriptionId == subId);
+            var answer = Dialogs.Ask("Remove tunnel",
+                $"{Selected.Name} comes from the subscription \"{sub.Name}\" and would return on the next update.\n\n" +
+                $"Yes — remove the whole subscription and its {count} tunnel(s)\nNo — remove only this tunnel\n\n" +
+                "Rules that use removed tunnels are switched to Direct.");
+            if (answer is null) return;
+            var removed = new ImportResult();
+            if (answer == true) Subscriptions.RemoveSubscription(Host.Profile, sub);
+            else Subscriptions.RemoveTunnel(Host.Profile, p, removed);
+            Host.CommitProfileEdit();
+            return;
+        }
 
         var message = $"Remove tunnel {Selected.Name}?";
         if (rules.Count > 0)

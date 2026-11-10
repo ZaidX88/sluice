@@ -14,7 +14,7 @@ public partial class PasswordDialog : Window
         _confirmNew = confirmNew;
         Heading.Text = confirmNew ? "Set a master password" : "Profile is locked";
         Info.Text = confirmNew
-            ? $"Proxy passwords in \"{profileName}\" will be encrypted with this password. It is not stored anywhere — if you forget it, the passwords cannot be recovered."
+            ? $"Tunnel passwords in \"{profileName}\" will be encrypted with this password. It is not stored anywhere — if you forget it, the passwords cannot be recovered."
             : $"Enter the master password for \"{profileName}\".";
         ConfirmPanel.Visibility = confirmNew ? Visibility.Visible : Visibility.Collapsed;
         Loaded += (_, _) => Pass1.Focus();

@@ -25,14 +25,14 @@ public sealed class MainViewModel : ObservableObject
         Connections = new ConnectionsViewModel(host);
         Statistics = new StatisticsViewModel(host);
         Log = new LogViewModel(host);
-        Proxies = new ProxiesViewModel(host);
+        Tunnels = new TunnelsViewModel(host);
         Rules = new RulesViewModel(host);
         Settings = new SettingsViewModel(host);
-        Pages = [Connections, Statistics, Log, Proxies, Rules, Settings];
+        Pages = [Connections, Statistics, Log, Tunnels, Rules, Settings];
         NavGroups =
         [
             new NavGroup("Monitor", [Connections, Statistics, Log]),
-            new NavGroup("Configure", [Proxies, Rules]),
+            new NavGroup("Configure", [Tunnels, Rules]),
             new NavGroup("App", [Settings]),
         ];
         _current = Connections;
@@ -54,6 +54,7 @@ public sealed class MainViewModel : ObservableObject
         OpenCommand = new RelayCommand(Open);
         SaveCommand = new RelayCommand(Save);
         SaveAsCommand = new RelayCommand(SaveAs);
+        ExportProxifierCommand = new RelayCommand(ExportProxifier);
         NewCommand = new RelayCommand(New);
         DismissBannerCommand = new RelayCommand(() => Banner = null);
         RestartElevatedCommand = new RelayCommand(() =>
@@ -71,7 +72,7 @@ public sealed class MainViewModel : ObservableObject
     public ConnectionsViewModel Connections { get; }
     public StatisticsViewModel Statistics { get; }
     public LogViewModel Log { get; }
-    public ProxiesViewModel Proxies { get; }
+    public TunnelsViewModel Tunnels { get; }
     public RulesViewModel Rules { get; }
     public SettingsViewModel Settings { get; }
     public IReadOnlyList<PageViewModel> Pages { get; }
@@ -175,6 +176,7 @@ public sealed class MainViewModel : ObservableObject
     public ICommand OpenCommand { get; }
     public ICommand SaveCommand { get; }
     public ICommand SaveAsCommand { get; }
+    public ICommand ExportProxifierCommand { get; }
     public ICommand NewCommand { get; }
     public ICommand DismissBannerCommand { get; }
     public ICommand RestartElevatedCommand { get; }
@@ -212,9 +214,23 @@ public sealed class MainViewModel : ObservableObject
     private void ShowBanner(string text, bool offerElevation = false)
     {
         BannerOffersElevation = offerElevation;
+        BannerIsError = true;
         Raise(nameof(BannerOffersElevation));
+        Raise(nameof(BannerIsError));
         Banner = text;
     }
+
+    /// <summary>Neutral notice (e.g. "imported from Proxifier") rather than an error.</summary>
+    public void ShowInfo(string text)
+    {
+        BannerOffersElevation = false;
+        BannerIsError = false;
+        Raise(nameof(BannerOffersElevation));
+        Raise(nameof(BannerIsError));
+        Banner = text;
+    }
+
+    public bool BannerIsError { get; private set; } = true;
 
     private void Tick()
     {
@@ -250,8 +266,8 @@ public sealed class MainViewModel : ObservableObject
         if (path is null) return;
         try
         {
-            _host.LoadProfile(path, (name, confirm) => Dialogs.AskMasterPassword(name, confirm));
-            Banner = null;
+            var note = _host.LoadProfile(path, (name, confirm) => Dialogs.AskMasterPassword(name, confirm));
+            if (note is not null) ShowInfo(note); else Banner = null;
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
@@ -271,6 +287,23 @@ public sealed class MainViewModel : ObservableObject
         var path = Dialogs.SaveProfile(_host.ProfileName);
         if (path is not null && !_host.TrySave(path))
             ShowBanner("The profile could not be saved; see the Log page.");
+    }
+
+    private void ExportProxifier()
+    {
+        var path = Dialogs.ExportProxifier(_host.ProfileName);
+        if (path is null) return;
+        try
+        {
+            var lost = _host.ExportProxifier(path);
+            ShowInfo(lost.Count == 0
+                ? $"Exported {Path.GetFileName(path)} for Proxifier."
+                : $"Exported {Path.GetFileName(path)} for Proxifier. Left out: {string.Join(" ", lost)}");
+        }
+        catch (Exception ex)
+        {
+            ShowBanner($"Export failed: {ex.Message}");
+        }
     }
 
     private void New()

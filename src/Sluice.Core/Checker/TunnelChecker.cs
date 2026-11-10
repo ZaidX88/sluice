@@ -22,21 +22,21 @@ public enum CheckStatus { Passed, Failed, Skipped }
 
 public sealed record CheckStep(int Number, string Name, CheckStatus Status, string Detail, TimeSpan? Elapsed = null);
 
-public sealed record CheckReport(ProxyServer Proxy, IReadOnlyList<CheckStep> Steps)
+public sealed record CheckReport(Tunnel Proxy, IReadOnlyList<CheckStep> Steps)
 {
     public bool Passed => Steps.All(s => s.Status != CheckStatus.Failed);
     public TimeSpan? Latency => Steps.FirstOrDefault(s => s.Number == 3 && s.Status == CheckStatus.Passed)?.Elapsed;
 }
 
 /// <summary>
-/// Equivalent of Proxifier's ProxyChecker.exe:
+/// Equivalent of Proxifier's TunnelChecker.exe:
 ///   Test 1: Connection to the Proxy Server
 ///   Test 2: Connection through the Proxy Server (optionally loading a web page)
 ///   Test 3: Proxy Server latency
 /// </summary>
-public static class ProxyChecker
+public static class TunnelChecker
 {
-    public static async Task<CheckReport> CheckAsync(ProxyServer proxy, CheckSettings? settings = null,
+    public static async Task<CheckReport> CheckAsync(Tunnel proxy, CheckSettings? settings = null,
         IProgress<CheckStep>? progress = null, CancellationToken ct = default)
     {
         settings ??= new CheckSettings();
@@ -54,12 +54,12 @@ public static class ProxyChecker
             using var tcp = await ConnectAsync(proxy.Address, proxy.Port, c);
             return $"Connected to {proxy.Address}:{proxy.Port} ({tcp.Client.RemoteEndPoint})";
         }, settings.Timeout, ct);
-        Add(new CheckStep(1, "Connection to the proxy server", t1.Ok ? CheckStatus.Passed : CheckStatus.Failed, t1.Detail, t1.Elapsed));
+        Add(new CheckStep(1, "Connection to the tunnel server", t1.Ok ? CheckStatus.Passed : CheckStatus.Failed, t1.Detail, t1.Elapsed));
 
         if (!t1.Ok)
         {
-            Add(new CheckStep(2, "Connection through the proxy server", CheckStatus.Skipped, "Skipped: the proxy is not reachable"));
-            Add(new CheckStep(3, "Proxy server latency", CheckStatus.Skipped, "Skipped: the proxy is not reachable"));
+            Add(new CheckStep(2, "Connection through the tunnel", CheckStatus.Skipped, "Skipped: the tunnel server is not reachable"));
+            Add(new CheckStep(3, "Tunnel latency", CheckStatus.Skipped, "Skipped: the tunnel server is not reachable"));
             return new CheckReport(proxy, steps);
         }
 
@@ -70,16 +70,16 @@ public static class ProxyChecker
             using var tcp = await ConnectAsync(proxy.Address, proxy.Port, c);
             var s = tcp.GetStream();
             await ProxyHandshake.ConnectAsync(s, proxy, settings.TargetHost, settings.TargetPort, c);
-            var detail = $"Connected to {target} through the proxy" + AuthNote(proxy);
+            var detail = $"Connected to {target} through the tunnel" + AuthNote(proxy);
             if (settings.LoadWebPage)
                 detail += $"; web server replied \"{await FetchStatusLineAsync(s, settings.TargetHost, c)}\"";
             return detail;
         }, settings.Timeout, ct);
-        Add(new CheckStep(2, "Connection through the proxy server", t2.Ok ? CheckStatus.Passed : CheckStatus.Failed, t2.Detail, t2.Elapsed));
+        Add(new CheckStep(2, "Connection through the tunnel", t2.Ok ? CheckStatus.Passed : CheckStatus.Failed, t2.Detail, t2.Elapsed));
 
         if (!t2.Ok)
         {
-            Add(new CheckStep(3, "Proxy server latency", CheckStatus.Skipped, "Skipped: tunnelling failed"));
+            Add(new CheckStep(3, "Tunnel latency", CheckStatus.Skipped, "Skipped: tunnelling failed"));
             return new CheckReport(proxy, steps);
         }
 
@@ -101,12 +101,12 @@ public static class ProxyChecker
             if (r.Ok) samples.Add(r.Elapsed); else error = r.Detail;
         }
         if (error is not null)
-            Add(new CheckStep(3, "Proxy server latency", CheckStatus.Failed, error));
+            Add(new CheckStep(3, "Tunnel latency", CheckStatus.Failed, error));
         else
         {
             var avg = TimeSpan.FromTicks((long)samples.Average(x => x.Ticks));
             var what = settings.LoadWebPage ? "request round trip to the target" : "tunnel setup (handshake only)";
-            Add(new CheckStep(3, "Proxy server latency", CheckStatus.Passed,
+            Add(new CheckStep(3, "Tunnel latency", CheckStatus.Passed,
                 $"{avg.TotalMilliseconds:F0} ms average {what} over {samples.Count} connections " +
                 $"(min {samples.Min().TotalMilliseconds:F0} ms, max {samples.Max().TotalMilliseconds:F0} ms)", avg));
         }
@@ -114,7 +114,7 @@ public static class ProxyChecker
         return new CheckReport(proxy, steps);
     }
 
-    private static string AuthNote(ProxyServer p) =>
+    private static string AuthNote(Tunnel p) =>
         string.IsNullOrEmpty(p.Username) ? "" : "; authentication was successful";
 
     private static async Task<TcpClient> ConnectAsync(string host, int port, CancellationToken ct)
@@ -137,7 +137,7 @@ public static class ProxyChecker
     /// <summary>GET / and return the status line; throws if the reply is not HTTP.</summary>
     private static async Task<string> FetchStatusLineAsync(Stream s, string host, CancellationToken ct)
     {
-        var req = $"GET / HTTP/1.1\r\nHost: {host}\r\nUser-Agent: Sluice-ProxyChecker\r\nAccept: */*\r\nConnection: close\r\n\r\n";
+        var req = $"GET / HTTP/1.1\r\nHost: {host}\r\nUser-Agent: Sluice-TunnelChecker\r\nAccept: */*\r\nConnection: close\r\n\r\n";
         await s.WriteAsync(Encoding.ASCII.GetBytes(req), ct);
         var buf = new byte[512];
         var got = 0;
@@ -178,19 +178,19 @@ public static class ProxyChecker
         }
     }
 
-    /// <summary>Plain-language explanation, in the spirit of ProxyChecker's messages.</summary>
+    /// <summary>Plain-language explanation, in the spirit of TunnelChecker's messages.</summary>
     private static string Explain(Exception ex) => ex switch
     {
         SocketException { SocketErrorCode: SocketError.ConnectionRefused } =>
-            "No connection could be made because the target computer actively refused it. Check the proxy address and port.",
+            "No connection could be made because the target computer actively refused it. Check the tunnel server's address and port.",
         SocketException { SocketErrorCode: SocketError.HostNotFound or SocketError.NoData } =>
-            "The proxy hostname could not be resolved.",
+            "The tunnel server's hostname could not be resolved.",
         SocketException { SocketErrorCode: SocketError.HostUnreachable or SocketError.NetworkUnreachable } =>
-            "The proxy host is unreachable.",
+            "The tunnel server is unreachable.",
         ProxyException pe when pe.Message.Contains("authentication", StringComparison.OrdinalIgnoreCase) || pe.Message.Contains("407") =>
-            $"Authentication on the proxy server failed ({pe.Message}).",
+            $"Authentication on the tunnel server failed ({pe.Message}).",
         ProxyException pe when pe.Message.Contains("not allowed by ruleset") =>
-            "Connection to the target is denied by the proxy's access rules.",
+            "Connection to the target is denied by the tunnel server's access rules.",
         ProxyException pe when pe.Message.Contains("SOCKS4 needs an IP") =>
             "Please enable the SOCKS 4A extension or specify the IP address of the target host.",
         _ => ex.Message,

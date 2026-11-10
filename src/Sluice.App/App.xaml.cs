@@ -62,7 +62,11 @@ public partial class App : Application
         var profilePath = Arg(args, "--profile") ?? settings.LastProfilePath;
         if (profilePath is not null && File.Exists(profilePath))
         {
-            try { _host.LoadProfile(profilePath, (name, confirm) => Dialogs.AskMasterPassword(name, confirm)); }
+            try
+            {
+                var note = _host.LoadProfile(profilePath, (name, confirm) => Dialogs.AskMasterPassword(name, confirm));
+                if (note is not null) vm.ShowInfo(note);
+            }
             catch (OperationCanceledException) { }
             catch (Exception ex) { vm.Banner = $"Could not open {Path.GetFileName(profilePath)}: {ex.Message}"; }
         }

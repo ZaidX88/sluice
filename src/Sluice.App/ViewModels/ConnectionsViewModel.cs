@@ -77,9 +77,9 @@ public sealed class ConnectionsViewModel : PageViewModel
         var routes = Host.Profile.Rules.Any(r => (r.Enabled || r.IsDefault) && r.Action.Type is not Core.Profiles.RuleActionType.Direct);
         RoutingHint = routes || o.HandleDirectConnections
             ? null
-            : Host.Profile.Proxies.Count == 0
-                ? "No proxy servers yet, and every rule is Direct: captured traffic goes straight out without a proxy (and isn't listed here). Add a proxy on the Proxies page."
-                : "Every rule is Direct: captured traffic goes straight out without a proxy (and isn't listed here). On the Rules page, set the Default rule — or another rule — to use your proxy.";
+            : Host.Profile.Tunnels.Count == 0
+                ? "No tunnels yet, and every rule is Direct: captured traffic goes straight out (and isn't listed here). Add a tunnel on the Tunnels page."
+                : "Every rule is Direct: captured traffic goes straight out without a tunnel (and isn't listed here). On the Rules page, set the Default rule — or another rule — to use your tunnel.";
     }
 
     public override void OnProfileChanged() => UpdateHint();

@@ -22,7 +22,7 @@ public sealed class EngineHost : IAsyncDisposable
     public AppSettings Settings { get; }
     public ConnectionTracker Tracker { get; } = new() { Level = LogLevel.Verbose };
     public Statistics Statistics { get; }
-    public ProxyEngine Engine { get; }
+    public RoutingEngine Engine { get; }
 
     public Profile Profile { get; private set; }
     public string? ProfilePath { get; private set; }
@@ -49,7 +49,7 @@ public sealed class EngineHost : IAsyncDisposable
         Settings = settings;
         Statistics = new Statistics(Tracker);
         Profile = Profile.CreateDefault();
-        Engine = new ProxyEngine(Profile, Tracker);
+        Engine = new RoutingEngine(Profile, Tracker);
         ApplyFileLog();
     }
 
@@ -57,9 +57,24 @@ public sealed class EngineHost : IAsyncDisposable
 
     // ---------------- profile ----------------
 
-    public void LoadProfile(string path, MasterPasswordProvider? askMaster)
+    /// <summary>
+    /// Opens a profile. A Proxifier .ppx is imported: it is converted into a new .sluice file in the
+    /// Sluice profiles folder (autosaving back into .ppx would lose tunnels it cannot store).
+    /// </summary>
+    /// <returns>A message for the user when the file was imported, otherwise null.</returns>
+    public string? LoadProfile(string path, MasterPasswordProvider? askMaster)
     {
-        var profile = PpxSerializer.Load(path, askMaster);
+        var profile = ProfileFile.Load(path, askMaster);
+        string? note = null;
+        if (ProfileFile.IsProxifier(path))
+        {
+            var target = UniquePath(Path.Combine(AppSettings.ProfilesFolder, Path.GetFileNameWithoutExtension(path) + ProfileFile.Extension));
+            Directory.CreateDirectory(AppSettings.ProfilesFolder);
+            SluiceProfileSerializer.Save(profile, target);
+            note = $"Imported {Path.GetFileName(path)} from Proxifier as {Path.GetFileName(target)}. Changes are saved there; the original file is untouched.";
+            Tracker.Write(LogLevel.Normal, note);
+            path = target;
+        }
         Profile = profile;
         ProfilePath = path;
         IsDirty = false;
@@ -67,6 +82,28 @@ public sealed class EngineHost : IAsyncDisposable
         Settings.LastProfilePath = path;
         Settings.Save();
         ProfileChanged?.Invoke();
+        return note;
+    }
+
+    private static string UniquePath(string path)
+    {
+        if (!File.Exists(path)) return path;
+        var dir = Path.GetDirectoryName(path)!;
+        var name = Path.GetFileNameWithoutExtension(path);
+        for (var i = 2; ; i++)
+        {
+            var candidate = Path.Combine(dir, $"{name} ({i}){ProfileFile.Extension}");
+            if (!File.Exists(candidate)) return candidate;
+        }
+    }
+
+    /// <summary>Writes a Proxifier-compatible copy; returns what could not be exported.</summary>
+    public List<string> ExportProxifier(string path)
+    {
+        var warnings = new List<string>();
+        ProfileFile.Save(Profile, path, warnings);
+        Tracker.Write(LogLevel.Normal, $"Exported {Path.GetFileName(path)} for Proxifier" + (warnings.Count > 0 ? $" ({warnings.Count} item(s) left out)" : ""));
+        return warnings;
     }
 
     /// <summary>Use an in-memory profile without a file (demo / screenshots).</summary>
@@ -102,7 +139,9 @@ public sealed class EngineHost : IAsyncDisposable
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
-            PpxSerializer.Save(Profile, path);
+            // Saving always writes Sluice's format; Proxifier copies go through ExportProxifier.
+            if (ProfileFile.IsProxifier(path)) path = Path.ChangeExtension(path, ProfileFile.Extension);
+            SluiceProfileSerializer.Save(Profile, path);
             ProfilePath = path;
             IsDirty = false;
             Settings.LastProfilePath = path;

@@ -24,7 +24,7 @@ public interface IRedirectTable
 /// Listener for transparently redirected connections. The app thinks it is talking to the
 /// real server; there is no handshake, so failures simply close the socket.
 /// </summary>
-public sealed class TransparentInbound(ProxyEngine engine, IPEndPoint bind, IRedirectTable table) : InboundListener(engine, bind)
+public sealed class TransparentInbound(RoutingEngine engine, IPEndPoint bind, IRedirectTable table) : InboundListener(engine, bind)
 {
     protected override async Task ServeAsync(Socket client, CancellationToken ct)
     {

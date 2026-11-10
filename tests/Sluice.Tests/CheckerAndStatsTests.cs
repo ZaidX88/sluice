@@ -28,8 +28,8 @@ public sealed class TinyHttpServer : LoopbackServer
 
 public class CheckerTests
 {
-    private static ProxyServer Socks(int port, string? user = null, string? pass = null) =>
-        new() { Type = ProxyType.Socks5, Address = "127.0.0.1", Port = port, Username = user, Password = pass };
+    private static Tunnel Socks(int port, string? user = null, string? pass = null) =>
+        new() { Type = TunnelType.Socks5, Address = "127.0.0.1", Port = port, Username = user, Password = pass };
 
     private static int DeadPort()
     {
@@ -45,7 +45,7 @@ public class CheckerTests
         await using var socks = new Socks5TestServer("u", "p");
         var steps = new List<CheckStep>();
 
-        var report = await ProxyChecker.CheckAsync(Socks(socks.Port, "u", "p"),
+        var report = await TunnelChecker.CheckAsync(Socks(socks.Port, "u", "p"),
             new CheckSettings { TargetHost = "127.0.0.1", TargetPort = web.Port, LatencySamples = 4 },
             new SyncProgress(steps.Add));
 
@@ -63,7 +63,7 @@ public class CheckerTests
     [Fact]
     public async Task DeadProxy_FailsTest1_SkipsTheRest()
     {
-        var report = await ProxyChecker.CheckAsync(Socks(DeadPort()));
+        var report = await TunnelChecker.CheckAsync(Socks(DeadPort()));
         Assert.False(report.Passed);
         Assert.Equal(CheckStatus.Failed, report.Steps[0].Status);
         Assert.Contains("actively refused", report.Steps[0].Detail);
@@ -74,10 +74,10 @@ public class CheckerTests
     public async Task WrongCredentials_FailTest2_WithAuthMessage()
     {
         await using var socks = new Socks5TestServer("u", "p");
-        var report = await ProxyChecker.CheckAsync(Socks(socks.Port, "u", "WRONG"), new CheckSettings { LoadWebPage = false });
+        var report = await TunnelChecker.CheckAsync(Socks(socks.Port, "u", "WRONG"), new CheckSettings { LoadWebPage = false });
         Assert.Equal(CheckStatus.Passed, report.Steps[0].Status);
         Assert.Equal(CheckStatus.Failed, report.Steps[1].Status);
-        Assert.Contains("Authentication on the proxy server failed", report.Steps[1].Detail);
+        Assert.Contains("Authentication on the tunnel server failed", report.Steps[1].Detail);
         Assert.Equal(CheckStatus.Skipped, report.Steps[2].Status);
     }
 
@@ -88,11 +88,11 @@ public class CheckerTests
         await using var socks = new Socks5TestServer();
         var target = new CheckSettings { TargetHost = "127.0.0.1", TargetPort = echo.Port };
 
-        var withPage = await ProxyChecker.CheckAsync(Socks(socks.Port), target);
+        var withPage = await TunnelChecker.CheckAsync(Socks(socks.Port), target);
         Assert.Equal(CheckStatus.Failed, withPage.Steps[1].Status);
         Assert.Contains("does not look like a usual Web Server reply", withPage.Steps[1].Detail);
 
-        var noPage = await ProxyChecker.CheckAsync(Socks(socks.Port), target with { LoadWebPage = false });
+        var noPage = await TunnelChecker.CheckAsync(Socks(socks.Port), target with { LoadWebPage = false });
         Assert.True(noPage.Passed);
     }
 
@@ -103,7 +103,7 @@ public class CheckerTests
         using var silent = new TcpListener(IPAddress.Loopback, 0);
         silent.Start();
         var port = ((IPEndPoint)silent.LocalEndpoint).Port;
-        var report = await ProxyChecker.CheckAsync(Socks(port), new CheckSettings { Timeout = TimeSpan.FromMilliseconds(500) });
+        var report = await TunnelChecker.CheckAsync(Socks(port), new CheckSettings { Timeout = TimeSpan.FromMilliseconds(500) });
         Assert.Equal(CheckStatus.Passed, report.Steps[0].Status);
         Assert.Equal(CheckStatus.Failed, report.Steps[1].Status);
         Assert.Contains("Timed out", report.Steps[1].Detail);
@@ -123,7 +123,7 @@ public class StatisticsAndLogTests
         await using var echo = new EchoServer();
         var profile = Profile.CreateDefault();
         profile.Rules.Insert(0, new Rule { Name = "NoAds", Targets = "*.ads.test", Action = RuleAction.Block });
-        var engine = new ProxyEngine(profile);
+        var engine = new RoutingEngine(profile);
         var stats = new Statistics(engine.Tracker);
         await using var inbound = new Socks5Inbound(engine, new IPEndPoint(IPAddress.Loopback, 0));
         inbound.Start();
@@ -174,9 +174,9 @@ public class StatisticsAndLogTests
         using var silent = new TcpListener(IPAddress.Loopback, 0);
         silent.Start();
         var profile = Profile.CreateDefault();
-        profile.Proxies.Add(new ProxyServer { Id = 1, Type = ProxyType.Socks5, Address = "127.0.0.1", Port = ((IPEndPoint)silent.LocalEndpoint).Port });
-        profile.Rules.Single(r => r.IsDefault).Action = RuleAction.ViaProxy(1);
-        var engine = new ProxyEngine(profile);
+        profile.Tunnels.Add(new Tunnel { Id = 1, Type = TunnelType.Socks5, Address = "127.0.0.1", Port = ((IPEndPoint)silent.LocalEndpoint).Port });
+        profile.Rules.Single(r => r.IsDefault).Action = RuleAction.ViaTunnel(1);
+        var engine = new RoutingEngine(profile);
         var errors = new List<string>();
         engine.Tracker.Log += (l, m) => { if (l == LogLevel.Error) lock (errors) errors.Add(m); };
         var closed = new TaskCompletionSource<ConnectionEntry>();

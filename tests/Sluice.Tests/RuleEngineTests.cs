@@ -7,7 +7,7 @@ namespace Sluice.Tests;
 public class RuleEngineTests
 {
     private static RuleEngine Engine(params Rule[] rules) =>
-        new(rules.Append(new Rule { Name = "Default", Action = RuleAction.ViaProxy(100) }), computerName: "MYPC");
+        new(rules.Append(new Rule { Name = "Default", Action = RuleAction.ViaTunnel(100) }), computerName: "MYPC");
 
     private static string Match(RuleEngine e, string? app, string? host, int port, string? ip = null) =>
         e.Match(new ConnectionInfo(app, host, ip is null ? null : IPAddress.Parse(ip), port)).Rule.Name;
@@ -18,7 +18,7 @@ public class RuleEngineTests
         // Default listed first must still be evaluated last.
         var e = new RuleEngine([
             new Rule { Name = "Default", Action = RuleAction.Direct },
-            new Rule { Name = "Web", Ports = "80;443", Action = RuleAction.ViaProxy(1) },
+            new Rule { Name = "Web", Ports = "80;443", Action = RuleAction.ViaTunnel(1) },
             new Rule { Name = "AlsoWeb", Ports = "443", Action = RuleAction.Block },
         ]);
         Assert.Equal("Web", e.Match(new ConnectionInfo(null, "a.com", null, 443)).Rule.Name);

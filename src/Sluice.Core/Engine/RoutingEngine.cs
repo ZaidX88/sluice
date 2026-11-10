@@ -21,16 +21,16 @@ public interface IInboundReply
 /// The heart of the app: rule matching → upstream connect (direct / proxy / chain) → relay.
 /// Inbound listeners (local SOCKS5 now, WinDivert transparent redirection later) feed it.
 /// </summary>
-public sealed class ProxyEngine
+public sealed class RoutingEngine
 {
     private readonly ConcurrentDictionary<IPEndPoint, byte> _ownEndpoints = new();
     private volatile Snapshot _state;
 
-    private sealed record Snapshot(Profile Profile, RuleEngine Rules, ProxyConnector Connector);
+    private sealed record Snapshot(Profile Profile, RuleEngine Rules, TunnelConnector Connector);
 
     public ConnectionTracker Tracker { get; }
 
-    public ProxyEngine(Profile profile, ConnectionTracker? tracker = null)
+    public RoutingEngine(Profile profile, ConnectionTracker? tracker = null)
     {
         Tracker = tracker ?? new ConnectionTracker();
         _state = Build(profile);
@@ -55,10 +55,10 @@ public sealed class ProxyEngine
     public void Reload(Profile profile)
     {
         _state = Build(profile);
-        Tracker.Write(LogLevel.Normal, $"Profile loaded: {profile.Proxies.Count} proxies, {profile.Chains.Count} chains, {profile.Rules.Count} rules");
+        Tracker.Write(LogLevel.Normal, $"Profile loaded: {profile.Tunnels.Count} tunnels, {profile.Chains.Count} chains, {profile.Rules.Count} rules");
     }
 
-    private Snapshot Build(Profile p) => new(p, new RuleEngine(p.Rules), new ProxyConnector(p) { Resolver = _resolver });
+    private Snapshot Build(Profile p) => new(p, new RuleEngine(p.Rules), new TunnelConnector(p) { Resolver = _resolver });
 
     /// <summary>Endpoints this app listens on; connections to them are refused (loop guard).</summary>
     public void RegisterOwnEndpoint(IPEndPoint ep) => _ownEndpoints[ep] = 0;
@@ -89,7 +89,7 @@ public sealed class ProxyEngine
         if (cache is not { } c || !ReferenceEquals(c.Profile, state.Profile) || DateTime.UtcNow - c.At > TimeSpan.FromSeconds(5))
         {
             var pids = new HashSet<int>();
-            foreach (var p in state.Profile.Proxies.Where(p => IsLocalAddress(p.Address)))
+            foreach (var p in state.Profile.Tunnels.Where(p => IsLocalAddress(p.Address)))
                 pids.UnionWith(Platform.ProcessLookup.FindListeners(p.Port));
             pids.Remove(Environment.ProcessId);
             c = (state.Profile, DateTime.UtcNow, pids);
@@ -101,7 +101,7 @@ public sealed class ProxyEngine
         {
             if (_loopReported.Add(pid))
                 Tracker.Write(LogLevel.Normal,
-                    $"Loop prevention: {Path.GetFileName(Platform.ProcessLookup.GetProcessPath(pid)) ?? "?"} ({pid}) runs a proxy from this profile; its connections go direct");
+                    $"Loop prevention: {Path.GetFileName(Platform.ProcessLookup.GetProcessPath(pid)) ?? "?"} ({pid}) runs a tunnel from this profile; its connections go direct");
         }
         return true;
     }
@@ -124,7 +124,7 @@ public sealed class ProxyEngine
     {
         RuleActionType.Direct => "Direct",
         RuleActionType.Block => "Block",
-        RuleActionType.Proxy => _state.Profile.FindProxy(a.TargetId ?? -1) is { } p ? $"{p.Type.ToString().ToUpperInvariant()} {p}" : $"proxy #{a.TargetId}",
+        RuleActionType.Tunnel => _state.Profile.FindTunnel(a.TargetId ?? -1) is { } p ? $"{p.Type.DisplayName()} {p}" : $"tunnel #{a.TargetId}",
         RuleActionType.Chain => _state.Profile.FindChain(a.TargetId ?? -1) is { } c ? $"chain {c.Name}" : $"chain #{a.TargetId}",
         _ => a.Type.ToString(),
     };
@@ -143,7 +143,7 @@ public sealed class ProxyEngine
         try
         {
             if (IsLoop(req))
-                throw new IOException("Connection loop detected: target is this proxy's own listener");
+                throw new IOException("Connection loop detected: target is Sluice's own listener");
 
             using var upstream = await state.Connector.ConnectAsync(match.Action, match.Rule.Name, req.Host, req.Port, req.ProcessId, linked.Token);
 

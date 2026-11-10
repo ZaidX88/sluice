@@ -12,10 +12,10 @@ public abstract class InboundListener : IAsyncDisposable
     private readonly CancellationTokenSource _cts = new();
     private Task? _loop;
 
-    protected ProxyEngine Engine { get; }
+    protected RoutingEngine Engine { get; }
     public IPEndPoint LocalEndPoint { get; }
 
-    protected InboundListener(ProxyEngine engine, IPEndPoint bind)
+    protected InboundListener(RoutingEngine engine, IPEndPoint bind)
     {
         Engine = engine;
         _socket = new Socket(bind.AddressFamily, SocketType.Stream, ProtocolType.Tcp);

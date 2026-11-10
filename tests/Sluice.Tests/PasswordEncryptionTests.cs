@@ -126,7 +126,7 @@ public class PasswordEncryptionTests
         var p = Profile.CreateDefault();
         p.Options.PasswordEncryption = mode;
         p.MasterPassword = master;
-        p.Proxies.Add(new ProxyServer { Id = 100, Type = ProxyType.Socks5, Address = "10.0.0.1", Port = 1080, Username = "alice", Password = "s3cret" });
+        p.Tunnels.Add(new Tunnel { Id = 100, Type = TunnelType.Socks5, Address = "10.0.0.1", Port = 1080, Username = "alice", Password = "s3cret" });
         return p;
     }
 
@@ -149,8 +149,8 @@ public class PasswordEncryptionTests
         Assert.Equal(mode == PasswordEncryptionMode.Disabled, xml.Contains("<Password>s3cret</Password>"));
 
         var back = PpxSerializer.Parse(xml, (_, _) => master);
-        Assert.Equal("s3cret", back.Proxies[0].Password);
-        Assert.Equal("alice", back.Proxies[0].Username);
+        Assert.Equal("s3cret", back.Tunnels[0].Password);
+        Assert.Equal("alice", back.Tunnels[0].Username);
         Assert.Equal(mode, back.Options.PasswordEncryption);
     }
 
@@ -162,7 +162,7 @@ public class PasswordEncryptionTests
         var asked = 0;
         var ok = PpxSerializer.Parse(xml, (_, _) => ++asked < 3 ? "nope" : "mp");
         Assert.Equal(3, asked);
-        Assert.Equal("s3cret", ok.Proxies[0].Password);
+        Assert.Equal("s3cret", ok.Tunnels[0].Password);
         Assert.Equal("mp", ok.MasterPassword);
 
         Assert.Throws<CryptographicFailure>(() => PpxSerializer.Parse(xml, (_, _) => "nope"));

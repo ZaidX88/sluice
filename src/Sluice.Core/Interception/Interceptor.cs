@@ -23,7 +23,7 @@ public sealed class Interceptor : IAsyncDisposable
 {
     private const int MaxPacket = 0xFFFF + 40;
 
-    private readonly ProxyEngine _engine;
+    private readonly RoutingEngine _engine;
     private readonly ConcurrentDictionary<(int LocalPort, IPEndPoint Remote), (int Pid, DateTime At)> _socketPids = new();
     private readonly CancellationTokenSource _cts = new();
     private IntPtr _net = IntPtr.Zero, _sock = IntPtr.Zero;
@@ -41,7 +41,7 @@ public sealed class Interceptor : IAsyncDisposable
     /// <summary>Log the headers of this many packets at Debug level (troubleshooting).</summary>
     public int DiagnosticPackets;
 
-    public Interceptor(ProxyEngine engine) => _engine = engine;
+    public Interceptor(RoutingEngine engine) => _engine = engine;
 
     public long PacketsReflected => Interlocked.Read(ref _reflected);
     public long PacketsPassed => Interlocked.Read(ref _passed);
@@ -75,7 +75,7 @@ public sealed class Interceptor : IAsyncDisposable
         if (policy.Enabled)
         {
             FlushOsDnsCache();
-            _engine.Tracker.Write(LogLevel.Normal, "Name resolution through proxy is ON (fake IPs from 198.18.0.0/15)");
+            _engine.Tracker.Write(LogLevel.Normal, "Name resolution through tunnels is ON (fake IPs from 198.18.0.0/15)");
         }
 
         _sockThread = new Thread(SocketLoop) { IsBackground = true, Name = "Sluice WinDivert socket" };

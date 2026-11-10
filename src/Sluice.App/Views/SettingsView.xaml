@@ -59,6 +59,16 @@
                 </StackPanel>
             </Border>
 
+            <!-- UDP -->
+            <Border Style="{StaticResource CardBox}" Margin="0,0,0,16">
+                <StackPanel>
+                    <TextBlock Text="UDP" Style="{StaticResource SectionTitle}"/>
+                    <TextBlock Style="{StaticResource Muted}" TextWrapping="Wrap"
+                               Text="What happens to UDP (QUIC, games, voice and video calls) from apps whose rule uses a tunnel. Direct rules always pass and Block rules always drop. Applies while traffic is captured."/>
+                    <ComboBox ItemsSource="{Binding UdpModes}" SelectedIndex="{Binding UdpIndex}" Margin="0,12,0,0" HorizontalAlignment="Left" MinWidth="420"/>
+                </StackPanel>
+            </Border>
+
             <!-- Passwords -->
             <Border Style="{StaticResource CardBox}" Margin="0,0,0,16">
                 <StackPanel>

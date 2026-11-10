@@ -363,6 +363,44 @@ public class LiveSingBoxTests : IAsyncLifetime
         }
     }
 
+    /// <summary>UDP: a datagram to a local echo server through each protocol's sing-box session.</summary>
+    [Theory]
+    [InlineData("ss")]
+    [InlineData("vmess")]
+    [InlineData("vless-grpc")]
+    [InlineData("trojan")]
+    [InlineData("hy2")]
+    [InlineData("tuic")]
+    public async Task Udp_EchoThroughTunnel(string name)
+    {
+        if (!Enabled) return;
+        var t = name switch
+        {
+            "ss" => T(TunnelType.Shadowsocks, "ss", _ssKey, ("method", "2022-blake3-aes-128-gcm")),
+            "vmess" => T(TunnelType.VMess, "vmess", null, ("uuid", _uuid), ("transport", "ws"), ("path", "/ray")),
+            "vless-grpc" => T(TunnelType.VLess, "vless-grpc", null, ("uuid", _uuid), ("security", "tls"), ("sni", "test.local"),
+                ("insecure", "true"), ("transport", "grpc"), ("servicename", "svc")),
+            "trojan" => T(TunnelType.Trojan, "trojan", "tr-pass", ("sni", "test.local"), ("insecure", "true")),
+            "hy2" => T(TunnelType.Hysteria2, "hy2", "hy-pass", ("sni", "test.local"), ("insecure", "true"), ("obfspassword", "obfs-pass")),
+            _ => T(TunnelType.Tuic, "tuic", "tuic-pass", ("uuid", _uuid), ("sni", "test.local"), ("insecure", "true")),
+        };
+        using var echo = new UdpEchoServer();
+        var profile = Profile.CreateDefault();
+        profile.Tunnels.Add(t);
+        await using var engine = new Sluice.Core.Engine.RoutingEngine(profile);
+        engine.Backends.SingBoxPath = Exe;
+        var got = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var a = await engine.OpenUdpAsync(t, (h, p, d) => got.TrySetResult($"{h}:{p} {Encoding.ASCII.GetString(d.Span)}"), default);
+        // UDP may be lost while the session warms up: retry a few times.
+        for (var i = 0; i < 10 && !got.Task.IsCompleted; i++)
+        {
+            await a.SendAsync("127.0.0.1", echo.Port, Encoding.ASCII.GetBytes($"udp over {name}"));
+            await Task.WhenAny(got.Task, Task.Delay(500));
+        }
+        Assert.True(got.Task.IsCompleted, $"no UDP reply through {name}");
+        Assert.Equal($"127.0.0.1:{echo.Port} udp over {name}", await got.Task);
+    }
+
     [Fact]
     public async Task WrongPassword_FailsCleanly()
     {

@@ -15,5 +15,8 @@
     <None Include="..\..\lib\WinDivert\x64\WinDivert.dll" Link="WinDivert.dll" CopyToOutputDirectory="PreserveNewest" Condition="Exists('..\..\lib\WinDivert\x64\WinDivert.dll')" />
     <None Include="..\..\lib\WinDivert\x64\WinDivert64.sys" Link="WinDivert64.sys" CopyToOutputDirectory="PreserveNewest" Condition="Exists('..\..\lib\WinDivert\x64\WinDivert64.sys')" />
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="SSH.NET" Version="2026.0.0" />
+  </ItemGroup>
 
 </Project>

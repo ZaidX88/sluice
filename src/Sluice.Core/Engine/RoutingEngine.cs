@@ -18,10 +18,10 @@ public interface IInboundReply
 }
 
 /// <summary>
-/// The heart of the app: rule matching → upstream connect (direct / proxy / chain) → relay.
-/// Inbound listeners (local SOCKS5 now, WinDivert transparent redirection later) feed it.
+/// The heart of the app: rule matching → upstream connect (direct / tunnel / chain) → relay.
+/// Inbound listeners (local SOCKS5, WinDivert transparent redirection) feed it.
 /// </summary>
-public sealed class RoutingEngine
+public sealed class RoutingEngine : IAsyncDisposable
 {
     private readonly ConcurrentDictionary<IPEndPoint, byte> _ownEndpoints = new();
     private volatile Snapshot _state;
@@ -30,11 +30,17 @@ public sealed class RoutingEngine
 
     public ConnectionTracker Tracker { get; }
 
+    /// <summary>Client sessions of encrypted tunnels (SSH, …), shared by all connections.</summary>
+    public Tunnels.TunnelBackends Backends { get; }
+
     public RoutingEngine(Profile profile, ConnectionTracker? tracker = null)
     {
         Tracker = tracker ?? new ConnectionTracker();
+        Backends = new Tunnels.TunnelBackends(line => Tracker.Write(LogLevel.Normal, line));
         _state = Build(profile);
     }
+
+    public async ValueTask DisposeAsync() => await Backends.DisposeAsync();
 
     public Profile Profile => _state.Profile;
 
@@ -47,18 +53,20 @@ public sealed class RoutingEngine
         set
         {
             _resolver = value;
+            Backends.Resolver = value is null ? null : new Tunnels.TunnelTransport.Resolver(value);
             _state = Build(_state.Profile);
         }
     }
 
-    /// <summary>Swap in a new profile; existing connections keep running.</summary>
+    /// <summary>Swap in a new profile; existing connections keep running. Edited/removed tunnels' sessions close.</summary>
     public void Reload(Profile profile)
     {
         _state = Build(profile);
+        _ = Backends.PruneAsync(profile);
         Tracker.Write(LogLevel.Normal, $"Profile loaded: {profile.Tunnels.Count} tunnels, {profile.Chains.Count} chains, {profile.Rules.Count} rules");
     }
 
-    private Snapshot Build(Profile p) => new(p, new RuleEngine(p.Rules), new TunnelConnector(p) { Resolver = _resolver });
+    private Snapshot Build(Profile p) => new(p, new RuleEngine(p.Rules), new TunnelConnector(p, Backends) { Resolver = _resolver });
 
     /// <summary>Endpoints this app listens on; connections to them are refused (loop guard).</summary>
     public void RegisterOwnEndpoint(IPEndPoint ep) => _ownEndpoints[ep] = 0;

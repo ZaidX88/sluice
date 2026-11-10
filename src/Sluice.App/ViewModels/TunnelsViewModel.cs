@@ -30,7 +30,7 @@ public sealed class TunnelsViewModel : PageViewModel
     private bool _checking;
 
     public TunnelsViewModel(EngineHost host)
-        : base(host, "Tunnels", "", "Routes out of this PC — SOCKS, HTTP and, soon, SSH and encrypted tunnels. Rules choose which traffic uses which tunnel.")
+        : base(host, "Tunnels", "", "Routes out of this PC — SSH, SOCKS and HTTP (Shadowsocks, VLESS and more next). Rules choose which traffic uses which tunnel.")
     {
         AddCommand = new RelayCommand(Add);
         EditCommand = new RelayCommand(Edit, () => Selected is not null);
@@ -146,7 +146,7 @@ public sealed class TunnelsViewModel : PageViewModel
 
         try
         {
-            var report = await TunnelChecker.CheckAsync(row.Tunnel, new CheckSettings(), progress);
+            var report = await TunnelChecker.CheckAsync(row.Tunnel, new CheckSettings(), progress, backends: Host.Engine.Backends);
             row.Ok = report.Passed;
             row.Status = report.Passed
                 ? $"OK · {report.Latency?.TotalMilliseconds:F0} ms"

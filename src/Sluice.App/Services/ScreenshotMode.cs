@@ -29,6 +29,12 @@ internal static class ScreenshotMode
         var p = Profile.CreateDefault();
         p.Tunnels.Add(new Tunnel { Id = 100, Type = TunnelType.Socks5, Address = "127.0.0.1", Port = 6002, Label = "Local tunnel" });
         p.Tunnels.Add(new Tunnel { Id = 101, Type = TunnelType.Https, Address = "proxy.corp.example", Port = 3128, Username = "alice", Password = "x" });
+        var ssh = new Tunnel { Id = 102, Type = TunnelType.Ssh, Address = "ssh.example.net", Port = 443, Username = "alice", Password = "x", Label = "SSH over WebSocket" };
+        ssh.Settings["mode"] = "tls-payload";
+        ssh.Settings["sni"] = "cdn.example.net";
+        ssh.Settings["payload"] = "GET / [protocol][crlf]Host: cdn.example.net[crlf]Upgrade: websocket[crlf][crlf]";
+        ssh.Settings["hostkey"] = "ssh-ed25519 SHA256:1o9IWCf9i53pEF2bhPW204/arxb+ZCkGAIz7w4w2PyQ";
+        p.Tunnels.Add(ssh);
         if (!directOnly)
         {
             p.Rules.Insert(0, new Rule { Name = "Browsers", Applications = "chrome.exe; firefox.exe; msedge.exe", Action = RuleAction.ViaTunnel(100) });
@@ -85,6 +91,7 @@ internal static class ScreenshotMode
         foreach (var (name, dialog) in new (string, Window)[]
                  {
                      ("dialog-tunnel", new Views.TunnelDialog(p.Tunnels[1])),
+                     ("dialog-tunnel-ssh", new Views.TunnelDialog(p.Tunnels[2])),
                      ("dialog-rule", new Views.RuleDialog(p.Rules[1], p)),
                      ("dialog-password", new Views.PasswordDialog("Work", confirmNew: true)),
                  })

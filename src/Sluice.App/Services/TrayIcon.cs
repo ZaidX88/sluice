@@ -64,6 +64,10 @@ public sealed class TrayIcon : IDisposable
         _icon.Text = text.Length > 63 ? text[..63] : text;   // NotifyIcon limit
     }
 
+    /// <summary>A Windows notification from the tray icon.</summary>
+    public void Notify(string title, string text, bool error) =>
+        _icon.ShowBalloonTip(5000, title, text.Length > 250 ? text[..250] + "…" : text, error ? Forms.ToolTipIcon.Warning : Forms.ToolTipIcon.Info);
+
     public void ShowHiddenHint()
     {
         if (_hintShown) return;

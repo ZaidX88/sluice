@@ -10,6 +10,15 @@ using Sluice.Core.Tunnels;
 
 namespace Sluice.Tests;
 
+internal static class TunnelTestExtensions
+{
+    public static Tunnel WithSettings(this Tunnel t, Tunnel from)
+    {
+        foreach (var (k, v) in from.Settings) t.Settings[k] = v;
+        return t;
+    }
+}
+
 public class SingBoxConfigTests
 {
     private static JsonObject Out(Tunnel t) => SingBoxConfig.Outbound(t, "203.0.113.5");
@@ -399,6 +408,131 @@ public class LiveSingBoxTests : IAsyncLifetime
         }
         Assert.True(got.Task.IsCompleted, $"no UDP reply through {name}");
         Assert.Equal($"127.0.0.1:{echo.Port} udp over {name}", await got.Task);
+    }
+
+    // ---------------- tunnel lifecycle (idle stop, leases, retries, giving up, off switch) ----------------
+
+    private TunnelBackends Backends() => new() { SingBoxPath = Exe, HealthInterval = TimeSpan.Zero };
+
+    private Tunnel TrojanTunnel(int? port = null) =>
+        T(TunnelType.Trojan, "trojan", "tr-pass", ("sni", "test.local"), ("insecure", "true")) is var t && port is { } p
+            ? new Tunnel { Id = t.Id, Type = t.Type, Address = t.Address, Port = p, Password = t.Password, Label = "dead" }.WithSettings(t)
+            : t;
+
+    [Fact]
+    public async Task Lifecycle_IdleStop_ThenRestartOnUse()
+    {
+        if (!Enabled) return;
+        await using var b = Backends();
+        b.IdleTimeout = TimeSpan.FromSeconds(1);
+        var t = TrojanTunnel();
+        await b.GetLocalSocksAsync(t, default);
+        Assert.Equal(SessionState.Connected, b.GetStatus(t.Id).State);
+        var helper = Process.GetProcessesByName("sing-box").Select(p => p.Id).Single(b.IsHelperProcess);
+
+        await Task.Delay(1300);
+        await b.MonitorOnceAsync();
+        Assert.Equal(SessionState.Idle, b.GetStatus(t.Id).State);
+        Assert.False(b.IsHelperProcess(helper));
+
+        await b.GetLocalSocksAsync(t, default);                     // next use starts it again
+        Assert.Equal(SessionState.Connected, b.GetStatus(t.Id).State);
+    }
+
+    [Fact]
+    public async Task Lifecycle_OpenConnectionsKeepItRunning()
+    {
+        if (!Enabled) return;
+        await using var b = Backends();
+        b.IdleTimeout = TimeSpan.FromSeconds(1);
+        var t = TrojanTunnel();
+        await b.GetLocalSocksAsync(t, default);
+        using (b.Lease(t.Id))
+        {
+            await Task.Delay(1300);
+            await b.MonitorOnceAsync();
+            Assert.Equal(SessionState.Connected, b.GetStatus(t.Id).State);
+        }
+    }
+
+    [Fact]
+    public async Task Lifecycle_DeadServer_RetriesThenGivesUp_UntilReset()
+    {
+        if (!Enabled) return;
+        await using var b = Backends();
+        b.MaxAttempts = 3;
+        b.Backoff = [TimeSpan.FromMilliseconds(200)];
+        var changes = new List<SessionState>();
+        b.StatusChanged += (_, st) => { lock (changes) changes.Add(st.State); };
+        var dead = TrojanTunnel(FreePort());                               // nothing listens there
+
+        for (var i = 1; i <= 3; i++)
+        {
+            var ex = await Assert.ThrowsAnyAsync<IOException>(() => b.GetLocalSocksAsync(dead, default));
+            Assert.Contains("no test connection", ex.Message);       // started, but carries nothing
+            if (i < 3)
+            {
+                Assert.Equal(SessionState.Reconnecting, b.GetStatus(dead.Id).State);
+                // Within the back-off, connections fail at once instead of starting sing-box again.
+                Assert.Contains("reconnecting", (await Assert.ThrowsAnyAsync<IOException>(() => b.GetLocalSocksAsync(dead, default))).Message);
+                await Task.Delay(250);
+            }
+        }
+        Assert.Equal(SessionState.Failed, b.GetStatus(dead.Id).State);
+        Assert.Contains("stopped after", (await Assert.ThrowsAnyAsync<IOException>(() => b.GetLocalSocksAsync(dead, default))).Message);
+        Assert.DoesNotContain(Process.GetProcessesByName("sing-box").Select(p => p.Id), b.IsHelperProcess);
+
+        b.ResetFailures(dead.Id);                                    // Check / off-and-on
+        Assert.Equal(SessionState.NotStarted, b.GetStatus(dead.Id).State);
+        lock (changes) Assert.Contains(SessionState.Failed, changes);
+    }
+
+    [Fact]
+    public async Task Lifecycle_HelperDies_ReconnectsByItself()
+    {
+        if (!Enabled) return;
+        await using var b = Backends();
+        var t = TrojanTunnel();
+        await b.GetLocalSocksAsync(t, default);
+        var helper = Process.GetProcessesByName("sing-box").Select(p => p.Id).Single(b.IsHelperProcess);
+        var seen = new List<SessionState>();
+        b.StatusChanged += (_, st) => { lock (seen) seen.Add(st.State); };
+        Process.GetProcessById(helper).Kill();
+
+        // The monitor (every 2 s) notices on its own; run a pass too so the test does not depend on timing.
+        await Task.Delay(500);
+        await b.MonitorOnceAsync();
+        for (var i = 0; i < 50 && b.GetStatus(t.Id).State != SessionState.Connected; i++) await Task.Delay(200);
+        Assert.Equal(SessionState.Connected, b.GetStatus(t.Id).State);
+        lock (seen) Assert.Contains(SessionState.Reconnecting, seen);
+        Assert.NotEqual(helper, Process.GetProcessesByName("sing-box").Select(p => p.Id).Single(b.IsHelperProcess));
+        await AssertTunnelWorks(t);
+    }
+
+    [Fact]
+    public async Task Lifecycle_TurnedOff_ClosesSession_AndRefusesUse()
+    {
+        if (!Enabled) return;
+        await using var b = Backends();
+        var t = TrojanTunnel();
+        var profile = Profile.CreateDefault();
+        profile.Tunnels.Add(t);
+        await b.PruneAsync(profile);
+        await b.GetLocalSocksAsync(t, default);
+
+        t.Enabled = false;
+        await b.PruneAsync(profile);
+        Assert.Equal(SessionState.Disabled, b.GetStatus(t.Id).State);
+        Assert.DoesNotContain(Process.GetProcessesByName("sing-box").Select(p => p.Id), b.IsHelperProcess);
+        Assert.Contains("turned off", (await Assert.ThrowsAnyAsync<IOException>(() => b.GetLocalSocksAsync(t, default))).Message);
+        var conn = new TunnelConnector(profile, b);
+        Assert.Contains("turned off", (await Assert.ThrowsAnyAsync<IOException>(() => conn.ConnectAsync(RuleAction.ViaTunnel(t.Id), "r", "127.0.0.1", 9))).Message);
+
+        t.Enabled = true;
+        await b.PruneAsync(profile);
+        Assert.Equal(SessionState.NotStarted, b.GetStatus(t.Id).State);
+        await b.GetLocalSocksAsync(t, default);
+        Assert.Equal(SessionState.Connected, b.GetStatus(t.Id).State);
     }
 
     [Fact]

@@ -40,6 +40,8 @@ public sealed class TunnelConnector(Profile profile, Tunnels.TunnelBackends? bac
             case RuleActionType.Tunnel:
                 var proxy = profile.FindTunnel(action.TargetId ?? -1)
                             ?? throw new InvalidOperationException($"Rule '{ruleName}' references missing tunnel {action.TargetId}");
+                // Turned off: fail rather than send the traffic out directly.
+                if (!proxy.Enabled) throw new ProxyException($"Tunnel \"{proxy}\" is turned off");
                 return await ThroughHopsAsync([proxy], host, port, DirectConnectTimeout, ct);
 
             case RuleActionType.Chain:
@@ -57,8 +59,9 @@ public sealed class TunnelConnector(Profile profile, Tunnels.TunnelBackends? bac
         var hops = chain.Hops.Where(h => h.Enabled)
             .Select(h => profile.FindTunnel(h.TunnelId))
             .OfType<Tunnel>()
+            .Where(t => t.Enabled)
             .ToList();
-        if (hops.Count == 0) throw new InvalidOperationException($"Chain '{chain.Name}' has no enabled tunnels");
+        if (hops.Count == 0) throw new ProxyException($"Chain '{chain.Name}' has no tunnels turned on");
 
         switch (chain.Type)
         {

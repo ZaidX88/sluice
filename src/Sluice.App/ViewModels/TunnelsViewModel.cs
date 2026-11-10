@@ -8,8 +8,22 @@ using Sluice.Core.Tunnels;
 
 namespace Sluice.App.ViewModels;
 
-public sealed class TunnelRow(Tunnel tunnel, string? source = null) : ObservableObject
+public sealed class TunnelRow(Tunnel tunnel, string? source = null, Action<TunnelRow, bool>? setEnabled = null) : ObservableObject
 {
+    /// <summary>The on/off switch: turning a tunnel off closes its session and makes its rules fail (no leak).</summary>
+    public bool Enabled
+    {
+        get => Tunnel.Enabled;
+        set
+        {
+            if (value == Tunnel.Enabled) return;
+            setEnabled?.Invoke(this, value);
+            Raise();
+            Raise(nameof(Session));
+            Raise(nameof(SessionTip));
+        }
+    }
+
     private string _status = "Not checked";
     private bool? _ok;
 
@@ -43,28 +57,35 @@ public sealed class TunnelRow(Tunnel tunnel, string? source = null) : Observable
         set { _session = value; Raise(nameof(Session)); Raise(nameof(SessionOk)); Raise(nameof(SessionTip)); }
     }
 
-    public string Session => !HasSession ? "—" : _session.State switch
+    public string Session => !Tunnel.Enabled ? "Off" : !HasSession ? "—" : _session.State switch
     {
         SessionState.Connecting => "Connecting…",
         SessionState.Connected => $"Connected {_session.Since:HH:mm}",
+        SessionState.Reconnecting => "Reconnecting…",
         SessionState.Failed => "Failed",
-        SessionState.Lost => "Disconnected",
+        SessionState.Idle => "Idle",
+        SessionState.Disabled => "Off",
         _ => "Not started",
     };
 
-    /// <summary>True = connected, false = failed or lost, null = neither.</summary>
-    public bool? SessionOk => _session.State switch
+    /// <summary>True = connected, false = failed or reconnecting, null = neither.</summary>
+    public bool? SessionOk => !Tunnel.Enabled ? null : _session.State switch
     {
         SessionState.Connected => true,
-        SessionState.Failed or SessionState.Lost => false,
+        SessionState.Failed or SessionState.Reconnecting => false,
         _ => null,
     };
 
-    public string SessionTip => !HasSession
-        ? "This tunnel type has no session: each connection goes to the proxy on its own."
-        : _session.State == SessionState.NotStarted
-            ? "Starts on first use: a connection matching a rule that uses this tunnel, or Check."
-            : $"{Session}{(_session.Detail is { } d ? " — " + d : "")}";
+    public string SessionTip => !Tunnel.Enabled
+        ? "Turned off: rules that use this tunnel fail instead of going direct, and chains skip it."
+        : !HasSession
+            ? "This tunnel type has no session: each connection goes to the proxy on its own."
+            : _session.State switch
+            {
+                SessionState.NotStarted => "Starts when capture starts (if a rule uses it), on the first connection, or with Check.",
+                SessionState.Failed => $"{_session.Detail}. Press Check, or turn it off and on, to try again.",
+                _ => $"{Session}{(_session.Detail is { } d ? " — " + d : "")}",
+            };
     public bool? Ok { get => _ok; set => Set(ref _ok, value); }
 }
 
@@ -87,8 +108,9 @@ public sealed class TunnelsViewModel : PageViewModel
         CopyLinkCommand = new RelayCommand(CopyLink, () => Selected is not null);
         UpdateCommand = new AsyncCommand(UpdateSubscriptionsAsync, () => !_updating && Host.Profile.Subscriptions.Count > 0);
         CheckCommand = new AsyncCommand(CheckSelectedAsync, () => Selected is not null && !_checking);
-        Host.Engine.Backends.StatusChanged += (id, st) => System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
+        Host.Engine.Backends.StatusChanged += (tunnel, st) => System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
         {
+            var id = tunnel.Id;
             foreach (var r in Rows.Where(r => r.Tunnel.Id == id)) r.SessionStatus = Host.Engine.Backends.GetStatus(id);
         });
         // A session can die silently; refresh "Disconnected" now and then.
@@ -122,7 +144,7 @@ public sealed class TunnelsViewModel : PageViewModel
         foreach (var p in Host.Profile.Tunnels)
         {
             var source = p.SubscriptionId is { } sid ? Host.Profile.Subscriptions.FirstOrDefault(s => s.Id == sid)?.Name : null;
-            var row = new TunnelRow(p, source);
+            var row = new TunnelRow(p, source, SetEnabled);
             if (keep.TryGetValue(p, out var k)) { row.Status = k.Status; row.Ok = k.Ok; }
             row.SessionStatus = Host.Engine.Backends.GetStatus(p.Id);
             Rows.Add(row);
@@ -154,6 +176,14 @@ public sealed class TunnelsViewModel : PageViewModel
 
         Host.CommitProfileEdit();
         Selected = Rows.FirstOrDefault(r => r.Tunnel == p);
+    }
+
+    private void SetEnabled(TunnelRow row, bool on)
+    {
+        row.Tunnel.Enabled = on;
+        Host.Tracker.Write(Sluice.Core.Engine.LogLevel.Normal, $"Tunnel {row.Name} turned {(on ? "on" : "off")}");
+        Host.CommitProfileEdit(notify: false);   // closes the session if turned off
+        if (on && Host.Intercepting) Host.Engine.WarmUpTunnels();
     }
 
     private void Import()
@@ -284,6 +314,7 @@ public sealed class TunnelsViewModel : PageViewModel
 
         try
         {
+            Host.Engine.Backends.ResetFailures(row.Tunnel.Id);   // a manual check always tries again
             var report = await TunnelChecker.CheckAsync(row.Tunnel, new CheckSettings(), progress, backends: Host.Engine.Backends);
             row.Ok = report.Passed;
             row.Status = report.Passed

@@ -37,6 +37,37 @@ public sealed class SettingsViewModel : PageViewModel
     public bool HandleDirect { get => O.HandleDirectConnections; set { O.HandleDirectConnections = value; Commit(); Raise(); } }
     public bool ProcessServices { get => O.ProcessServices; set { O.ProcessServices = value; Commit(); Raise(); } }
 
+    // ----- Tunnels (app settings, not part of the profile) -----
+    private static readonly int[] IdleChoices = [5, 10, 30, 60, 0];
+
+    public string[] IdleOptions { get; } =
+    [
+        "After 5 minutes unused",
+        "After 10 minutes unused",
+        "After 30 minutes unused",
+        "After 1 hour unused",
+        "Never — keep tunnels connected",
+    ];
+
+    public int IdleIndex
+    {
+        get => Math.Max(0, Array.IndexOf(IdleChoices, Host.Settings.TunnelIdleMinutes));
+        set
+        {
+            if (value < 0) return;
+            Host.Settings.TunnelIdleMinutes = IdleChoices[value];
+            Host.Settings.Save();
+            Host.ApplyTunnelSettings();
+            Raise();
+        }
+    }
+
+    public bool TunnelNotifications
+    {
+        get => Host.Settings.TunnelNotifications;
+        set { Host.Settings.TunnelNotifications = value; Host.Settings.Save(); Raise(); }
+    }
+
     // ----- UDP -----
     private static readonly UdpMode[] UdpOrder = [UdpMode.Tunnel, UdpMode.BlockQuic, UdpMode.BlockAll, UdpMode.Bypass];
 

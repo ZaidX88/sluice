@@ -56,6 +56,15 @@
                 <DataGrid Style="{StaticResource Grid}" ItemsSource="{Binding Rows}" SelectedItem="{Binding Selected}"
                           MouseDoubleClick="OnRowDoubleClick">
                     <DataGrid.Columns>
+                        <DataGridTemplateColumn Header="On" Width="58">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <CheckBox Style="{StaticResource Switch}" VerticalAlignment="Center" HorizontalAlignment="Left"
+                                              IsChecked="{Binding Enabled, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                              ToolTip="Turn this tunnel on or off. Off: rules that use it fail instead of going direct."/>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
                         <DataGridTemplateColumn Header="Tunnel" Width="1.4*" MinWidth="120">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>

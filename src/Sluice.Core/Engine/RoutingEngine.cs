@@ -43,6 +43,7 @@ public sealed class RoutingEngine : IAsyncDisposable
         Tracker = tracker ?? new ConnectionTracker();
         Backends = new Tunnels.TunnelBackends(line => Tracker.Write(LogLevel.Normal, line));
         _state = Build(profile);
+        _ = Backends.PruneAsync(profile);   // learn the tunnels (and which are turned off)
     }
 
     public async ValueTask DisposeAsync() => await Backends.DisposeAsync();
@@ -151,8 +152,9 @@ public sealed class RoutingEngine : IAsyncDisposable
             else if (r.Action.Type == RuleActionType.Chain && p.FindChain(r.Action.TargetId ?? -1) is { } c)
                 foreach (var h in c.Hops.Where(h => h.Enabled)) ids.Add(h.TunnelId);
         }
-        foreach (var t in ids.Select(p.FindTunnel).OfType<Tunnel>().Where(t => Tunnels.TunnelBackends.Handles(t.Type)))
+        foreach (var t in ids.Select(p.FindTunnel).OfType<Tunnel>().Where(t => t.Enabled && Tunnels.TunnelBackends.Handles(t.Type)))
         {
+            Backends.ResetFailures(t.Id);   // starting capture is a good moment to try a failed tunnel again
             _ = Task.Run(async () =>
             {
                 try { await Backends.GetLocalSocksAsync(t, CancellationToken.None); }
@@ -199,9 +201,9 @@ public sealed class RoutingEngine : IAsyncDisposable
     {
         var p = _state.Profile;
         if (a.Type == RuleActionType.Tunnel)
-            return p.FindTunnel(a.TargetId ?? -1) is { } t && CarriesUdp(t) ? t : null;
+            return p.FindTunnel(a.TargetId ?? -1) is { Enabled: true } t && CarriesUdp(t) ? t : null;
         if (p.FindChain(a.TargetId ?? -1) is not { } chain) return null;
-        var hops = chain.Hops.Where(h => h.Enabled).Select(h => p.FindTunnel(h.TunnelId)).OfType<Tunnel>().ToList();
+        var hops = chain.Hops.Where(h => h.Enabled).Select(h => p.FindTunnel(h.TunnelId)).OfType<Tunnel>().Where(t => t.Enabled).ToList();
         // A datagram cannot be relayed hop by hop through several tunnels.
         if (chain.Type == ChainType.Simple) return hops.Count == 1 && CarriesUdp(hops[0]) ? hops[0] : null;
         var usable = hops.Where(CarriesUdp).ToList();
@@ -244,6 +246,8 @@ public sealed class RoutingEngine : IAsyncDisposable
             if (IsLoop(req))
                 throw new IOException("Connection loop detected: target is Sluice's own listener");
 
+            // Hold the route's tunnels for the life of the connection (they are never stopped as idle meanwhile).
+            using var leases = LeaseTunnels(state.Profile, match.Action);
             using var upstream = await state.Connector.ConnectAsync(match.Action, match.Rule.Name, req.Host, req.Port, req.ProcessId, linked.Token);
 
             await reply.SuccessAsync(linked.Token);
@@ -282,6 +286,23 @@ public sealed class RoutingEngine : IAsyncDisposable
             app.Dispose();
         }
     }
+
+    /// <summary>Encrypted tunnels a rule action may use (a chain's enabled hops), for leases and warm-up.</summary>
+    internal static IEnumerable<Tunnel> BackendTunnels(Profile p, RuleAction a) => a.Type switch
+    {
+        RuleActionType.Tunnel => p.FindTunnel(a.TargetId ?? -1) is { } t && Tunnels.TunnelBackends.Handles(t.Type) ? [t] : [],
+        RuleActionType.Chain => p.FindChain(a.TargetId ?? -1) is { } c
+            ? c.Hops.Where(h => h.Enabled).Select(h => p.FindTunnel(h.TunnelId)).OfType<Tunnel>().Where(t => Tunnels.TunnelBackends.Handles(t.Type))
+            : [],
+        _ => [],
+    };
+
+    private sealed class LeaseSet(List<IDisposable> leases) : IDisposable
+    {
+        public void Dispose() { foreach (var l in leases) l.Dispose(); }
+    }
+
+    internal IDisposable LeaseTunnels(Profile p, RuleAction a) => new LeaseSet(BackendTunnels(p, a).Select(t => Backends.Lease(t.Id)).ToList());
 
     /// <summary>Per-connection download buffer for SSH routes (see <see cref="Relay.RunAsync"/>).</summary>
     public const int SshDownstreamBuffer = 16 * 1024 * 1024;

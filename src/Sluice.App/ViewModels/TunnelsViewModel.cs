@@ -18,6 +18,9 @@ public sealed class TunnelRow(Tunnel tunnel, string? source = null) : Observable
     public string Endpoint => $"{Tunnel.Address}:{Tunnel.Port}";
     /// <summary>Subscription the tunnel came from, if any.</summary>
     public string? Source { get; } = source;
+
+    /// <summary>Second line under the name: who logs in, and the subscription it came from.</summary>
+    public string Subtitle => Source is null ? Auth : $"{Auth} · from {Source}";
     public string Type => Tunnel.Type.DisplayName().ToUpperInvariant();
     public string Auth => Tunnel.Type switch
     {
@@ -28,6 +31,40 @@ public sealed class TunnelRow(Tunnel tunnel, string? source = null) : Observable
         _ => string.IsNullOrEmpty(Tunnel.Username) ? "None" : Tunnel.Username!,
     };
     public string Status { get => _status; set => Set(ref _status, value); }
+
+    private SessionStatus _session = SessionStatus.None;
+
+    /// <summary>Encrypted tunnels keep a session (SSH login, sing-box helper); plain proxies have none.</summary>
+    public bool HasSession => TunnelBackends.Handles(Tunnel.Type);
+
+    public SessionStatus SessionStatus
+    {
+        get => _session;
+        set { _session = value; Raise(nameof(Session)); Raise(nameof(SessionOk)); Raise(nameof(SessionTip)); }
+    }
+
+    public string Session => !HasSession ? "—" : _session.State switch
+    {
+        SessionState.Connecting => "Connecting…",
+        SessionState.Connected => $"Connected {_session.Since:HH:mm}",
+        SessionState.Failed => "Failed",
+        SessionState.Lost => "Disconnected",
+        _ => "Not started",
+    };
+
+    /// <summary>True = connected, false = failed or lost, null = neither.</summary>
+    public bool? SessionOk => _session.State switch
+    {
+        SessionState.Connected => true,
+        SessionState.Failed or SessionState.Lost => false,
+        _ => null,
+    };
+
+    public string SessionTip => !HasSession
+        ? "This tunnel type has no session: each connection goes to the proxy on its own."
+        : _session.State == SessionState.NotStarted
+            ? "Starts on first use: a connection matching a rule that uses this tunnel, or Check."
+            : $"{Session}{(_session.Detail is { } d ? " — " + d : "")}";
     public bool? Ok { get => _ok; set => Set(ref _ok, value); }
 }
 
@@ -50,6 +87,14 @@ public sealed class TunnelsViewModel : PageViewModel
         CopyLinkCommand = new RelayCommand(CopyLink, () => Selected is not null);
         UpdateCommand = new AsyncCommand(UpdateSubscriptionsAsync, () => !_updating && Host.Profile.Subscriptions.Count > 0);
         CheckCommand = new AsyncCommand(CheckSelectedAsync, () => Selected is not null && !_checking);
+        Host.Engine.Backends.StatusChanged += (id, st) => System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
+        {
+            foreach (var r in Rows.Where(r => r.Tunnel.Id == id)) r.SessionStatus = Host.Engine.Backends.GetStatus(id);
+        });
+        // A session can die silently; refresh "Disconnected" now and then.
+        var timer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
+        timer.Tick += (_, _) => { foreach (var r in Rows.Where(r => r.HasSession)) r.SessionStatus = Host.Engine.Backends.GetStatus(r.Tunnel.Id); };
+        timer.Start();
         OnProfileChanged();
     }
 
@@ -79,6 +124,7 @@ public sealed class TunnelsViewModel : PageViewModel
             var source = p.SubscriptionId is { } sid ? Host.Profile.Subscriptions.FirstOrDefault(s => s.Id == sid)?.Name : null;
             var row = new TunnelRow(p, source);
             if (keep.TryGetValue(p, out var k)) { row.Status = k.Status; row.Ok = k.Ok; }
+            row.SessionStatus = Host.Engine.Backends.GetStatus(p.Id);
             Rows.Add(row);
         }
         Raise(nameof(IsEmpty));
@@ -244,6 +290,9 @@ public sealed class TunnelsViewModel : PageViewModel
                 ? $"OK · {report.Latency?.TotalMilliseconds:F0} ms"
                 : "Failed";
             CheckTitle = report.Passed ? $"{row.Name} is working" : $"{row.Name} failed the check";
+            var failed = report.Steps.FirstOrDefault(s => s.Status == CheckStatus.Failed);
+            Host.Tracker.Write(report.Passed ? Sluice.Core.Engine.LogLevel.Normal : Sluice.Core.Engine.LogLevel.Error,
+                report.Passed ? $"Check: {row.Name} is working ({row.Status})" : $"Check: {row.Name} failed at test {failed?.Number}: {failed?.Detail}");
         }
         finally
         {

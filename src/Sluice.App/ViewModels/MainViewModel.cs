@@ -51,6 +51,17 @@ public sealed class MainViewModel : ObservableObject
         };
         host.StateChanged += () => RaiseCapture();
         host.Notice += ShowInfo;
+        host.FirewallBlocked += () =>
+        {
+            ShowBanner("Windows Firewall is blocking Sluice on this network, so captured connections never reach it. Allow Sluice to receive incoming connections.");
+            BannerOffersFirewall = true;
+            Raise(nameof(BannerOffersFirewall));
+        };
+        AllowFirewallCommand = new RelayCommand(() =>
+        {
+            if (EngineHost.AllowThroughFirewall() is { } error) ShowBanner($"Could not add the firewall rule: {error}");
+            else ShowInfo("Sluice is now allowed in Windows Firewall. Reload the page in your browser.");
+        });
 
         OpenCommand = new RelayCommand(Open);
         SaveCommand = new RelayCommand(Save);
@@ -181,6 +192,8 @@ public sealed class MainViewModel : ObservableObject
     public ICommand NewCommand { get; }
     public ICommand DismissBannerCommand { get; }
     public ICommand RestartElevatedCommand { get; }
+    public ICommand AllowFirewallCommand { get; private set; } = null!;
+    public bool BannerOffersFirewall { get; private set; }
 
     public void TurnOn()
     {
@@ -214,6 +227,8 @@ public sealed class MainViewModel : ObservableObject
 
     private void ShowBanner(string text, bool offerElevation = false)
     {
+        BannerOffersFirewall = false;
+        Raise(nameof(BannerOffersFirewall));
         BannerOffersElevation = offerElevation;
         BannerIsError = true;
         Raise(nameof(BannerOffersElevation));
@@ -224,6 +239,8 @@ public sealed class MainViewModel : ObservableObject
     /// <summary>Neutral notice (e.g. "imported from Proxifier") rather than an error.</summary>
     public void ShowInfo(string text)
     {
+        BannerOffersFirewall = false;
+        Raise(nameof(BannerOffersFirewall));
         BannerOffersElevation = false;
         BannerIsError = false;
         Raise(nameof(BannerOffersElevation));

@@ -15,6 +15,11 @@ public abstract class InboundListener : IAsyncDisposable
     protected RoutingEngine Engine { get; }
     public IPEndPoint LocalEndPoint { get; }
 
+    private long _accepted;
+
+    /// <summary>Connections accepted so far.</summary>
+    public long Accepted => Interlocked.Read(ref _accepted);
+
     protected InboundListener(RoutingEngine engine, IPEndPoint bind)
     {
         Engine = engine;
@@ -47,6 +52,7 @@ public abstract class InboundListener : IAsyncDisposable
                 continue;
             }
             client.NoDelay = true;
+            Interlocked.Increment(ref _accepted);
             _ = Task.Run(async () =>
             {
                 try { await ServeAsync(client, ct); }

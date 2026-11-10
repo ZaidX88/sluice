@@ -48,12 +48,11 @@ public sealed class Socks5UdpAssociation : IAsyncDisposable
             : resolver is not null ? await resolver(proxy.Address, cts.Token)
             : await System.Net.Dns.GetHostAddressesAsync(proxy.Address, cts.Token);
 
-        var control = new TcpClient(AddressFamily.InterNetworkV6) { NoDelay = true };
-        control.Client.DualMode = true;
+        TcpClient? control = null;
         Socket? udp = null;
         try
         {
-            await control.ConnectAsync(addrs, proxy.Port, cts.Token);
+            control = await HappyEyeballs.ConnectAsync(addrs, proxy.Port, cts.Token);
             var (boundHost, boundPort) = await ProxyHandshake.Socks5RequestAsync(control.GetStream(), 0x03, "0.0.0.0", 0,
                 proxy.Username, proxy.Password, cts.Token);
 
@@ -76,13 +75,13 @@ public sealed class Socks5UdpAssociation : IAsyncDisposable
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
-            control.Dispose();
+            control?.Dispose();
             udp?.Dispose();
             throw new TimeoutException($"SOCKS5 UDP associate with {proxy} timed out");
         }
         catch
         {
-            control.Dispose();
+            control?.Dispose();
             udp?.Dispose();
             throw;
         }

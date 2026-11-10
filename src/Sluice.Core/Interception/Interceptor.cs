@@ -31,7 +31,15 @@ public sealed class Interceptor : IAsyncDisposable
     private Task? _sweeper;
     private TransparentInbound? _relay;
     private PacketReflector? _reflector;
-    private long _reflected, _passed, _recvErrors, _dnsAnswered;
+    private long _reflected, _passed, _recvErrors, _dnsAnswered, _redirectedFlows;
+    private DateTime _startedAt;
+    private bool _relayWarned;
+
+    /// <summary>
+    /// Raised once when flows are being redirected but none reaches the relay: something on this PC
+    /// (almost always Windows Firewall) drops the redirected connections before Sluice can accept them.
+    /// </summary>
+    public event Action? RelayUnreachable;
 
     private readonly FakeIpPool _fakeIps = new();
     private DnsResolver? _resolver;
@@ -96,6 +104,7 @@ public sealed class Interceptor : IAsyncDisposable
         _netThread = new Thread(NetworkLoop) { IsBackground = true, Name = "Sluice WinDivert network" };
         _sockThread.Start();
         _netThread.Start();
+        _startedAt = DateTime.UtcNow;
         _sweeper = Task.Run(SweepLoop);
 
         _engine.Tracker.Write(LogLevel.Normal, $"Interception started (relay port {port}; UDP: {UdpMode switch
@@ -175,6 +184,10 @@ public sealed class Interceptor : IAsyncDisposable
 
         if (pid == Environment.ProcessId) return (false, pid);
 
+        // DNS over TCP (fallback for large answers, or a browser's own resolver) goes to the local network's
+        // resolver: never into a tunnel, whose server cannot reach this LAN. UDP DNS is answered locally.
+        if (remote.Port == 53 && !FakeIpPool.IsFake(remote.Address)) return (false, pid);
+
         // A fake address is unreachable by itself: always hand such flows to the engine,
         // which connects by hostname (directly or through the proxy, per the rules).
         var fake = _fakeIps.TryGetHost(remote.Address, out var hostname);
@@ -186,6 +199,7 @@ public sealed class Interceptor : IAsyncDisposable
         var host = fake ? hostname : remote.Address.ToString();
         var match = _engine.Classify(new InboundRequest(host, remote.Port, pid, path));
         var redirect = fake || match.Action.Type != RuleActionType.Direct || _engine.Profile.Options.HandleDirectConnections;
+        if (redirect) Interlocked.Increment(ref _redirectedFlows);
         _engine.Tracker.Write(LogLevel.Debug, $"SYN {local} -> {host}:{remote.Port} pid {pid} ({Path.GetFileName(path) ?? "?"}) rule {match.Rule.Name} => {(redirect ? "redirect" : "pass")}");
         if (!redirect)
             _engine.Tracker.Write(LogLevel.Verbose, $"{Path.GetFileName(path) ?? "?"} ({pid}) - {remote} direct (rule {match.Rule.Name}, not intercepted)");
@@ -306,12 +320,25 @@ public sealed class Interceptor : IAsyncDisposable
                     (_udp is null ? "" : $", UDP {_udp.FlowCount} flows / {_udp.DatagramsTunneled:N0} tunneled / {_udp.DatagramsDropped:N0} dropped"));
                 _udp?.Sweep(TimeSpan.FromSeconds(60));
                 _reflector?.Sweep(TimeSpan.FromMinutes(10));
+                CheckRelayReachable();
                 var cutoff = DateTime.UtcNow - TimeSpan.FromMinutes(1);
                 foreach (var (k, v) in _socketPids)
                     if (v.At < cutoff) _socketPids.TryRemove(k, out _);
             }
         }
         catch (OperationCanceledException) { }
+    }
+
+    private void CheckRelayReachable()
+    {
+        if (_relayWarned || _relay is null) return;
+        if (_relay.Accepted > 0) { _relayWarned = true; return; }   // working: stop checking
+        if (Interlocked.Read(ref _redirectedFlows) < 3 || DateTime.UtcNow - _startedAt < TimeSpan.FromSeconds(8)) return;
+        _relayWarned = true;
+        _engine.Tracker.Write(LogLevel.Error,
+            $"{Interlocked.Read(ref _redirectedFlows)} connections were redirected but none reached Sluice. Windows Firewall is probably blocking " +
+            $"{Path.GetFileName(Environment.ProcessPath)} on this network: allow it for incoming connections ({Environment.ProcessPath}).");
+        RelayUnreachable?.Invoke();
     }
 
     private static IPEndPoint Norm(IPEndPoint ep) => IRedirectTable.Normalize(ep);

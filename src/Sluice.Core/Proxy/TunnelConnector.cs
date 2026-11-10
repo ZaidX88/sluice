@@ -171,23 +171,13 @@ public sealed class TunnelConnector(Profile profile, Tunnels.TunnelBackends? bac
         }
         else addrs = await System.Net.Dns.GetHostAddressesAsync(host, cts.Token);
 
-        // Dual-mode socket so both IPv4 and IPv6 results are usable.
-        var client = new TcpClient(AddressFamily.InterNetworkV6) { NoDelay = true };
-        client.Client.DualMode = true;
         try
         {
-            await client.ConnectAsync(addrs, port, cts.Token);
-            return client;
+            return await HappyEyeballs.ConnectAsync(addrs, port, cts.Token);
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
-            client.Dispose();
             throw new TimeoutException($"Connection to {host}:{port} timed out");
-        }
-        catch
-        {
-            client.Dispose();
-            throw;
         }
     }
 }

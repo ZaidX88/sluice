@@ -17,6 +17,11 @@ public interface IInboundReply
     Task FailAsync(Exception error, CancellationToken ct);
 }
 
+public enum UdpVerdict { Pass, Block, Tunnel }
+
+/// <summary>What to do with an application's UDP flow, and through which tunnel.</summary>
+public sealed record UdpRoute(UdpVerdict Verdict, RuleMatch Match, Tunnel? Tunnel, string Via);
+
 /// <summary>
 /// The heart of the app: rule matching → upstream connect (direct / tunnel / chain) → relay.
 /// Inbound listeners (local SOCKS5, WinDivert transparent redirection) feed it.
@@ -131,6 +136,64 @@ public sealed class RoutingEngine : IAsyncDisposable
         }
         catch { return false; }
     }
+
+    // ---------- UDP ----------
+
+    /// <summary>Decides an application's UDP flow per its rule and the profile's UDP mode.</summary>
+    public UdpRoute ClassifyUdp(InboundRequest req)
+    {
+        var match = Classify(req);
+        var a = match.Action;
+        switch (a.Type)
+        {
+            case RuleActionType.Direct:
+                return new UdpRoute(UdpVerdict.Pass, match, null, "Direct");
+            case RuleActionType.Block:
+                return new UdpRoute(UdpVerdict.Block, match, null, "Block");
+        }
+        var mode = _state.Profile.Options.Udp;
+        switch (mode)
+        {
+            case UdpMode.Bypass:
+                return new UdpRoute(UdpVerdict.Pass, match, null, "Direct (UDP bypasses tunnels)");
+            case UdpMode.BlockAll:
+                return new UdpRoute(UdpVerdict.Block, match, null, "Blocked (UDP of tunneled apps is blocked)");
+            case UdpMode.BlockQuic:
+                return req.Port == 443
+                    ? new UdpRoute(UdpVerdict.Block, match, null, "Blocked (QUIC)")
+                    : new UdpRoute(UdpVerdict.Pass, match, null, "Direct (UDP bypasses tunnels)");
+        }
+        if (UdpTunnelFor(a, req.ProcessId) is { } t)
+            return new UdpRoute(UdpVerdict.Tunnel, match, t, $"{t.Type.DisplayName()} {t}");
+        return new UdpRoute(UdpVerdict.Block, match, null, $"Blocked ({Describe(a)} cannot carry UDP)");
+    }
+
+    /// <summary>True for tunnels that can carry UDP: SOCKS5 (UDP ASSOCIATE) and the sing-box protocols.</summary>
+    public static bool CarriesUdp(Tunnel t) => t.Type == TunnelType.Socks5 || Tunnels.SingBoxConfig.Handles(t.Type);
+
+    private Tunnel? UdpTunnelFor(RuleAction a, int pid)
+    {
+        var p = _state.Profile;
+        if (a.Type == RuleActionType.Tunnel)
+            return p.FindTunnel(a.TargetId ?? -1) is { } t && CarriesUdp(t) ? t : null;
+        if (p.FindChain(a.TargetId ?? -1) is not { } chain) return null;
+        var hops = chain.Hops.Where(h => h.Enabled).Select(h => p.FindTunnel(h.TunnelId)).OfType<Tunnel>().ToList();
+        // A datagram cannot be relayed hop by hop through several tunnels.
+        if (chain.Type == ChainType.Simple) return hops.Count == 1 && CarriesUdp(hops[0]) ? hops[0] : null;
+        var usable = hops.Where(CarriesUdp).ToList();
+        if (usable.Count == 0) return null;
+        return chain.Type == ChainType.LoadBalancing ? usable[(pid & 0x7fffffff) % usable.Count] : usable[0];
+    }
+
+    /// <summary>Opens a UDP association through <paramref name="t"/> (starting its session if needed).</summary>
+    public async Task<Socks5UdpAssociation> OpenUdpAsync(Tunnel t, Action<string, int, ReadOnlyMemory<byte>> onReceive, CancellationToken ct)
+    {
+        var socks = Tunnels.TunnelBackends.Handles(t.Type) ? await Backends.AsLocalSocksAsync(t, ct) : t;
+        return await Socks5UdpAssociation.OpenAsync(socks, onReceive, _resolver, ct: ct);
+    }
+
+    internal ConnectionEntry BeginUdp(InboundRequest req, UdpRoute route) =>
+        Tracker.Begin(req.ProcessId, req.ProcessPath, FormatTarget(req.Host, req.Port) + " UDP", route.Match.Rule.Name, route.Via);
 
     public string Describe(RuleAction a) => a.Type switch
     {

@@ -90,7 +90,7 @@ public sealed class EngineHost : IAsyncDisposable
         Profile = profile;
         ProfilePath = path;
         IsDirty = false;
-        Engine.Reload(profile);
+        ReloadEngine();
         Settings.LastProfilePath = path;
         Settings.Save();
         ProfileChanged?.Invoke();
@@ -123,7 +123,7 @@ public sealed class EngineHost : IAsyncDisposable
     {
         Profile = profile;
         ProfilePath = null;
-        Engine.Reload(profile);
+        ReloadEngine();
         ProfileChanged?.Invoke();
     }
 
@@ -132,7 +132,7 @@ public sealed class EngineHost : IAsyncDisposable
         Profile = Profile.CreateDefault();
         ProfilePath = null;
         IsDirty = true;
-        Engine.Reload(Profile);
+        ReloadEngine();
         ProfileChanged?.Invoke();
     }
 
@@ -140,7 +140,7 @@ public sealed class EngineHost : IAsyncDisposable
     /// <param name="notify">False when the caller already reflects the change (e.g. a toggle in a list row).</param>
     public void CommitProfileEdit(bool notify = true)
     {
-        Engine.Reload(Profile);
+        ReloadEngine();
         IsDirty = true;
         if (ProfilePath is not null) TrySave(ProfilePath, notify);
         else if (notify) ProfileChanged?.Invoke();
@@ -194,6 +194,20 @@ public sealed class EngineHost : IAsyncDisposable
             _socks = null;
         }
         StartSocks();
+    }
+
+    /// <summary>Applies <see cref="Profile"/> to the engine; restarts capture when the UDP mode needs another filter.</summary>
+    private void ReloadEngine()
+    {
+        Engine.Reload(Profile);
+        if (_interceptor is { } i && i.NeedsRestartFor(Profile)) _ = RestartInterceptionAsync();
+    }
+
+    private async Task RestartInterceptionAsync()
+    {
+        Tracker.Write(LogLevel.Normal, "UDP mode changed: restarting capture");
+        await StopInterceptionAsync();
+        if (StartInterception() is { } error) Tracker.Write(LogLevel.Error, $"Could not restart capture: {error}");
     }
 
     /// <summary>Turns WinDivert interception on. Returns an error message, or null on success.</summary>

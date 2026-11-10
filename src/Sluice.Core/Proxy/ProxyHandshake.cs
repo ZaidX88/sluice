@@ -24,7 +24,15 @@ public static class ProxyHandshake
 
     // ---------------- SOCKS5 (RFC 1928 / RFC 1929) ----------------
 
-    public static async Task Socks5Async(Stream s, string host, int port, string? user, string? pass, CancellationToken ct)
+    public static Task Socks5Async(Stream s, string host, int port, string? user, string? pass, CancellationToken ct) =>
+        Socks5RequestAsync(s, 0x01, host, port, user, pass, ct);
+
+    /// <summary>
+    /// Greeting, optional user/password login, then one request (1 = CONNECT, 3 = UDP ASSOCIATE).
+    /// Returns the address and port from the server's reply (for UDP ASSOCIATE: where to send datagrams).
+    /// </summary>
+    public static async Task<(string Host, int Port)> Socks5RequestAsync(Stream s, byte command, string host, int port,
+        string? user, string? pass, CancellationToken ct)
     {
         var useAuth = !string.IsNullOrEmpty(user);
         byte[] greeting = useAuth ? [0x05, 0x02, 0x00, 0x02] : [0x05, 0x01, 0x00];
@@ -53,22 +61,28 @@ public static class ProxyHandshake
             default: throw new ProxyException($"SOCKS5 proxy selected unsupported method 0x{sel[1]:X2}");
         }
 
-        var req = new List<byte> { 0x05, 0x01, 0x00 };
+        var req = new List<byte> { 0x05, command, 0x00 };
         AppendSocks5Address(req, host);
         req.Add((byte)(port >> 8));
         req.Add((byte)port);
         await s.WriteAsync(req.ToArray(), ct);
 
         var head = await ReadExactAsync(s, 4, ct);
-        if (head[1] != 0x00) throw new ProxyException("SOCKS5: " + Socks5Error(head[1]));
-        var addrLen = head[3] switch
+        if (head[1] != 0x00)
+            throw new ProxyException("SOCKS5: " + (command == 0x03 && head[1] == 0x07 ? "the server does not support UDP" : Socks5Error(head[1])));
+        string boundHost;
+        switch (head[3])
         {
-            0x01 => 4,
-            0x04 => 16,
-            0x03 => (await ReadExactAsync(s, 1, ct))[0],
-            _ => throw new ProxyException("SOCKS5: bad address type in reply"),
-        };
-        await ReadExactAsync(s, addrLen + 2, ct); // bound address + port, unused
+            case 0x01: boundHost = new IPAddress(await ReadExactAsync(s, 4, ct)).ToString(); break;
+            case 0x04: boundHost = new IPAddress(await ReadExactAsync(s, 16, ct)).ToString(); break;
+            case 0x03:
+                var n = (await ReadExactAsync(s, 1, ct))[0];
+                boundHost = Encoding.ASCII.GetString(await ReadExactAsync(s, n, ct));
+                break;
+            default: throw new ProxyException("SOCKS5: bad address type in reply");
+        }
+        var bp = await ReadExactAsync(s, 2, ct);
+        return (boundHost, (bp[0] << 8) | bp[1]);
     }
 
     internal static void AppendSocks5Address(List<byte> buf, string host)

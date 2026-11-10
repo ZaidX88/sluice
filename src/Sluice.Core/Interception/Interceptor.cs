@@ -37,6 +37,7 @@ public sealed class Interceptor : IAsyncDisposable
     private DnsResolver? _resolver;
     private DnsRedirector? _dns;
     private (Profile Profile, DnsPolicy Policy)? _policy;
+    private UdpNat? _udp;
 
     /// <summary>Log the headers of this many packets at Debug level (troubleshooting).</summary>
     public int DiagnosticPackets;
@@ -48,6 +49,14 @@ public sealed class Interceptor : IAsyncDisposable
     public long DnsQueriesAnswered => Interlocked.Read(ref _dnsAnswered);
     public IPEndPoint? RelayEndPoint => _relay?.LocalEndPoint;
     public FakeIpPool FakeIps => _fakeIps;
+
+    /// <summary>The UDP mode capture was started with (UDP is only captured when it is not Bypass).</summary>
+    public UdpMode UdpMode { get; private set; }
+
+    public long UdpDatagramsTunneled => _udp?.DatagramsTunneled ?? 0;
+
+    /// <summary>True when <paramref name="profile"/> needs a different capture filter (restart interception to apply).</summary>
+    public bool NeedsRestartFor(Profile profile) => (profile.Options.Udp == UdpMode.Bypass) != (UdpMode == UdpMode.Bypass);
 
     public void Start()
     {
@@ -68,8 +77,13 @@ public sealed class Interceptor : IAsyncDisposable
         var self = Environment.ProcessId;
         _sock = OpenOrThrow($"event == CONNECT and tcp and !loopback and processId != {self}",
             WinDivertNative.Layer.Socket, WinDivertNative.OpenFlags.Sniff | WinDivertNative.OpenFlags.RecvOnly);
-        _net = OpenOrThrow("outbound and !loopback and (tcp or (udp and udp.DstPort == 53))",
+        UdpMode = _engine.Profile.Options.Udp;
+        var captureUdp = UdpMode != UdpMode.Bypass;
+        _net = OpenOrThrow(captureUdp
+                ? "outbound and !loopback and (tcp or udp)"
+                : "outbound and !loopback and (tcp or (udp and udp.DstPort == 53))",
             WinDivertNative.Layer.Network, WinDivertNative.OpenFlags.None);
+        if (captureUdp) _udp = new UdpNat(_engine, _fakeIps, InjectInbound);
 
         var policy = CurrentPolicy();
         if (policy.Enabled)
@@ -84,7 +98,13 @@ public sealed class Interceptor : IAsyncDisposable
         _netThread.Start();
         _sweeper = Task.Run(SweepLoop);
 
-        _engine.Tracker.Write(LogLevel.Normal, $"Interception started (relay port {port})");
+        _engine.Tracker.Write(LogLevel.Normal, $"Interception started (relay port {port}; UDP: {UdpMode switch
+        {
+            UdpMode.Tunnel => "through tunnels",
+            UdpMode.BlockQuic => "QUIC of tunneled apps blocked",
+            UdpMode.BlockAll => "blocked for tunneled apps",
+            _ => "not captured",
+        }})");
         WarnAboutConflicts();
     }
 
@@ -226,6 +246,17 @@ public sealed class Interceptor : IAsyncDisposable
                     Interlocked.Increment(ref _dnsAnswered);
                     continue;
                 }
+                if (_udp is not null)
+                {
+                    try
+                    {
+                        if (_udp.ProcessOutbound(buf.AsSpan(0, (int)len), addr) == UdpNat.Verdict.Drop) continue;
+                    }
+                    catch (Exception ex)
+                    {
+                        _engine.Tracker.Write(LogLevel.Error, $"UDP handling failed, passing through: {ex.Message}");
+                    }
+                }
                 WinDivertNative.Send(_net, buf, len, out _, ref addr);
                 continue;
             }
@@ -252,6 +283,16 @@ public sealed class Interceptor : IAsyncDisposable
         }
     }
 
+    /// <summary>Injects a reply datagram as if it had arrived on the interface the app's packet left by.</summary>
+    private void InjectInbound(byte[] packet, object? context)
+    {
+        if (context is not WinDivertNative.Address original || _net == IntPtr.Zero) return;
+        var a = original;
+        a.SetOutbound(false);
+        WinDivertNative.CalcChecksums(packet, (uint)packet.Length, ref a, 0);
+        WinDivertNative.Send(_net, packet, (uint)packet.Length, out _, ref a);
+    }
+
     private async Task SweepLoop()
     {
         using var timer = new PeriodicTimer(TimeSpan.FromSeconds(5));
@@ -261,7 +302,9 @@ public sealed class Interceptor : IAsyncDisposable
             {
                 _engine.Tracker.Write(LogLevel.Debug,
                     $"Interception stats: {PacketsReflected:N0} reflected, {PacketsPassed:N0} passed, {_reflector?.FlowCount ?? 0} flows, " +
-                    $"{DnsQueriesAnswered:N0} DNS answered, {_fakeIps.Count} fake IPs, {Interlocked.Read(ref _recvErrors)} recv errors");
+                    $"{DnsQueriesAnswered:N0} DNS answered, {_fakeIps.Count} fake IPs, {Interlocked.Read(ref _recvErrors)} recv errors" +
+                    (_udp is null ? "" : $", UDP {_udp.FlowCount} flows / {_udp.DatagramsTunneled:N0} tunneled / {_udp.DatagramsDropped:N0} dropped"));
+                _udp?.Sweep(TimeSpan.FromSeconds(60));
                 _reflector?.Sweep(TimeSpan.FromMinutes(10));
                 var cutoff = DateTime.UtcNow - TimeSpan.FromMinutes(1);
                 foreach (var (k, v) in _socketPids)
@@ -285,6 +328,7 @@ public sealed class Interceptor : IAsyncDisposable
         _net = _sock = IntPtr.Zero;
         if (_sweeper is not null) await _sweeper;
         if (_relay is not null) await _relay.DisposeAsync();
+        if (_udp is not null) await _udp.DisposeAsync();
         _engine.HostResolver = null;
         _resolver?.Dispose();
         // Fake answers are meaningless once we stop: drop them from the OS cache.

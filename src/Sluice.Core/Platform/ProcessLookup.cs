@@ -45,6 +45,68 @@ public static class ProcessLookup
         return 0;
     }
 
+    [DllImport("iphlpapi.dll", SetLastError = true)]
+    private static extern uint GetExtendedUdpTable(IntPtr pUdpTable, ref int pdwSize, bool bOrder, int ulAf, int tableClass, uint reserved);
+
+    private const int UDP_TABLE_OWNER_PID = 1;
+
+    /// <summary>PID owning the UDP socket bound to <paramref name="local"/> (exact address or wildcard), or 0.</summary>
+    public static int FindUdpOwner(IPEndPoint local)
+    {
+        if (!OperatingSystem.IsWindows()) return 0;
+        var addr = local.Address.IsIPv4MappedToIPv6 ? local.Address.MapToIPv4() : local.Address;
+        var v6 = addr.AddressFamily == AddressFamily.InterNetworkV6;
+        int wildcard = 0;
+        // A dual-stack (IPv6) socket can send IPv4 packets, so look in both tables.
+        foreach (var table in v6 ? new[] { true } : new[] { false, true })
+        {
+            foreach (var (la, lp, pid) in ReadUdpTable(table))
+            {
+                if (lp != local.Port) continue;
+                var a = la.IsIPv4MappedToIPv6 ? la.MapToIPv4() : la;
+                if (a.Equals(addr)) return pid;
+                if (wildcard == 0 && (a.Equals(IPAddress.Any) || a.Equals(IPAddress.IPv6Any))) wildcard = pid;
+            }
+            if (wildcard != 0) return wildcard;
+        }
+        return wildcard;
+    }
+
+    private static List<(IPAddress Local, int Port, int Pid)> ReadUdpTable(bool v6)
+    {
+        var rows = new List<(IPAddress, int, int)>();
+        var size = 0;
+        var af = v6 ? AF_INET6 : AF_INET;
+        GetExtendedUdpTable(IntPtr.Zero, ref size, false, af, UDP_TABLE_OWNER_PID, 0);
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            var buf = Marshal.AllocHGlobal(size);
+            try
+            {
+                var rc = GetExtendedUdpTable(buf, ref size, false, af, UDP_TABLE_OWNER_PID, 0);
+                if (rc == 122) continue;
+                if (rc != 0) return rows;
+                var count = Marshal.ReadInt32(buf);
+                var ptr = buf + 4;
+                if (!v6)
+                {
+                    // MIB_UDPROW_OWNER_PID: localAddr, localPort, pid
+                    for (var i = 0; i < count; i++, ptr += 12)
+                        rows.Add((new IPAddress((uint)Marshal.ReadInt32(ptr)), PortFromNet(Marshal.ReadInt32(ptr + 4)), Marshal.ReadInt32(ptr + 8)));
+                }
+                else
+                {
+                    // MIB_UDP6ROW_OWNER_PID: localAddr[16], localScopeId, localPort, pid
+                    for (var i = 0; i < count; i++, ptr += 28)
+                        rows.Add((new IPAddress(Bytes(ptr, 16)), PortFromNet(Marshal.ReadInt32(ptr + 20)), Marshal.ReadInt32(ptr + 24)));
+                }
+                return rows;
+            }
+            finally { Marshal.FreeHGlobal(buf); }
+        }
+        return rows;
+    }
+
     /// <summary>PIDs with a TCP socket listening on <paramref name="port"/> (IPv4 and IPv6 tables).</summary>
     public static HashSet<int> FindListeners(int port)
     {

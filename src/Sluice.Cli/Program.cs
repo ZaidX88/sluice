@@ -10,7 +10,9 @@ using Sluice.Core.Tunnels;
 const string Usage = """
     Sluice.Cli [profile.sluice|.ppx] [options]  run the routing engine
       --socks 127.0.0.1:1080      local SOCKS5 listener address
-      --intercept                 capture all applications' TCP traffic with WinDivert (needs Administrator)
+      --intercept                 capture all applications' traffic with WinDivert (needs Administrator)
+      --udp tunnel|block-quic|block-all|bypass
+                                  UDP of tunneled apps (default: the profile's setting)
       --log errors|normal|verbose|debug           on-screen log level (default normal)
       --log-file DIR [--log-file-level LEVEL]     also write a daily log file in DIR (default level verbose)
       --duration N                stop cleanly after N seconds
@@ -56,12 +58,24 @@ static async Task<int> RunEngineAsync(string[] args)
     var fileLevel = LogLevel.Verbose;
     var intercept = false;
     TimeSpan? duration = null;
+    UdpMode? udp = null;
 
     for (var i = 0; i < args.Length; i++)
     {
         switch (args[i])
         {
             case "--intercept": intercept = true; break;
+            case "--udp" when i + 1 < args.Length:
+                udp = args[++i].ToLowerInvariant() switch
+                {
+                    "tunnel" => UdpMode.Tunnel,
+                    "block-quic" => UdpMode.BlockQuic,
+                    "block-all" => UdpMode.BlockAll,
+                    "bypass" => UdpMode.Bypass,
+                    _ => null,
+                };
+                if (udp is null) { Console.Error.WriteLine($"Unknown UDP mode\n\n{Usage}"); return 1; }
+                break;
             case "--duration" when i + 1 < args.Length:
                 duration = TimeSpan.FromSeconds(double.Parse(args[++i], CultureInfo.InvariantCulture)); break;
             case "--socks" when i + 1 < args.Length: socksBind = IPEndPoint.Parse(args[++i]); break;
@@ -76,6 +90,7 @@ static async Task<int> RunEngineAsync(string[] args)
     }
 
     if (!TryLoadProfile(profilePath, out var profile)) return 1;
+    if (udp is { } u) profile!.Options.Udp = u;
 
     var tracker = new ConnectionTracker { Level = screenLevel };
     var gate = new object();

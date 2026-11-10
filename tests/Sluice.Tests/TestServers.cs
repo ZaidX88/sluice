@@ -104,6 +104,11 @@ public sealed class Socks5TestServer(string? user = null, string? pass = null) :
         var pb = await Read(s, 2, ct);
         var port = (pb[0] << 8) | pb[1];
         LastTarget = $"{host}:{port}";
+        if (req[1] != 1)   // CONNECT only
+        {
+            await s.WriteAsync(new byte[] { 5, 7, 0, 1, 0, 0, 0, 0, 0, 0 }, ct);
+            return;
+        }
         if (host == "refuse.test")
         {
             await s.WriteAsync(new byte[] { 5, 5, 0, 1, 0, 0, 0, 0, 0, 0 }, ct);

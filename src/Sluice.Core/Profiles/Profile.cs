@@ -36,7 +36,15 @@ public enum RuleActionType { Direct, Block, Tunnel, Chain }
 
 public enum ChainType { Simple, Redundancy, LoadBalancing }
 
-public enum UdpMode { Bypass, BlockQuic, BlockAll }
+/// <summary>
+/// What happens to UDP from applications whose rule sends them through a tunnel (Direct rules always pass,
+/// Block rules always drop). Only applies while traffic is intercepted.
+///   Bypass     UDP is not captured: it goes direct (Proxifier's default)
+///   BlockQuic  UDP to port 443 (QUIC / HTTP3) is dropped so browsers fall back to TCP; other UDP goes direct
+///   BlockAll   all their UDP is dropped
+///   Tunnel     UDP goes through the tunnel (SOCKS5 and sing-box tunnels); dropped if the tunnel cannot carry UDP
+/// </summary>
+public enum UdpMode { Bypass, BlockQuic, BlockAll, Tunnel }
 
 /// <summary>An outbound route that rules can send traffic through.</summary>
 public sealed class Tunnel
@@ -138,7 +146,7 @@ public sealed class ProfileOptions
     public PasswordEncryptionMode PasswordEncryption { get; set; } = PasswordEncryptionMode.Basic;
     public bool ConnectionLoopDetection { get; set; } = true;
     public bool ResolveLoopDetection { get; set; } = true;
-    public UdpMode Udp { get; set; } = UdpMode.Bypass;
+    public UdpMode Udp { get; set; } = UdpMode.Tunnel;
     public bool LeakPreventionMode { get; set; }
     public bool ProcessOtherUsers { get; set; }
     public bool ProcessServices { get; set; }

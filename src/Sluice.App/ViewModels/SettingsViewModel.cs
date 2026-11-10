@@ -37,6 +37,29 @@ public sealed class SettingsViewModel : PageViewModel
     public bool HandleDirect { get => O.HandleDirectConnections; set { O.HandleDirectConnections = value; Commit(); Raise(); } }
     public bool ProcessServices { get => O.ProcessServices; set { O.ProcessServices = value; Commit(); Raise(); } }
 
+    // ----- UDP -----
+    private static readonly UdpMode[] UdpOrder = [UdpMode.Tunnel, UdpMode.BlockQuic, UdpMode.BlockAll, UdpMode.Bypass];
+
+    public string[] UdpModes { get; } =
+    [
+        "Through the tunnel — SOCKS5 and encrypted tunnels; blocked if the tunnel cannot carry UDP",
+        "Block QUIC (UDP 443) so browsers use TCP; other UDP goes direct",
+        "Block all UDP of tunneled apps",
+        "Bypass — UDP goes direct, outside the tunnel",
+    ];
+
+    public int UdpIndex
+    {
+        get => Array.IndexOf(UdpOrder, O.Udp);
+        set
+        {
+            if (value < 0 || UdpOrder[value] == O.Udp) return;
+            O.Udp = UdpOrder[value];
+            Commit();
+            Raise();
+        }
+    }
+
     // ----- Password encryption -----
     public string[] EncryptionModes { get; } =
     [

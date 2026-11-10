@@ -61,6 +61,61 @@ public class LiveSshTests
         }
     }
 
+    /// <summary>Streams bytes until the client goes away.</summary>
+    private sealed class EndlessServer : LoopbackServer
+    {
+        protected override async Task HandleAsync(NetworkStream s, CancellationToken ct)
+        {
+            var chunk = new byte[64 * 1024];
+            while (!ct.IsCancellationRequested) await s.WriteAsync(chunk, ct);
+        }
+    }
+
+    private static async Task<Stream> OpenAsync(System.Net.IPEndPoint socks, int port)
+    {
+        var c = new TcpClient();
+        await c.ConnectAsync(socks);
+        await ProxyHandshake.Socks5Async(c.GetStream(), "127.0.0.1", port, null, null, default);
+        return c.GetStream();
+    }
+
+    /// <summary>
+    /// A connection whose application reads nothing must not stall the other connections of the session.
+    /// This is why SSH tunnels use sing-box's client (per-channel flow control) rather than SSH.NET.
+    /// </summary>
+    [Theory]
+    [InlineData("singbox", true)]
+    [InlineData("sshnet", false)]
+    public async Task IdleConnection_DoesNotStallOthers(string client, bool expectUnaffected)
+    {
+        if (!Enabled || (client == "singbox" && !File.Exists(Path.Combine(AppContext.BaseDirectory, "sing-box.exe")))) return;
+        await using var source = new EndlessServer();
+        await using var b = new TunnelBackends();
+        var ep = await b.GetLocalSocksAsync(SshTunnel("127.0.0.1", Port!.Value, new() { ["sshclient"] = client }), default);
+
+        await using var idle = await OpenAsync(ep, source.Port);   // never read
+        await Task.Delay(1500);                                     // let it fill whatever the client buffers
+
+        var buf = new byte[64 * 1024];
+        var total = 0L;
+        using var window = new CancellationTokenSource(TimeSpan.FromSeconds(4));
+        Stream? busy = null;
+        try
+        {
+            // A stalled session cannot even open the channel, so the open counts against the same 4 s.
+            busy = await OpenAsync(ep, source.Port).WaitAsync(window.Token);
+            while (total < 64L * 1024 * 1024) total += await busy.ReadAsync(buf, window.Token);
+        }
+        catch (OperationCanceledException) { }
+        catch (TimeoutException) { }
+        finally
+        {
+            busy?.Dispose();
+        }
+        // The idle connection is not read at all here; through SSH.NET the session stalls once its buffers are full.
+        Assert.Equal(expectUnaffected, total >= 64L * 1024 * 1024);
+    }
+
     [Fact]
     public async Task Direct()
     {
@@ -127,7 +182,7 @@ public class LiveSshTests
         string? learned = null;
         await using (var b = new TunnelBackends())
         {
-            b.HostKeyLearned += (_, k) => learned = k;
+            b.HostKeyLearned += (_, k, _) => learned = k;
             await AssertTunnelWorks(SshTunnel("127.0.0.1", Port!.Value), b);
         }
         Assert.Matches("^ssh-[a-z0-9-]+ SHA256:", learned);

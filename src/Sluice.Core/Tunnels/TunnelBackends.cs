@@ -56,8 +56,15 @@ public sealed class TunnelBackends : IAsyncDisposable
     /// <summary>Path of sing-box.exe (default: next to the running program).</summary>
     public string SingBoxPath { get; set; } = Path.Combine(AppContext.BaseDirectory, "sing-box.exe");
 
-    /// <summary>Raised when an SSH host key is trusted for the first time; the app saves it in the profile.</summary>
-    public event Action<Tunnel, string>? HostKeyLearned;
+    /// <summary>
+    /// Raised when an SSH host key is trusted for the first time (tunnel, display fingerprint, full public key or
+    /// null); the app saves them in the profile.
+    /// </summary>
+    public event Action<Tunnel, string, string?>? HostKeyLearned;
+
+    /// <summary>Which SSH client carries a tunnel: setting "sshclient" = auto (default) | singbox | sshnet.</summary>
+    internal static string SshClientOf(Tunnel t) =>
+        t.Settings.TryGetValue("sshclient", out var c) && c is "singbox" or "sshnet" ? c : "auto";
 
     public static bool Handles(TunnelType t) => t == TunnelType.Ssh || SingBoxConfig.Handles(t);
 
@@ -65,7 +72,8 @@ public sealed class TunnelBackends : IAsyncDisposable
     /// True for helper processes Sluice started (sing-box). Their own connections to tunnel servers must
     /// go direct, or they would be captured and sent back into the tunnel (an infinite loop).
     /// </summary>
-    public bool IsHelperProcess(int pid) => pid != 0 && _sessions.Values.Any(s => s.ProcessId == pid);
+    public bool IsHelperProcess(int pid) =>
+        pid != 0 && (SingBoxSession.RunningHelpers.ContainsKey(pid) || _sessions.Values.Any(s => s.ProcessId == pid));
 
     /// <summary>A SOCKS5 tunnel pointing at the local endpoint that carries <paramref name="t"/>.</summary>
     public async Task<Tunnel> AsLocalSocksAsync(Tunnel t, CancellationToken ct)
@@ -91,18 +99,15 @@ public sealed class TunnelBackends : IAsyncDisposable
                 if (s.Fingerprint == fp) Log($"{t.Type.DisplayName()} {t}: connection lost, reconnecting");
                 await s.DisposeAsync();
             }
-            IBackendSession session = t.Type == TunnelType.Ssh
-                ? new SshSession(t, fp, Resolver, Log, (tun, key) => HostKeyLearned?.Invoke(tun, key))
-                : new SingBoxSession(t, fp, SingBoxPath, Resolver, Log);
             Log($"{t.Type.DisplayName()} {t}: starting session");
             SetStatus(t.Id, SessionState.Connecting);
+            IBackendSession session;
             try
             {
-                await session.StartAsync(ct);
+                session = await StartSessionAsync(t, fp, ct);
             }
             catch (Exception ex)
             {
-                await session.DisposeAsync();
                 if (ex is not OperationCanceledException) Log($"{t.Type.DisplayName()} {t}: could not connect: {ex.Message}");
                 SetStatus(t.Id, ex is OperationCanceledException ? SessionState.NotStarted : SessionState.Failed, ex.Message);
                 throw;
@@ -114,6 +119,46 @@ public sealed class TunnelBackends : IAsyncDisposable
         finally
         {
             gate.Release();
+        }
+    }
+
+    private async Task<IBackendSession> StartSessionAsync(Tunnel t, string fp, CancellationToken ct)
+    {
+        if (t.Type != TunnelType.Ssh) return await StartAsync(new SingBoxSession(t, fp, SingBoxPath, Resolver, Log), ct);
+
+        var choice = SshClientOf(t);
+        var useSingBox = choice == "singbox" || (choice == "auto" && File.Exists(SingBoxPath));
+        if (useSingBox)
+        {
+            try
+            {
+                return await StartAsync(new SshSingBoxSession(t, fp, SingBoxPath, Resolver, Log,
+                    (tun, fingerprint, key) => HostKeyLearned?.Invoke(tun, fingerprint, key)), ct);
+            }
+            catch (SshLoginException ex) when (choice == "auto")
+            {
+                // e.g. a server that only allows keyboard-interactive logins, which sing-box does not speak.
+                Log($"SSH {t}: sing-box could not log in ({ex.Message}); using the built-in SSH client instead");
+            }
+        }
+        else if (choice == "auto")
+        {
+            Log($"SSH {t}: sing-box.exe not found; using the built-in SSH client (one slow connection can slow the others)");
+        }
+        return await StartAsync(new SshSession(t, fp, Resolver, Log, (tun, fingerprint) => HostKeyLearned?.Invoke(tun, fingerprint, null)), ct);
+    }
+
+    private static async Task<IBackendSession> StartAsync(IBackendSession session, CancellationToken ct)
+    {
+        try
+        {
+            await session.StartAsync(ct);
+            return session;
+        }
+        catch
+        {
+            await session.DisposeAsync();
+            throw;
         }
     }
 
@@ -138,7 +183,9 @@ public sealed class TunnelBackends : IAsyncDisposable
         var sb = new StringBuilder()
             .Append(t.Type).Append('|').Append(t.Address).Append('|').Append(t.Port).Append('|')
             .Append(t.Username).Append('|').Append(t.Password).Append('|');
-        foreach (var (k, v) in t.Settings.Where(kv => !kv.Key.Equals("hostkey", StringComparison.OrdinalIgnoreCase)).OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase))
+        foreach (var (k, v) in t.Settings.Where(kv => !kv.Key.Equals("hostkey", StringComparison.OrdinalIgnoreCase) &&
+                                                      !kv.Key.Equals("hostpubkey", StringComparison.OrdinalIgnoreCase))
+                     .OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase))
             sb.Append(k.ToLowerInvariant()).Append('=').Append(v).Append(';');
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(sb.ToString())));
     }

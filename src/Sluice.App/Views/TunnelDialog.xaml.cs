@@ -179,6 +179,7 @@ public partial class TunnelDialog : Window
     private void OnForgetHostKey(object sender, RoutedEventArgs e)
     {
         _settings.Remove("hostkey");
+        _settings.Remove("hostpubkey");
         HostKeyText.Text = "";
         UpdateVisibility();
     }
@@ -223,7 +224,11 @@ public partial class TunnelDialog : Window
             // Keep the trusted host key unless the server changed or the user pressed Forget.
             if (_settings.TryGetValue("hostkey", out var hk)
                 && string.Equals(_originalAddress, t.Address, StringComparison.OrdinalIgnoreCase) && _originalPort == port)
+            {
                 Put("hostkey", hk);
+                if (_settings.TryGetValue("hostpubkey", out var pub)) Put("hostpubkey", pub);
+            }
+            if (_settings.TryGetValue("sshclient", out var sshClient)) Put("sshclient", sshClient);
         }
         else if (v2)
         {

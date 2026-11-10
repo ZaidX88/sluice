@@ -71,6 +71,7 @@ public partial class App : Application
             catch (Exception ex) { vm.Banner = $"Could not open {Path.GetFileName(profilePath)}: {ex.Message}"; }
         }
 
+        if (Arg(args, "--log-file") is { } diagDir) _host.StartDiagnosticLog(diagDir);
         _host.StartSocks();
         if (args.Contains("--intercept") || settings.StartInterceptionOnLaunch) vm.TurnOn();
     }

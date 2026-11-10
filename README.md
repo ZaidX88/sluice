@@ -20,7 +20,7 @@ analysis and the build plan.
 | 6 | Proxy checker (3 tests), statistics per app/target/rule, daily file log, clean shutdown | done |
 | 7 | WPF app: Fluent light/dark UI, connections, statistics, log, tunnels (+checker), rules, settings, tray | done |
 | 8.1 | Proxy → **Tunnel** model, Sluice `.sluice` profile format, `.ppx` import/export | done |
-| 8.2 | SSH tunnels: password/key login, host-key pinning, modes direct / payload / SSL / SSL+payload / payload+SSL | done |
+| 8.2 | SSH tunnels: password/key login, host-key pinning, modes direct / payload / SSL / SSL+payload / payload+SSL; carried by sing-box's SSH client (per-connection flow control), SSH.NET as fallback | done |
 | 8.3 | sing-box helper: Shadowsocks (incl. 2022), VMess, VLESS (+REALITY/Vision), Trojan, Hysteria2, TUIC; WS/gRPC/HTTP transports | done |
 | 8.4 | Share links (vless / vmess / trojan / ss / hysteria2 / tuic / ssh / socks / http): import, copy link, subscriptions with stable tunnel ids | done |
 | 8.5 | UDP through tunnels (SOCKS5 UDP ASSOCIATE; all sing-box protocols): QUIC, games and calls follow the rules; modes tunnel / block QUIC / block all / bypass | done |

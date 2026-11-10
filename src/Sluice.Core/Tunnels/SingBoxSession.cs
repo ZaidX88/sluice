@@ -24,20 +24,34 @@ internal interface IBackendSession : IAsyncDisposable
 /// </summary>
 internal sealed class SingBoxSession : IBackendSession
 {
+    /// <summary>
+    /// Every sing-box helper Sluice is running, from the moment it starts. Their connections to tunnel servers
+    /// must never be captured, including while the session is still starting (SSH logs in during start).
+    /// </summary>
+    internal static readonly System.Collections.Concurrent.ConcurrentDictionary<int, byte> RunningHelpers = new();
+
     private readonly Tunnel _tunnel;
     private readonly string _exe;
     private readonly TunnelTransport.Resolver? _resolve;
     private readonly Action<string> _log;
+    private readonly Func<int, string?, string>? _buildConfig;
     private Process? _process;
     private volatile bool _closing;
+    private readonly List<string> _recent = new();
+
+    /// <summary>The last lines sing-box printed (errors explain failed logins etc.).</summary>
+    public string[] RecentOutput { get { lock (_recent) return _recent.ToArray(); } }
 
     public IPEndPoint? SocksEndPoint { get; private set; }
     public string Fingerprint { get; }
     public int? ProcessId => _process?.Id;
     public bool IsAlive => _process is { HasExited: false } && SocksEndPoint is not null;
 
-    public SingBoxSession(Tunnel tunnel, string fingerprint, string exe, TunnelTransport.Resolver? resolve, Action<string> log)
+    /// <param name="buildConfig">Custom config (socks port, resolved server IP → JSON); default: <see cref="SingBoxConfig.Build"/>.</param>
+    public SingBoxSession(Tunnel tunnel, string fingerprint, string exe, TunnelTransport.Resolver? resolve, Action<string> log,
+        Func<int, string?, string>? buildConfig = null)
     {
+        _buildConfig = buildConfig;
         _tunnel = tunnel;
         Fingerprint = fingerprint;
         _exe = exe;
@@ -68,7 +82,7 @@ internal sealed class SingBoxSession : IBackendSession
         }
 
         var port = FreeLoopbackPort();
-        var json = SingBoxConfig.Build(_tunnel, port, ip);
+        var json = _buildConfig is not null ? _buildConfig(port, ip) : SingBoxConfig.Build(_tunnel, port, ip);
         var dir = Path.Combine(Path.GetTempPath(), "sluice-sing-box");
         Directory.CreateDirectory(dir);
         var configPath = Path.Combine(dir, $"{_tunnel.Id}-{Guid.NewGuid():N}.json");
@@ -91,6 +105,7 @@ internal sealed class SingBoxSession : IBackendSession
             {
                 if (string.IsNullOrWhiteSpace(line)) return;
                 lock (errors) if (errors.Count < 20) errors.Add(line.Trim());
+                lock (_recent) { _recent.Add(line.Trim()); if (_recent.Count > 30) _recent.RemoveAt(0); }
                 if (!_closing) _log($"sing-box {_tunnel}: {line.Trim()}");
             }
             p.OutputDataReceived += (_, e) => OnLine(e.Data);
@@ -100,6 +115,9 @@ internal sealed class SingBoxSession : IBackendSession
                 if (!_closing) _log($"sing-box {_tunnel}: helper exited (code {SafeExitCode(p)})");
             };
             if (!p.Start()) throw new ProxyException("sing-box could not be started");
+            RunningHelpers[p.Id] = 0;
+            var helperId = p.Id;
+            p.Exited += (_, _) => RunningHelpers.TryRemove(helperId, out _);
             Job.Assign(p);
             p.BeginOutputReadLine();
             p.BeginErrorReadLine();
@@ -165,6 +183,7 @@ internal sealed class SingBoxSession : IBackendSession
             if (_process is { HasExited: false }) _process.Kill(entireProcessTree: true);
         }
         catch { /* already gone */ }
+        try { if (_process is not null) RunningHelpers.TryRemove(_process.Id, out _); } catch { /* no id */ }
         _process?.Dispose();
         return ValueTask.CompletedTask;
     }

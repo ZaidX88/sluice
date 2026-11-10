@@ -63,6 +63,9 @@ public sealed class Tunnel
     /// </summary>
     public Dictionary<string, string> Settings { get; } = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>The subscription this tunnel came from (refreshing it may update or remove the tunnel).</summary>
+    public int? SubscriptionId { get; set; }
+
     public override string ToString() => Label ?? $"{Address}:{Port}";
 }
 
@@ -143,12 +146,23 @@ public sealed class ProfileOptions
     public bool HttpProxiesSupport { get; set; }
 }
 
+/// <summary>A URL that serves a list of share links (v2rayN-style subscription).</summary>
+public sealed class Subscription
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = "";
+    public string Url { get; set; } = "";
+    public DateTime? LastUpdated { get; set; }
+    public string? LastError { get; set; }
+}
+
 public sealed class Profile
 {
     public ProfileOptions Options { get; set; } = new();
     public List<Tunnel> Tunnels { get; } = new();
     public List<TunnelChain> Chains { get; } = new();
     public List<Rule> Rules { get; } = new();
+    public List<Subscription> Subscriptions { get; } = new();
 
     /// <summary>Master password for <see cref="PasswordEncryptionMode.MasterPassword"/>; kept in memory only, never saved.</summary>
     public string? MasterPassword { get; set; }

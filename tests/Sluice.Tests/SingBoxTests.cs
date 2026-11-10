@@ -327,6 +327,42 @@ public class LiveSingBoxTests : IAsyncLifetime
             ("security", "reality"), ("sni", "www.microsoft.com"), ("publickey", _realityPublic), ("shortid", _shortId)));
     }
 
+    /// <summary>
+    /// A base64 subscription of share links (as v2rayN / NekoRay would get) pointing at the local server:
+    /// import it over HTTP, export every tunnel back to a link, re-import that, and carry traffic.
+    /// </summary>
+    [Fact]
+    public async Task SubscriptionLinks_ImportExportAndConnect()
+    {
+        if (!Enabled) return;
+        var vmess = Convert.ToBase64String(Encoding.UTF8.GetBytes(new JsonObject
+        {
+            ["v"] = "2", ["ps"] = "vmess", ["add"] = "127.0.0.1", ["port"] = _ports["vmess"].ToString(), ["id"] = _uuid,
+            ["aid"] = "0", ["net"] = "ws", ["path"] = "/ray", ["tls"] = "",
+        }.ToJsonString()));
+        var links = string.Join('\n',
+            $"ss://2022-blake3-aes-128-gcm:{Uri.EscapeDataString(_ssKey)}@127.0.0.1:{_ports["ss"]}#ss",
+            $"vmess://{vmess}",
+            $"vless://{_uuid}@127.0.0.1:{_ports["vless-grpc"]}?encryption=none&security=tls&sni=test.local&allowInsecure=1&type=grpc&serviceName=svc#vless",
+            $"trojan://tr-pass@127.0.0.1:{_ports["trojan"]}?sni=test.local&allowInsecure=1#trojan",
+            $"hy2://hy-pass@127.0.0.1:{_ports["hy2"]}?sni=test.local&insecure=1&obfs=salamander&obfs-password=obfs-pass#hy2",
+            $"tuic://{_uuid}:tuic-pass@127.0.0.1:{_ports["tuic"]}?sni=test.local&alpn=h3&allow_insecure=1#tuic");
+        await using var server = new SubscriptionTests.SubServer(Convert.ToBase64String(Encoding.UTF8.GetBytes(links)));
+        var profile = Profile.CreateDefault();
+        var sub = Subscriptions.AddSubscription(profile, $"http://127.0.0.1:{server.Port}/s");
+        var result = await Subscriptions.UpdateAsync(profile, sub);
+        Assert.Equal(6, result.Added.Count);
+        Assert.Empty(result.Warnings);
+
+        foreach (var t in profile.Tunnels)
+        {
+            var again = ShareLinks.Parse(ShareLinks.ToLink(t));
+            Assert.True(again.Ok, $"{t}: {again.Error}");
+            again.Tunnel!.Id = 50;
+            await AssertTunnelWorks(again.Tunnel);
+        }
+    }
+
     [Fact]
     public async Task WrongPassword_FailsCleanly()
     {

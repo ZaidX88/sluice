@@ -44,6 +44,10 @@ internal static class ScreenshotMode
         vless.Settings["publickey"] = "jNXHt1yRo0vDuchQlIP6Z0ZvjT3KtzVI-T4E7RoLJS0";
         vless.Settings["shortid"] = "0123abcd";
         p.Tunnels.Add(vless);
+        var sub = new Subscription { Id = 1, Name = "Provider", Url = "https://sub.example/x" };
+        p.Subscriptions.Add(sub);
+        var hy = new Tunnel { Id = 104, Type = TunnelType.Hysteria2, Address = "de1.provider.example", Port = 443, Password = "x", Label = "Germany 01", SubscriptionId = 1 };
+        p.Tunnels.Add(hy);
         if (!directOnly)
         {
             p.Rules.Insert(0, new Rule { Name = "Browsers", Applications = "chrome.exe; firefox.exe; msedge.exe", Action = RuleAction.ViaTunnel(100) });
@@ -104,6 +108,8 @@ internal static class ScreenshotMode
                      ("dialog-tunnel-vless", new Views.TunnelDialog(p.Tunnels[3])),
                      ("dialog-rule", new Views.RuleDialog(p.Rules[1], p)),
                      ("dialog-password", new Views.PasswordDialog("Work", confirmNew: true)),
+                     ("dialog-import", new Views.ImportDialog(Profile.CreateDefault(), null,
+                         "vless://b831381d-6324-4d53-ad4f-8cda48b30811@edge.example:443?security=reality&pbk=PUB&sni=www.microsoft.com#Edge\ntrojan://secret@tr.example:443#Trojan")),
                  })
         {
             dialog.WindowStartupLocation = WindowStartupLocation.Manual;

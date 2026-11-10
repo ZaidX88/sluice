@@ -22,7 +22,8 @@ analysis and the build plan.
 | 8.1 | Proxy → **Tunnel** model, Sluice `.sluice` profile format, `.ppx` import/export | done |
 | 8.2 | SSH tunnels: password/key login, host-key pinning, modes direct / payload / SSL / SSL+payload / payload+SSL | done |
 | 8.3 | sing-box helper: Shadowsocks (incl. 2022), VMess, VLESS (+REALITY/Vision), Trojan, Hysteria2, TUIC; WS/gRPC/HTTP transports | done |
-| 8.4 | Import share links / subscriptions; 8.5 UDP through tunnels | planned |
+| 8.4 | Share links (vless / vmess / trojan / ss / hysteria2 / tuic / ssh / socks / http): import, copy link, subscriptions with stable tunnel ids | done |
+| 8.5 | UDP through tunnels | planned |
 
 ![Rules](docs/screenshots/rules-light.png)
 ![Tunnels, dark theme](docs/screenshots/proxies-dark.png)
@@ -78,6 +79,20 @@ dotnet run --project src/Sluice.Cli -- check my-profile.sluice
 
 ```bash
 dotnet run --project src/Sluice.Cli -- check socks5://user:pass@proxy.example:1080 --target example.com:80
+```
+
+Any share link works too, and links or subscriptions can be added to a profile:
+
+```bash
+dotnet run --project src/Sluice.Cli -- check "trojan://password@server.example:443#My server"
+```
+
+```bash
+dotnet run --project src/Sluice.Cli -- import my-profile.sluice --subscription https://provider.example/sub/TOKEN
+```
+
+```bash
+dotnet run --project src/Sluice.Cli -- update my-profile.sluice
 ```
 
 Encrypted tunnels other than SSH use [sing-box](https://github.com/SagerNet/sing-box) (GPL-3.0) as a helper process. It is not committed; fetch the pinned, SHA-256-checked build with:

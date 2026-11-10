@@ -12,6 +12,7 @@ namespace Sluice.Core.Tunnels;
 ///
 ///   uuid           VMess / VLESS / TUIC user id
 ///   method         Shadowsocks cipher (e.g. 2022-blake3-aes-128-gcm, chacha20-ietf-poly1305)
+///   plugin, pluginopts   Shadowsocks SIP003 plugin (obfs-local or v2ray-plugin) and its options
 ///   cipher         VMess security (default auto)
 ///   flow           VLESS flow (e.g. xtls-rprx-vision)
 ///   security       none | tls | reality  (Trojan, Hysteria2 and TUIC always use TLS)
@@ -76,6 +77,17 @@ public static class SingBoxConfig
             case TunnelType.Shadowsocks:
                 o["method"] = Need("method", "a cipher (method)");
                 o["password"] = NeedPassword();
+                if (Get("plugin") is { } plugin)
+                {
+                    // sing-box has these two SIP003 plugins built in.
+                    o["plugin"] = plugin switch
+                    {
+                        "obfs-local" or "simple-obfs" => "obfs-local",
+                        "v2ray-plugin" => "v2ray-plugin",
+                        _ => throw new ProxyException($"Shadowsocks plugin \"{plugin}\" is not supported (use obfs-local or v2ray-plugin)"),
+                    };
+                    if (Get("pluginopts") is { } opts) o["plugin_opts"] = opts;
+                }
                 break;
             case TunnelType.VMess:
                 o["uuid"] = Need("uuid", "a UUID");

@@ -50,6 +50,7 @@ public sealed class MainViewModel : ObservableObject
             Raise(nameof(ProfileHint));
         };
         host.StateChanged += () => RaiseCapture();
+        host.Notice += ShowInfo;
 
         OpenCommand = new RelayCommand(Open);
         SaveCommand = new RelayCommand(Save);

@@ -21,6 +21,21 @@ public static class Dialogs
         return d.ShowDialog() == true ? d.Result : null;
     }
 
+    public static Sluice.Core.Tunnels.ImportResult? Import(Profile profile, Sluice.Core.Tunnels.TunnelTransport.Resolver? resolve)
+    {
+        var d = new ImportDialog(profile, resolve, ImportDialog.ClipboardLinks()) { Owner = Owner };
+        return d.ShowDialog() == true ? d.Result : null;
+    }
+
+    /// <summary>Yes / No / Cancel → true / false / null.</summary>
+    public static bool? Ask(string title, string message) =>
+        MessageBox.Show(Owner!, message, title, MessageBoxButton.YesNoCancel, MessageBoxImage.Question, MessageBoxResult.Cancel) switch
+        {
+            MessageBoxResult.Yes => true,
+            MessageBoxResult.No => false,
+            _ => null,
+        };
+
     public static Rule? EditRule(Rule? existing, Profile profile)
     {
         var d = new RuleDialog(existing, profile) { Owner = Owner };

@@ -5,6 +5,7 @@ using Sluice.Core.Engine;
 using Sluice.Core.Inbound;
 using Sluice.Core.Interception;
 using Sluice.Core.Profiles;
+using Sluice.Core.Tunnels;
 
 const string Usage = """
     Sluice.Cli [profile.sluice|.ppx] [options]  run the routing engine
@@ -14,13 +15,19 @@ const string Usage = """
       --log-file DIR [--log-file-level LEVEL]     also write a daily log file in DIR (default level verbose)
       --duration N                stop cleanly after N seconds
 
-    Sluice.Cli check <profile.sluice|.ppx | scheme://[user:pass@]host:port> [options]
-                                  test tunnels (SOCKS/HTTP) like Proxifier's Proxy Checker
-      scheme: socks5, socks4, socks4a, https, http
+    Sluice.Cli check <profile.sluice|.ppx | share link> [options]
+                                  test tunnels like Proxifier's Proxy Checker
+      share link: vless:// vmess:// trojan:// ss:// hysteria2:// tuic:// ssh://
+                  socks5:// socks4:// socks4a:// https:// http://  (scheme://[user:pass@]host:port)
       --target host:port          host reached through the proxy (default www.google.com:80)
       --no-page                   do not load a web page through the proxy
       --samples N                 latency samples (default 3)
       --timeout SECONDS           per-test timeout (default 10)
+
+    Sluice.Cli import <profile.sluice> <share link | links.txt | --subscription URL [--name NAME]>
+                                  add tunnels from share links, a file of links, or a subscription
+    Sluice.Cli update <profile.sluice>
+                                  refresh every subscription in the profile
     """;
 
 if (args.Length > 0 && args[0] is "-h" or "--help" or "help")
@@ -29,9 +36,13 @@ if (args.Length > 0 && args[0] is "-h" or "--help" or "help")
     return 0;
 }
 
-return args.Length > 0 && args[0] == "check"
-    ? await RunCheckAsync(args[1..])
-    : await RunEngineAsync(args);
+return args.Length > 0 ? args[0] switch
+{
+    "check" => await RunCheckAsync(args[1..]),
+    "import" => await RunImportAsync(args[1..]),
+    "update" => await RunUpdateAsync(args[1..]),
+    _ => await RunEngineAsync(args),
+} : await RunEngineAsync(args);
 
 // ======================================================================================
 // run
@@ -168,8 +179,9 @@ static async Task<int> RunCheckAsync(string[] args)
     List<Tunnel> proxies;
     if (subject.Contains("://"))
     {
-        if (!TryParseProxyUrl(subject, out var single, out var error)) { Console.Error.WriteLine(error); return 1; }
-        proxies = [single!];
+        var link = ShareLinks.Parse(subject);
+        if (!link.Ok) { Console.Error.WriteLine($"Cannot use this link: {link.Error}"); return 1; }
+        proxies = [link.Tunnel!];
     }
     else
     {
@@ -183,8 +195,9 @@ static async Task<int> RunCheckAsync(string[] args)
     await using var backends = new Sluice.Core.Tunnels.TunnelBackends(line => Console.WriteLine($"  · {line}"));
     foreach (var proxy in proxies)
     {
-        Console.WriteLine($"{proxy.Type.ToString().ToUpperInvariant()} {proxy.Address}:{proxy.Port}" +
-                          (string.IsNullOrEmpty(proxy.Username) ? "" : $" (user {proxy.Username})"));
+        Console.WriteLine($"{proxy.Type.DisplayName()} {proxy.Address}:{proxy.Port}" +
+                          (string.IsNullOrEmpty(proxy.Username) ? "" : $" (user {proxy.Username})") +
+                          (proxy.Label is { } label ? $"  \"{label}\"" : ""));
         var progress = new SyncProgress<CheckStep>(s =>
         {
             var (mark, color) = s.Status switch
@@ -207,50 +220,83 @@ static async Task<int> RunCheckAsync(string[] args)
     return allPassed ? 0 : 3;
 }
 
-static bool TryParseProxyUrl(string url, out Tunnel? proxy, out string error)
+// ======================================================================================
+// import / update
+// ======================================================================================
+
+static async Task<int> RunImportAsync(string[] args)
 {
-    proxy = null;
-    error = "";
-    if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Port <= 0)
+    string? profilePath = null, source = null, subscription = null, name = null;
+    for (var i = 0; i < args.Length; i++)
     {
-        error = $"Invalid tunnel URL '{url}'. Expected scheme://[user:pass@]host:port";
-        return false;
+        switch (args[i])
+        {
+            case "--subscription" when i + 1 < args.Length: subscription = args[++i]; break;
+            case "--name" when i + 1 < args.Length: name = args[++i]; break;
+            default:
+                if (args[i].StartsWith("--")) { Console.Error.WriteLine($"Unknown option {args[i]}\n\n{Usage}"); return 1; }
+                if (profilePath is null) profilePath = args[i]; else source = args[i];
+                break;
+        }
     }
-    TunnelType? type = uri.Scheme.ToLowerInvariant() switch
+    if (profilePath is null || (source is null) == (subscription is null)) { Console.Error.WriteLine(Usage); return 1; }
+    if (ProfileFile.IsProxifier(profilePath)) { Console.Error.WriteLine("Import into a .sluice profile (Proxifier profiles cannot hold these tunnels)."); return 1; }
+    if (!TryLoadProfile(File.Exists(profilePath) ? profilePath : null, out var profile)) return 1;
+
+    ImportResult result;
+    if (subscription is not null)
     {
-        "socks5" or "socks5h" => TunnelType.Socks5,
-        "socks4" or "socks4a" => TunnelType.Socks4,
-        "https" => TunnelType.Https,
-        "http" => TunnelType.Http,
-        _ => null,
-    };
-    if (type is null)
-    {
-        error = $"Unknown tunnel scheme '{uri.Scheme}' (use socks5, socks4, socks4a, https or http)";
-        return false;
+        Subscription sub;
+        try { sub = Subscriptions.AddSubscription(profile!, subscription, name); }
+        catch (FormatException ex) { Console.Error.WriteLine(ex.Message); return 1; }
+        try { result = await Subscriptions.UpdateAsync(profile!, sub); }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidDataException)
+        {
+            Console.Error.WriteLine(ex.Message);
+            return 2;
+        }
     }
-    string? user = null, pass = null;
-    if (uri.UserInfo.Length > 0)
+    else
     {
-        var parts = uri.UserInfo.Split(':', 2);
-        user = Uri.UnescapeDataString(parts[0]);
-        pass = parts.Length > 1 ? Uri.UnescapeDataString(parts[1]) : null;
+        var text = source!.Contains("://") ? source : File.ReadAllText(source);
+        result = Subscriptions.ImportLinks(profile!, text);
     }
-    proxy = new Tunnel
-    {
-        Type = type.Value,
-        Address = uri.Host.Trim('[', ']'),
-        Port = uri.Port,
-        Username = user,
-        Password = pass,
-        Socks4aRemoteResolve = uri.Scheme.Equals("socks4a", StringComparison.OrdinalIgnoreCase),
-    };
-    return true;
+    PrintImport(result);
+    if (result.Added.Count + result.Updated.Count + result.Removed.Count > 0) SluiceProfileSerializer.Save(profile!, profilePath);
+    return result.Added.Count + result.Updated.Count + result.Unchanged.Count > 0 ? 0 : 2;
 }
 
-// ======================================================================================
-// shared helpers
-// ======================================================================================
+static async Task<int> RunUpdateAsync(string[] args)
+{
+    if (args.Length != 1) { Console.Error.WriteLine(Usage); return 1; }
+    if (!TryLoadProfile(args[0], out var profile)) return 1;
+    if (profile!.Subscriptions.Count == 0) { Console.WriteLine("The profile has no subscriptions."); return 0; }
+    var failed = 0;
+    foreach (var sub in profile.Subscriptions.ToList())
+    {
+        Console.WriteLine($"{sub.Name} ({sub.Url})");
+        try
+        {
+            PrintImport(await Subscriptions.UpdateAsync(profile, sub));
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidDataException)
+        {
+            failed++;
+            Console.WriteLine($"  {ex.Message} (tunnels kept as they were)");
+        }
+    }
+    SluiceProfileSerializer.Save(profile, args[0]);
+    return failed == 0 ? 0 : 2;
+}
+
+static void PrintImport(ImportResult r)
+{
+    foreach (var t in r.Added) Console.WriteLine($"  + {t.Type.DisplayName(),-12} {t}");
+    foreach (var t in r.Updated) Console.WriteLine($"  ~ {t.Type.DisplayName(),-12} {t}");
+    foreach (var t in r.Removed) Console.WriteLine($"  - {t.Type.DisplayName(),-12} {t}");
+    foreach (var w in r.Warnings) Console.WriteLine($"  ! {w}");
+    Console.WriteLine($"  {r.Summary}");
+}
 
 static bool TryLoadProfile(string? path, out Profile? profile)
 {

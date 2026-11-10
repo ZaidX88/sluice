@@ -21,6 +21,12 @@
                     <TextBlock Text="Add tunnel"/>
                 </StackPanel>
             </Button>
+            <Button Style="{StaticResource SecondaryButton}" Command="{Binding ImportCommand}" Margin="0,0,8,0" ToolTip="Paste share links (vless://, vmess://, ss://, trojan://, hy2://, tuic://…) or add a subscription">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Style="{StaticResource Icon}" Text="&#xE896;" FontSize="12" Margin="0,0,8,0"/>
+                    <TextBlock Text="Import"/>
+                </StackPanel>
+            </Button>
             <Button Style="{StaticResource SecondaryButton}" Content="Edit" Command="{Binding EditCommand}" Margin="0,0,8,0"/>
             <Button Style="{StaticResource SecondaryButton}" Command="{Binding CheckCommand}" Margin="0,0,8,0">
                 <StackPanel Orientation="Horizontal">
@@ -28,8 +34,22 @@
                     <TextBlock Text="Check"/>
                 </StackPanel>
             </Button>
+            <Button Style="{StaticResource SecondaryButton}" Command="{Binding CopyLinkCommand}" Margin="0,0,8,0" ToolTip="Copy a share link for the selected tunnel">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Style="{StaticResource Icon}" Text="&#xE71B;" FontSize="12" Margin="0,0,8,0"/>
+                    <TextBlock Text="Copy link"/>
+                </StackPanel>
+            </Button>
             <Button Style="{StaticResource DangerButton}" Content="Remove" Command="{Binding RemoveCommand}"/>
         </StackPanel>
+        <Button Grid.ColumnSpan="2" HorizontalAlignment="Right" VerticalAlignment="Top" Style="{StaticResource GhostButton}"
+                Command="{Binding UpdateCommand}" Visibility="{Binding HasSubscriptions, Converter={StaticResource Vis}}"
+                ToolTip="Download every subscription again">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Style="{StaticResource Icon}" Text="&#xE72C;" FontSize="12" Margin="0,0,8,0"/>
+                <TextBlock Text="{Binding UpdateLabel}"/>
+            </StackPanel>
+        </Button>
 
         <Border Grid.Row="1" Style="{StaticResource CardBox}" Padding="8,12,8,8">
             <Grid>
@@ -41,11 +61,22 @@
                                 <DataTemplate>
                                     <StackPanel VerticalAlignment="Center">
                                         <TextBlock Text="{Binding Name}" FontWeight="Bold" TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock Text="{Binding Source, StringFormat=from {0}}" FontSize="11" TextTrimming="CharacterEllipsis">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock" BasedOn="{StaticResource Muted}">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Source}" Value="{x:Null}">
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
                                     </StackPanel>
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTemplateColumn Header="Type" Width="90">
+                        <DataGridTemplateColumn Header="Type" Width="108">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
                                     <Border Style="{StaticResource Pill}" Background="{DynamicResource AccentSoft}">
@@ -81,7 +112,7 @@
                 </DataGrid>
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding IsEmpty, Converter={StaticResource Vis}}">
                     <TextBlock Text="No tunnels yet" HorizontalAlignment="Center" FontSize="15" FontWeight="Bold"/>
-                    <TextBlock Style="{StaticResource Muted}" HorizontalAlignment="Center" Margin="0,4,0,0" Text="Add one, then point a rule at it."/>
+                    <TextBlock Style="{StaticResource Muted}" HorizontalAlignment="Center" Margin="0,4,0,0" Text="Add one or import share links, then point a rule at it."/>
                 </StackPanel>
             </Grid>
         </Border>

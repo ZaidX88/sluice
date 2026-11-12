@@ -43,7 +43,31 @@ public partial class LogView : UserControl
 
 public partial class TunnelsView : UserControl
 {
-    public TunnelsView() => InitializeComponent();
+    private TunnelsViewModel? _vm;
+
+    public TunnelsView()
+    {
+        InitializeComponent();
+        // The check results panel takes the Address column's room: hide the column while it is open.
+        DataContextChanged += (_, _) =>
+        {
+            if (_vm is not null) _vm.PropertyChanged -= OnVmChanged;
+            _vm = DataContext as TunnelsViewModel;
+            if (_vm is not null) _vm.PropertyChanged += OnVmChanged;
+            SyncAddressColumn();
+        };
+    }
+
+    private void OnVmChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(TunnelsViewModel.HasCheck)) SyncAddressColumn();
+    }
+
+    private void SyncAddressColumn()
+    {
+        if (this.FindControl<DataGrid>("Grid") is { } grid && grid.Columns.FirstOrDefault(c => Equals(c.Header, "Address")) is { } col)
+            col.IsVisible = _vm?.HasCheck != true;
+    }
 
     private void OnRowDoubleTapped(object? sender, TappedEventArgs e)
     {

@@ -120,6 +120,8 @@ public sealed class TunnelsViewModel : PageViewModel
         CopyLinkCommand = new RelayCommand(CopyLink, () => Selected is not null);
         UpdateCommand = new AsyncCommand(UpdateSubscriptionsAsync, () => !_updating && Host.Profile.Subscriptions.Count > 0);
         CheckCommand = new AsyncCommand(CheckSelectedAsync, () => Selected is not null && !_checking);
+        // Check steps arrive through Progress<T>, possibly after the check finished: keep the panel in sync.
+        CheckSteps.CollectionChanged += (_, _) => Raise(nameof(HasCheck));
         Host.Engine.Backends.StatusChanged += (tunnel, st) => Dispatcher.UIThread.Post(() =>
         {
             var id = tunnel.Id;

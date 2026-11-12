@@ -1,0 +1,44 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Sluice.Desktop.Views.ImportDialog"
+        Title="Import tunnels" Width="580" SizeToContent="Height" CanResize="False"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
+    <DockPanel>
+        <Border DockPanel.Dock="Bottom" BorderBrush="{DynamicResource Divider}" BorderThickness="0,1,0,0" Padding="24,14">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <Button Content="Cancel" Theme="{StaticResource SecondaryButton}" IsCancel="True" MinWidth="90" Click="OnCancel"/>
+                    <Button x:Name="ImportButton" Content="Import" Theme="{StaticResource PrimaryButton}" IsDefault="True" Click="OnImport" MinWidth="90" Margin="10,0,0,0"/>
+                </StackPanel>
+                <TextBlock x:Name="StatusText" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,12,0" IsVisible="False"/>
+            </DockPanel>
+        </Border>
+
+        <StackPanel Margin="24,20,24,20">
+            <TextBlock Text="Import tunnels" Classes="PageTitle" FontSize="20"/>
+            <TextBlock Classes="PageSubtitle" Text="From share links (v2rayN, NekoRay, Shadowrocket, HTTP Injector…) or a subscription your provider gave you."/>
+
+            <StackPanel Orientation="Horizontal" Margin="0,10,0,6">
+                <RadioButton x:Name="LinksMode" Theme="{StaticResource Segment}" Content="Share links" GroupName="mode" IsChecked="True" IsCheckedChanged="OnModeChanged"/>
+                <RadioButton x:Name="SubMode" Theme="{StaticResource Segment}" Content="Subscription URL" GroupName="mode" IsCheckedChanged="OnModeChanged"/>
+            </StackPanel>
+
+            <StackPanel x:Name="LinksPanel">
+                <TextBlock Text="Links — one per line" Classes="FieldLabel"/>
+                <TextBox x:Name="LinksBox" AcceptsReturn="True" TextWrapping="NoWrap" Height="170" FontFamily="{StaticResource MonoFont}" FontSize="11.5"
+                         ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Auto"/>
+                <TextBlock Classes="Muted" Margin="0,6,0,0" TextWrapping="Wrap"
+                           Text="vless://  vmess://  trojan://  ss://  hysteria2://  hy2://  tuic://  ssh://  socks5://  http(s)://  — or a base64 block of them."/>
+            </StackPanel>
+
+            <StackPanel x:Name="SubPanel" IsVisible="False">
+                <TextBlock Text="Subscription URL" Classes="FieldLabel"/>
+                <TextBox x:Name="UrlBox" FontFamily="{StaticResource MonoFont}"/>
+                <TextBlock Text="Name (optional)" Classes="FieldLabel"/>
+                <TextBox x:Name="NameBox"/>
+                <TextBlock Classes="Muted" Margin="0,8,0,0" TextWrapping="Wrap"
+                           Text="Sluice downloads the list now and again whenever you press Update. Tunnels keep their identity across updates, so rules that use them keep working; tunnels the provider drops are removed and their rules go Direct."/>
+            </StackPanel>
+        </StackPanel>
+    </DockPanel>
+</Window>

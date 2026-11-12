@@ -3,6 +3,9 @@
     <Project Path="src/Sluice.App/Sluice.App.csproj" />
     <Project Path="src/Sluice.Cli/Sluice.Cli.csproj" />
     <Project Path="src/Sluice.Core/Sluice.Core.csproj" />
+    <Project Path="src/Sluice.Desktop/Sluice.Desktop.csproj" />
+    <Project Path="src/Sluice.Platform.Linux/Sluice.Platform.Linux.csproj" />
+    <Project Path="src/Sluice.Platform.Windows/Sluice.Platform.Windows.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Sluice.Tests/Sluice.Tests.csproj" />

@@ -1,0 +1,73 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- Same monochrome palettes as the WPF app (Theme/Light.xaml, Theme/Dark.xaml). -->
+    <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="Light">
+            <Color x:Key="AccentColor">#0A0A0A</Color>
+            <SolidColorBrush x:Key="Bg" Color="#FFFFFF"/>
+            <SolidColorBrush x:Key="Sidebar" Color="#F7F7F8"/>
+            <SolidColorBrush x:Key="Card" Color="#FFFFFF"/>
+            <SolidColorBrush x:Key="CardBorder" Color="#EDEDEF"/>
+            <SolidColorBrush x:Key="Divider" Color="#EFEFF1"/>
+            <SolidColorBrush x:Key="Text" Color="#0A0A0A"/>
+            <SolidColorBrush x:Key="TextMuted" Color="#7C7C83"/>
+            <SolidColorBrush x:Key="TextFaint" Color="#B4B4BA"/>
+            <SolidColorBrush x:Key="Accent" Color="#0A0A0A"/>
+            <SolidColorBrush x:Key="AccentSoft" Color="#F1F1F2"/>
+            <SolidColorBrush x:Key="OnAccent" Color="#FFFFFF"/>
+            <SolidColorBrush x:Key="Hover" Color="#EEEEF0"/>
+            <SolidColorBrush x:Key="Selected" Color="#0A0A0A"/>
+            <SolidColorBrush x:Key="OnSelected" Color="#FFFFFF"/>
+            <SolidColorBrush x:Key="RowHover" Color="#F7F7F8"/>
+            <SolidColorBrush x:Key="RowSelected" Color="#FFFFFF"/>
+            <SolidColorBrush x:Key="Success" Color="#0A0A0A"/>
+            <SolidColorBrush x:Key="SuccessSoft" Color="#F1F1F2"/>
+            <SolidColorBrush x:Key="Warning" Color="#4A4A50"/>
+            <SolidColorBrush x:Key="Danger" Color="#D33A3A"/>
+            <SolidColorBrush x:Key="DangerSoft" Color="#FBEDED"/>
+            <SolidColorBrush x:Key="SwitchOff" Color="#D4D4D8"/>
+            <SolidColorBrush x:Key="Spark" Color="#0A0A0A"/>
+            <SolidColorBrush x:Key="SparkFill" Color="#140A0A0A"/>
+            <BoxShadows x:Key="SoftShadow">0 4 28 0 #12000000</BoxShadows>
+            <BoxShadows x:Key="LiftShadow">0 6 22 0 #14000000</BoxShadows>
+            <DropShadowEffect x:Key="LiftEffect" OffsetX="0" OffsetY="4" BlurRadius="18" Color="#000000" Opacity="0.10"/>
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="Dark">
+            <Color x:Key="AccentColor">#FAFAFA</Color>
+            <SolidColorBrush x:Key="Bg" Color="#0B0B0C"/>
+            <SolidColorBrush x:Key="Sidebar" Color="#111113"/>
+            <SolidColorBrush x:Key="Card" Color="#151517"/>
+            <SolidColorBrush x:Key="CardBorder" Color="#232327"/>
+            <SolidColorBrush x:Key="Divider" Color="#1F1F23"/>
+            <SolidColorBrush x:Key="Text" Color="#F4F4F5"/>
+            <SolidColorBrush x:Key="TextMuted" Color="#8E8E96"/>
+            <SolidColorBrush x:Key="TextFaint" Color="#55555C"/>
+            <SolidColorBrush x:Key="Accent" Color="#FAFAFA"/>
+            <SolidColorBrush x:Key="AccentSoft" Color="#1C1C1F"/>
+            <SolidColorBrush x:Key="OnAccent" Color="#0A0A0A"/>
+            <SolidColorBrush x:Key="Hover" Color="#1A1A1D"/>
+            <SolidColorBrush x:Key="Selected" Color="#FAFAFA"/>
+            <SolidColorBrush x:Key="OnSelected" Color="#0A0A0A"/>
+            <SolidColorBrush x:Key="RowHover" Color="#18181B"/>
+            <SolidColorBrush x:Key="RowSelected" Color="#202024"/>
+            <SolidColorBrush x:Key="Success" Color="#FAFAFA"/>
+            <SolidColorBrush x:Key="SuccessSoft" Color="#1C1C1F"/>
+            <SolidColorBrush x:Key="Warning" Color="#B4B4BA"/>
+            <SolidColorBrush x:Key="Danger" Color="#F07070"/>
+            <SolidColorBrush x:Key="DangerSoft" Color="#2A1617"/>
+            <SolidColorBrush x:Key="SwitchOff" Color="#3A3A40"/>
+            <SolidColorBrush x:Key="Spark" Color="#FAFAFA"/>
+            <SolidColorBrush x:Key="SparkFill" Color="#1AFAFAFA"/>
+            <BoxShadows x:Key="SoftShadow">0 4 28 0 #80000000</BoxShadows>
+            <BoxShadows x:Key="LiftShadow">0 6 22 0 #80000000</BoxShadows>
+            <DropShadowEffect x:Key="LiftEffect" OffsetX="0" OffsetY="4" BlurRadius="18" Color="#000000" Opacity="0.5"/>
+        </ResourceDictionary>
+    </ResourceDictionary.ThemeDictionaries>
+
+    <!-- JetBrains Mono is embedded (Assets/Fonts, SIL OFL), so the UI looks the same on Windows and Linux. -->
+    <FontFamily x:Key="UiFont">avares://Sluice.Desktop/Assets/Fonts#JetBrains Mono</FontFamily>
+    <FontFamily x:Key="MonoFont">avares://Sluice.Desktop/Assets/Fonts#JetBrains Mono</FontFamily>
+    <!-- The Fluent theme reads these for its controls (text boxes, combo boxes, …). -->
+    <FontFamily x:Key="ContentControlThemeFontFamily">avares://Sluice.Desktop/Assets/Fonts#JetBrains Mono</FontFamily>
+    <x:Double x:Key="ControlContentThemeFontSize">12.5</x:Double>
+</ResourceDictionary>

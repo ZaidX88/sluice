@@ -1,0 +1,147 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:c="using:Sluice.Desktop.Controls">
+    <!-- Control themes ported from the WPF Theme/Styles.xaml: use with Theme="{StaticResource …}". -->
+
+    <!-- ===== Buttons: pill shaped ===== -->
+    <ControlTheme x:Key="ButtonBase" TargetType="Button">
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="Padding" Value="14,0"/>
+        <Setter Property="Height" Value="32"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Background" Value="{DynamicResource Card}"/>
+        <Setter Property="Foreground" Value="{DynamicResource Text}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource CardBorder}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="HorizontalContentAlignment" Value="Center"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                        BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="16" Padding="{TemplateBinding Padding}">
+                    <ContentPresenter Name="PART_ContentPresenter" Content="{TemplateBinding Content}"
+                                      ContentTemplate="{TemplateBinding ContentTemplate}"
+                                      HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                      VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                </Border>
+            </ControlTemplate>
+        </Setter>
+        <Style Selector="^:pointerover /template/ Border#Bd"><Setter Property="Opacity" Value="0.85"/></Style>
+        <Style Selector="^:pressed /template/ Border#Bd"><Setter Property="Opacity" Value="0.7"/></Style>
+        <Style Selector="^:disabled"><Setter Property="Opacity" Value="0.35"/></Style>
+    </ControlTheme>
+    <ControlTheme x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource ButtonBase}">
+        <Setter Property="Background" Value="{DynamicResource Accent}"/>
+        <Setter Property="Foreground" Value="{DynamicResource OnAccent}"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="FontWeight" Value="Bold"/>
+    </ControlTheme>
+    <ControlTheme x:Key="SecondaryButton" TargetType="Button" BasedOn="{StaticResource ButtonBase}"/>
+    <ControlTheme x:Key="DangerButton" TargetType="Button" BasedOn="{StaticResource ButtonBase}">
+        <Setter Property="Foreground" Value="{DynamicResource Danger}"/>
+    </ControlTheme>
+    <ControlTheme x:Key="GhostButton" TargetType="Button" BasedOn="{StaticResource ButtonBase}">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
+        <Setter Property="Padding" Value="8,0"/>
+    </ControlTheme>
+    <ControlTheme x:Key="IconButton" TargetType="Button" BasedOn="{StaticResource GhostButton}">
+        <Setter Property="Width" Value="32"/>
+        <Setter Property="Padding" Value="0"/>
+    </ControlTheme>
+    <!-- Round black action button (the "play" button of the capture bar). -->
+    <ControlTheme x:Key="RoundButton" TargetType="Button">
+        <Setter Property="Width" Value="40"/>
+        <Setter Property="Height" Value="40"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Background" Value="{DynamicResource Accent}"/>
+        <Setter Property="Foreground" Value="{DynamicResource OnAccent}"/>
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border Name="Disc" Background="{TemplateBinding Background}" CornerRadius="20" BoxShadow="{DynamicResource LiftShadow}">
+                    <ContentPresenter Content="{TemplateBinding Content}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Border>
+            </ControlTemplate>
+        </Setter>
+        <Style Selector="^:pointerover /template/ Border#Disc"><Setter Property="Opacity" Value="0.85"/></Style>
+        <Style Selector="^:pressed /template/ Border#Disc"><Setter Property="Opacity" Value="0.7"/></Style>
+    </ControlTheme>
+
+    <!-- ===== Toggle switch (CheckBox) ===== -->
+    <ControlTheme x:Key="Switch" TargetType="CheckBox">
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Foreground" Value="{DynamicResource Text}"/>
+        <Setter Property="FontSize" Value="12.5"/>
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Grid Background="Transparent" ColumnDefinitions="*,Auto">
+                    <ContentPresenter Name="PART_ContentPresenter" Content="{TemplateBinding Content}"
+                                      ContentTemplate="{TemplateBinding ContentTemplate}" VerticalAlignment="Center" Margin="0,0,14,0"/>
+                    <Border Name="Track" Grid.Column="1" Width="38" Height="20" CornerRadius="10" Background="{DynamicResource SwitchOff}">
+                        <Ellipse Name="Knob" Width="14" Height="14" Fill="{DynamicResource Card}" HorizontalAlignment="Left" Margin="3,0"/>
+                    </Border>
+                </Grid>
+            </ControlTemplate>
+        </Setter>
+        <Style Selector="^:checked /template/ Border#Track"><Setter Property="Background" Value="{DynamicResource Accent}"/></Style>
+        <Style Selector="^:checked /template/ Ellipse#Knob">
+            <Setter Property="Fill" Value="{DynamicResource OnAccent}"/>
+            <Setter Property="HorizontalAlignment" Value="Right"/>
+        </Style>
+        <Style Selector="^:disabled"><Setter Property="Opacity" Value="0.4"/></Style>
+    </ControlTheme>
+
+    <!-- ===== Sidebar navigation: black pill flush with the left edge ===== -->
+    <ControlTheme x:Key="NavItem" TargetType="RadioButton">
+        <Setter Property="Foreground" Value="{DynamicResource Text}"/>
+        <Setter Property="FontSize" Value="12.5"/>
+        <Setter Property="Height" Value="38"/>
+        <Setter Property="Margin" Value="0,1,24,1"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="HorizontalAlignment" Value="Stretch"/>
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border Name="Bd" Background="{TemplateBinding Background}" CornerRadius="0,19,19,0" Padding="30,0,12,0">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <c:IconView Name="Glyph" Kind="{Binding $parent[RadioButton].Tag}" Size="15" Width="28"
+                                    HorizontalAlignment="Left" Foreground="{DynamicResource TextMuted}"/>
+                        <ContentPresenter Content="{TemplateBinding Content}" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Border>
+            </ControlTemplate>
+        </Setter>
+        <Style Selector="^:pointerover /template/ Border#Bd"><Setter Property="Background" Value="{DynamicResource Hover}"/></Style>
+        <Style Selector="^:checked /template/ Border#Bd"><Setter Property="Background" Value="{DynamicResource Selected}"/></Style>
+        <Style Selector="^:checked /template/ c|IconView#Glyph"><Setter Property="Foreground" Value="{DynamicResource OnSelected}"/></Style>
+        <Style Selector="^:checked">
+            <Setter Property="Foreground" Value="{DynamicResource OnSelected}"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+        </Style>
+    </ControlTheme>
+
+    <!-- ===== Tabs (like Today / Week / Month): text with an underline ===== -->
+    <ControlTheme x:Key="Segment" TargetType="RadioButton">
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="Margin" Value="0,0,18,0"/>
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Template">
+            <ControlTemplate>
+                <StackPanel Background="Transparent">
+                    <ContentPresenter Content="{TemplateBinding Content}" HorizontalAlignment="Center"/>
+                    <Border Name="Line" Height="2" Margin="0,5,0,0" CornerRadius="1" Background="Transparent"/>
+                </StackPanel>
+            </ControlTemplate>
+        </Setter>
+        <Style Selector="^:pointerover"><Setter Property="Foreground" Value="{DynamicResource Text}"/></Style>
+        <Style Selector="^:checked">
+            <Setter Property="Foreground" Value="{DynamicResource Text}"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+        </Style>
+        <Style Selector="^:checked /template/ Border#Line"><Setter Property="Background" Value="{DynamicResource Accent}"/></Style>
+    </ControlTheme>
+</ResourceDictionary>

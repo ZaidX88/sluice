@@ -113,10 +113,22 @@ static async Task<int> RunEngineAsync(string[] args)
     await using var socks = new Socks5Inbound(engine, socksBind);
     socks.Start();
 
-    Interceptor? interceptor = null;
+    ITrafficCapture? interceptor = null;
     if (intercept)
     {
-        interceptor = new Interceptor(engine) { DiagnosticPackets = screenLevel == LogLevel.Debug ? 20 : 0 };
+        if (OperatingSystem.IsLinux())
+        {
+            // nftables + NFQUEUE (Sluice.Platform.Linux); process lookups read /proc.
+            var linux = new Sluice.Platform.Linux.LinuxPlatform();
+            linux.OnAppStart();
+            if (linux.CaptureUnavailableReason is { } why) { Console.Error.WriteLine(why); return 2; }
+            if (!linux.HasCaptureRights) { Console.Error.WriteLine(linux.CaptureRightsHint); return 2; }
+            interceptor = linux.CreateCapture(engine);
+        }
+        else
+        {
+            interceptor = new Interceptor(engine) { DiagnosticPackets = screenLevel == LogLevel.Debug ? 20 : 0 };
+        }
         try
         {
             interceptor.Start();

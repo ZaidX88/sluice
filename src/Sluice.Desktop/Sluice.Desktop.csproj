@@ -1,0 +1,40 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <!-- One build per OS: the Windows build uses Sluice.Platform.Windows, the plain net10.0 build (Linux) uses
+         Sluice.Platform.Linux. Everything else is shared (Sluice.Core and this UI). -->
+    <TargetFrameworks>net10.0-windows10.0.19041.0;net10.0</TargetFrameworks>
+    <WindowsSdkPackageVersion>10.0.19041.57</WindowsSdkPackageVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Cross-platform desktop UI (Windows, Linux). Replaces the WPF app once it reaches parity. -->
+    <AssemblyName>Sluice.Desktop</AssemblyName>
+    <RootNamespace>Sluice.Desktop</RootNamespace>
+    <ApplicationIcon>Assets\Sluice.ico</ApplicationIcon>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="12.1.6" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.6" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.6" />
+    <PackageReference Include="Avalonia.Controls.DataGrid" Version="12.1.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- JetBrains Mono (SIL Open Font License, see Assets/Fonts/OFL.txt), embedded so the UI looks the same everywhere. -->
+    <AvaloniaResource Include="Assets\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Sluice.Core\Sluice.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="$(TargetFramework.Contains('-windows'))">
+    <ProjectReference Include="..\Sluice.Platform.Windows\Sluice.Platform.Windows.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="!$(TargetFramework.Contains('-windows'))">
+    <ProjectReference Include="..\Sluice.Platform.Linux\Sluice.Platform.Linux.csproj" />
+  </ItemGroup>
+
+</Project>

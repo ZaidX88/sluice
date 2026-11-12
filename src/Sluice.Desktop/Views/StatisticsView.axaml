@@ -1,0 +1,55 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Sluice.Desktop.ViewModels"
+             x:Class="Sluice.Desktop.Views.StatisticsView"
+             x:DataType="vm:StatisticsViewModel">
+    <Grid RowDefinitions="Auto,*">
+
+        <DockPanel Margin="0,0,0,14">
+            <Button DockPanel.Dock="Right" Theme="{StaticResource GhostButton}" Content="Reset statistics" Command="{Binding ResetCommand}"/>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Center">
+                <RadioButton Theme="{StaticResource Segment}" Content="By application" IsChecked="{Binding ByApplication}" GroupName="stat"/>
+                <RadioButton Theme="{StaticResource Segment}" Content="By target" IsChecked="{Binding ByTarget}" GroupName="stat"/>
+                <RadioButton Theme="{StaticResource Segment}" Content="By rule" IsChecked="{Binding ByRule}" GroupName="stat"/>
+            </StackPanel>
+        </DockPanel>
+
+        <Border Grid.Row="1" Classes="CardBox" Padding="8,12,8,8">
+            <Grid>
+                <DataGrid Classes="Grid" ItemsSource="{Binding Rows}">
+                    <DataGrid.Columns>
+                        <DataGridTemplateColumn Width="2*">
+                            <DataGridTemplateColumn.Header>
+                                <TextBlock Text="{Binding $parent[DataGrid].((vm:StatisticsViewModel)DataContext).KeyHeader}"/>
+                            </DataGridTemplateColumn.Header>
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="vm:StatisticsRowView">
+                                    <TextBlock Text="{Binding Key}" FontWeight="Bold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="Share of traffic" Width="1.4*">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="vm:StatisticsRowView">
+                                    <Grid Height="6" Margin="0,0,12,0" VerticalAlignment="Center">
+                                        <Border Background="{DynamicResource Divider}" CornerRadius="3"/>
+                                        <ProgressBar Value="{Binding Share, Mode=OneWay}" Maximum="1" Height="6" MinHeight="0" MinWidth="0"
+                                                     Background="Transparent" Foreground="{DynamicResource Accent}" CornerRadius="3"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTextColumn Header="Total" Binding="{ReflectionBinding Total}" Width="90"/>
+                        <DataGridTextColumn Header="Sent" Binding="{ReflectionBinding Sent}" Width="85"/>
+                        <DataGridTextColumn Header="Received" Binding="{ReflectionBinding Received}" Width="90"/>
+                        <DataGridTextColumn Header="Conns" Binding="{ReflectionBinding Connections}" Width="65"/>
+                        <DataGridTextColumn Header="Open" Binding="{ReflectionBinding Active}" Width="60"/>
+                        <DataGridTextColumn Header="Failed" Binding="{ReflectionBinding Failed}" Width="65"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+                <TextBlock Text="No traffic yet" Classes="Muted" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center"
+                           IsVisible="{Binding IsEmpty}" IsHitTestVisible="False"/>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

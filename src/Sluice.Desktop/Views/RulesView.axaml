@@ -1,0 +1,88 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Sluice.Desktop.ViewModels"
+             xmlns:c="using:Sluice.Desktop.Controls"
+             x:Class="Sluice.Desktop.Views.RulesView"
+             x:DataType="vm:RulesViewModel">
+    <UserControl.Styles>
+        <Style Selector="Border.Action"><Setter Property="Background" Value="{DynamicResource AccentSoft}"/></Style>
+        <Style Selector="Border.Action.Direct"><Setter Property="Background" Value="{DynamicResource Hover}"/></Style>
+        <Style Selector="Border.Action.Block"><Setter Property="Background" Value="{DynamicResource DangerSoft}"/></Style>
+        <Style Selector="TextBlock.Action"><Setter Property="Foreground" Value="{DynamicResource Accent}"/></Style>
+        <Style Selector="TextBlock.Action.Direct"><Setter Property="Foreground" Value="{DynamicResource TextMuted}"/></Style>
+        <Style Selector="TextBlock.Action.Block"><Setter Property="Foreground" Value="{DynamicResource Danger}"/></Style>
+    </UserControl.Styles>
+    <Grid RowDefinitions="Auto,*">
+
+        <DockPanel Margin="0,0,0,14">
+            <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+                <Button Theme="{StaticResource SecondaryButton}" Command="{Binding UpCommand}" ToolTip.Tip="Move up" Margin="0,0,6,0" Padding="10,0">
+                    <c:IconView Kind="arrow-up" Size="13"/>
+                </Button>
+                <Button Theme="{StaticResource SecondaryButton}" Command="{Binding DownCommand}" ToolTip.Tip="Move down" Padding="10,0">
+                    <c:IconView Kind="arrow-down" Size="13"/>
+                </Button>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal">
+                <Button Theme="{StaticResource PrimaryButton}" Command="{Binding AddCommand}" Margin="0,0,8,0">
+                    <StackPanel Orientation="Horizontal">
+                        <c:IconView Kind="add" Size="12" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                        <TextBlock Text="Add rule"/>
+                    </StackPanel>
+                </Button>
+                <Button Theme="{StaticResource SecondaryButton}" Content="Edit" Command="{Binding EditCommand}" Margin="0,0,8,0"/>
+                <Button Theme="{StaticResource SecondaryButton}" Content="Duplicate" Command="{Binding CloneCommand}" Margin="0,0,8,0"/>
+                <Button Theme="{StaticResource DangerButton}" Content="Remove" Command="{Binding RemoveCommand}"/>
+            </StackPanel>
+        </DockPanel>
+
+        <Border Grid.Row="1" Classes="CardBox" Padding="8,12,8,8">
+            <DataGrid x:Name="Grid" Classes="Grid" ItemsSource="{Binding Rows}" SelectedItem="{Binding Selected}"
+                      CanUserSortColumns="False" RowHeight="40" DoubleTapped="OnRowDoubleTapped">
+                <DataGrid.Columns>
+                    <DataGridTemplateColumn Header="On" Width="64">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate x:DataType="vm:RuleRow">
+                                <CheckBox Theme="{StaticResource Switch}" IsChecked="{Binding Enabled}"
+                                          IsEnabled="{Binding !IsDefault}" HorizontalAlignment="Left" VerticalAlignment="Center"/>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    <DataGridTemplateColumn Header="Name" Width="1.2*">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate x:DataType="vm:RuleRow">
+                                <TextBlock Text="{Binding Name}" FontWeight="Bold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    <DataGridTemplateColumn Header="Applications" Width="1.2*">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate x:DataType="vm:RuleRow">
+                                <TextBlock Text="{Binding Applications}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    <DataGridTemplateColumn Header="Targets" Width="1.5*">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate x:DataType="vm:RuleRow">
+                                <TextBlock Text="{Binding Targets}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    <DataGridTextColumn Header="Ports" Binding="{ReflectionBinding Ports}" Width="90"/>
+                    <DataGridTemplateColumn Header="Action" Width="1.4*">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate x:DataType="vm:RuleRow">
+                                <Border CornerRadius="10" Padding="9,2" HorizontalAlignment="Left" VerticalAlignment="Center"
+                                        Classes="Action" Classes.Direct="{Binding IsDirect}" Classes.Block="{Binding IsBlock}">
+                                    <TextBlock Text="{Binding Action}" FontSize="12" FontWeight="Bold" TextTrimming="CharacterEllipsis"
+                                               Classes="Action" Classes.Direct="{Binding IsDirect}" Classes.Block="{Binding IsBlock}"/>
+                                </Border>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                </DataGrid.Columns>
+            </DataGrid>
+        </Border>
+    </Grid>
+</UserControl>

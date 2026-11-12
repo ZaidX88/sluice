@@ -1,0 +1,135 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Sluice.Desktop.ViewModels"
+             xmlns:c="using:Sluice.Desktop.Controls"
+             x:Class="Sluice.Desktop.Views.TunnelsView"
+             x:DataType="vm:TunnelsViewModel">
+    <UserControl.Styles>
+        <Style Selector="TextBlock.State"><Setter Property="Foreground" Value="{DynamicResource TextMuted}"/></Style>
+        <Style Selector="TextBlock.State.Good"><Setter Property="Foreground" Value="{DynamicResource Success}"/></Style>
+        <Style Selector="TextBlock.State.Bad"><Setter Property="Foreground" Value="{DynamicResource Danger}"/></Style>
+        <Style Selector="c|IconView.Mark"><Setter Property="Foreground" Value="{DynamicResource TextFaint}"/></Style>
+        <Style Selector="c|IconView.Mark.Good"><Setter Property="Foreground" Value="{DynamicResource Success}"/></Style>
+        <Style Selector="c|IconView.Mark.Bad"><Setter Property="Foreground" Value="{DynamicResource Danger}"/></Style>
+    </UserControl.Styles>
+    <Grid RowDefinitions="Auto,*" ColumnDefinitions="*,Auto">
+
+        <StackPanel Orientation="Horizontal" Margin="0,0,0,14" Grid.ColumnSpan="2">
+            <Button Theme="{StaticResource PrimaryButton}" Command="{Binding AddCommand}" Margin="0,0,8,0">
+                <StackPanel Orientation="Horizontal">
+                    <c:IconView Kind="add" Size="12" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                    <TextBlock Text="Add tunnel"/>
+                </StackPanel>
+            </Button>
+            <Button Theme="{StaticResource SecondaryButton}" Command="{Binding ImportCommand}" Margin="0,0,8,0"
+                    ToolTip.Tip="Paste share links (vless://, vmess://, ss://, trojan://, hy2://, tuic://…) or add a subscription">
+                <StackPanel Orientation="Horizontal">
+                    <c:IconView Kind="download" Size="13" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                    <TextBlock Text="Import"/>
+                </StackPanel>
+            </Button>
+            <Button Theme="{StaticResource SecondaryButton}" Content="Edit" Command="{Binding EditCommand}" Margin="0,0,8,0"/>
+            <Button Theme="{StaticResource SecondaryButton}" Command="{Binding CheckCommand}" Margin="0,0,8,0">
+                <StackPanel Orientation="Horizontal">
+                    <c:IconView Kind="pulse" Size="13" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                    <TextBlock Text="Check"/>
+                </StackPanel>
+            </Button>
+            <Button Theme="{StaticResource SecondaryButton}" Command="{Binding CopyLinkCommand}" Margin="0,0,8,0"
+                    ToolTip.Tip="Copy a share link for the selected tunnel">
+                <StackPanel Orientation="Horizontal">
+                    <c:IconView Kind="link" Size="13" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                    <TextBlock Text="Copy link"/>
+                </StackPanel>
+            </Button>
+            <Button Theme="{StaticResource DangerButton}" Content="Remove" Command="{Binding RemoveCommand}"/>
+        </StackPanel>
+        <Button Grid.ColumnSpan="2" HorizontalAlignment="Right" VerticalAlignment="Top" Theme="{StaticResource GhostButton}"
+                Command="{Binding UpdateCommand}" IsVisible="{Binding HasSubscriptions}" ToolTip.Tip="Download every subscription again">
+            <StackPanel Orientation="Horizontal">
+                <c:IconView Kind="refresh" Size="13" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                <TextBlock Text="{Binding UpdateLabel}"/>
+            </StackPanel>
+        </Button>
+
+        <Border Grid.Row="1" Classes="CardBox" Padding="8,12,8,8">
+            <Grid>
+                <DataGrid Classes="Grid" ItemsSource="{Binding Rows}" SelectedItem="{Binding Selected}" DoubleTapped="OnRowDoubleTapped">
+                    <DataGrid.Columns>
+                        <DataGridTemplateColumn Header="On" Width="58">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="vm:TunnelRow">
+                                    <CheckBox Theme="{StaticResource Switch}" VerticalAlignment="Center" HorizontalAlignment="Left"
+                                              IsChecked="{Binding Enabled}"
+                                              ToolTip.Tip="Turn this tunnel on or off. Off: rules that use it fail instead of going direct."/>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="Tunnel" Width="1.4*" MinWidth="120">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="vm:TunnelRow">
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding Name}" FontWeight="Bold" TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock Text="{Binding Subtitle}" FontSize="11" Classes="Muted" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="Type" Width="108">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="vm:TunnelRow">
+                                    <Border Classes="Pill" Background="{DynamicResource AccentSoft}">
+                                        <TextBlock Text="{Binding Type}" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource Accent}"/>
+                                    </Border>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTextColumn Header="Address" Binding="{ReflectionBinding Endpoint}" Width="1.3*" MinWidth="0"/>
+                        <DataGridTemplateColumn Header="Session" Width="150">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="vm:TunnelRow">
+                                    <TextBlock Text="{Binding Session}" ToolTip.Tip="{Binding SessionTip}" VerticalAlignment="Center"
+                                               Classes="State" Classes.Good="{Binding SessionGood}" Classes.Bad="{Binding SessionBad}"/>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="Status" Width="110">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="vm:TunnelRow">
+                                    <TextBlock Text="{Binding Status}" VerticalAlignment="Center"
+                                               Classes="State" Classes.Good="{Binding StatusGood}" Classes.Bad="{Binding StatusBad}"/>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                    </DataGrid.Columns>
+                </DataGrid>
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding IsEmpty}">
+                    <TextBlock Text="No tunnels yet" HorizontalAlignment="Center" FontSize="15" FontWeight="Bold"/>
+                    <TextBlock Classes="Muted" HorizontalAlignment="Center" Margin="0,4,0,0" Text="Add one or import share links, then point a rule at it."/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Checker results -->
+        <Border Grid.Row="1" Grid.Column="1" Classes="CardBox" Width="320" Margin="16,0,0,0"
+                IsVisible="{Binding HasCheck}" VerticalAlignment="Top">
+            <StackPanel>
+                <TextBlock Text="{Binding CheckTitle}" Classes="SectionTitle" TextWrapping="Wrap"/>
+                <ItemsControl ItemsSource="{Binding CheckSteps}" Margin="0,8,0,0">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:CheckStepView">
+                            <Grid Margin="0,10,0,0" ColumnDefinitions="26,*">
+                                <c:IconView Kind="{Binding Mark}" Size="14" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="0,2,0,0"
+                                            Classes="Mark" Classes.Good="{Binding IsGood}" Classes.Bad="{Binding IsBad}"/>
+                                <StackPanel Grid.Column="1">
+                                    <TextBlock Text="{Binding Title}" FontWeight="Bold" FontSize="13" TextWrapping="Wrap"/>
+                                    <TextBlock Text="{Binding Detail}" Classes="Muted" Margin="0,2,0,0"/>
+                                </StackPanel>
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>

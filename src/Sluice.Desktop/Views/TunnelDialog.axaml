@@ -1,0 +1,249 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Sluice.Desktop.Views.TunnelDialog"
+        Title="Tunnel" Width="560" SizeToContent="Height" MaxHeight="860" CanResize="False"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
+    <DockPanel>
+        <!-- Buttons stay visible however long the form gets. -->
+        <Border DockPanel.Dock="Bottom" BorderBrush="{DynamicResource Divider}" BorderThickness="0,1,0,0" Padding="24,14">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <Button Content="Cancel" Theme="{StaticResource SecondaryButton}" IsCancel="True" MinWidth="90" Click="OnCancel"/>
+                    <Button Content="Save" Theme="{StaticResource PrimaryButton}" IsDefault="True" Click="OnSave" MinWidth="90" Margin="10,0,0,0"/>
+                </StackPanel>
+                <TextBlock x:Name="ErrorText" Foreground="{DynamicResource Danger}" TextWrapping="Wrap" VerticalAlignment="Center"
+                           Margin="0,0,12,0" IsVisible="False"/>
+            </DockPanel>
+        </Border>
+
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <StackPanel Margin="24,20,24,20">
+                <TextBlock x:Name="Heading" Text="Add tunnel" Classes="PageTitle" FontSize="20"/>
+
+                <TextBlock Text="Protocol" Classes="FieldLabel"/>
+                <ComboBox x:Name="TypeBox" SelectionChanged="OnTypeChanged" HorizontalAlignment="Stretch">
+                    <ComboBoxItem Content="SSH" Tag="Ssh"/>
+                    <ComboBoxItem Content="VLESS" Tag="VLess"/>
+                    <ComboBoxItem Content="VMess" Tag="VMess"/>
+                    <ComboBoxItem Content="Trojan" Tag="Trojan"/>
+                    <ComboBoxItem Content="Shadowsocks" Tag="Shadowsocks"/>
+                    <ComboBoxItem Content="Hysteria2" Tag="Hysteria2"/>
+                    <ComboBoxItem Content="TUIC" Tag="Tuic"/>
+                    <ComboBoxItem Content="SOCKS5" Tag="Socks5"/>
+                    <ComboBoxItem Content="SOCKS4 / 4a" Tag="Socks4"/>
+                    <ComboBoxItem Content="HTTPS (CONNECT)" Tag="Https"/>
+                    <ComboBoxItem Content="HTTP" Tag="Http"/>
+                </ComboBox>
+
+                <Grid ColumnDefinitions="*,12,110">
+                    <StackPanel>
+                        <TextBlock Text="Server" Classes="FieldLabel"/>
+                        <TextBox x:Name="AddressBox"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="2">
+                        <TextBlock Text="Port" Classes="FieldLabel"/>
+                        <TextBox x:Name="PortBox"/>
+                    </StackPanel>
+                </Grid>
+
+                <CheckBox x:Name="Socks4aBox" Content="Let the server resolve hostnames (SOCKS4a)" Margin="0,12,0,0" IsChecked="True"/>
+
+                <TextBlock x:Name="AuthTitle" Text="Authentication (optional)" Classes="FieldLabel" Margin="0,18,0,4"/>
+                <StackPanel x:Name="UuidPanel">
+                    <TextBlock Text="UUID" Classes="Muted" Margin="0,0,0,4"/>
+                    <TextBox x:Name="UuidBox" Margin="0,0,0,10"/>
+                </StackPanel>
+                <Grid x:Name="UserPassGrid" ColumnDefinitions="*,12,*">
+                    <StackPanel x:Name="UserPanel">
+                        <TextBlock Text="Username" Classes="Muted" Margin="0,0,0,4"/>
+                        <TextBox x:Name="UserBox"/>
+                    </StackPanel>
+                    <StackPanel x:Name="PassPanel" Grid.Column="2">
+                        <TextBlock Text="Password" Classes="Muted" Margin="0,0,0,4"/>
+                        <TextBox x:Name="PassBox" PasswordChar="●"/>
+                    </StackPanel>
+                </Grid>
+
+                <!-- ============ sing-box protocols ============ -->
+                <StackPanel x:Name="V2Panel">
+                    <StackPanel x:Name="MethodPanel">
+                        <TextBlock Text="Cipher" Classes="FieldLabel"/>
+                        <ComboBox x:Name="MethodBox" IsEditable="True" HorizontalAlignment="Stretch">
+                            <ComboBoxItem Content="2022-blake3-aes-128-gcm"/>
+                            <ComboBoxItem Content="2022-blake3-aes-256-gcm"/>
+                            <ComboBoxItem Content="2022-blake3-chacha20-poly1305"/>
+                            <ComboBoxItem Content="aes-128-gcm"/>
+                            <ComboBoxItem Content="aes-256-gcm"/>
+                            <ComboBoxItem Content="chacha20-ietf-poly1305"/>
+                        </ComboBox>
+                    </StackPanel>
+                    <StackPanel x:Name="VmessCipherPanel">
+                        <TextBlock Text="Security (encryption)" Classes="FieldLabel"/>
+                        <ComboBox x:Name="VmessCipherBox" IsEditable="True" HorizontalAlignment="Stretch">
+                            <ComboBoxItem Content="auto"/>
+                            <ComboBoxItem Content="aes-128-gcm"/>
+                            <ComboBoxItem Content="chacha20-poly1305"/>
+                            <ComboBoxItem Content="none"/>
+                        </ComboBox>
+                    </StackPanel>
+                    <StackPanel x:Name="FlowPanel">
+                        <TextBlock Text="Flow" Classes="FieldLabel"/>
+                        <ComboBox x:Name="FlowBox" IsEditable="True" HorizontalAlignment="Stretch">
+                            <ComboBoxItem Content=""/>
+                            <ComboBoxItem Content="xtls-rprx-vision"/>
+                        </ComboBox>
+                    </StackPanel>
+
+                    <StackPanel x:Name="SecurityPanel">
+                        <Border Height="1" Background="{DynamicResource Divider}" Margin="0,18,0,0"/>
+                        <TextBlock Text="TLS" Classes="FieldLabel"/>
+                        <ComboBox x:Name="SecurityBox" SelectionChanged="OnSecurityChanged" HorizontalAlignment="Stretch">
+                            <ComboBoxItem Content="None" Tag="none"/>
+                            <ComboBoxItem Content="TLS" Tag="tls"/>
+                            <ComboBoxItem Content="REALITY" Tag="reality"/>
+                        </ComboBox>
+                    </StackPanel>
+                    <StackPanel x:Name="TlsPanel">
+                        <Grid ColumnDefinitions="*,12,160">
+                            <StackPanel>
+                                <TextBlock Text="SNI (empty = server name)" Classes="FieldLabel"/>
+                                <TextBox x:Name="V2SniBox"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="Fingerprint" Classes="FieldLabel"/>
+                                <ComboBox x:Name="FingerprintBox" IsEditable="True" HorizontalAlignment="Stretch">
+                                    <ComboBoxItem Content=""/>
+                                    <ComboBoxItem Content="chrome"/>
+                                    <ComboBoxItem Content="firefox"/>
+                                    <ComboBoxItem Content="safari"/>
+                                    <ComboBoxItem Content="edge"/>
+                                    <ComboBoxItem Content="ios"/>
+                                    <ComboBoxItem Content="android"/>
+                                    <ComboBoxItem Content="randomized"/>
+                                </ComboBox>
+                            </StackPanel>
+                        </Grid>
+                        <TextBlock Text="ALPN (comma separated, e.g. h2,http/1.1)" Classes="FieldLabel"/>
+                        <TextBox x:Name="AlpnBox"/>
+                        <CheckBox x:Name="InsecureBox" Content="Allow insecure (skip certificate check)" Margin="0,10,0,0"/>
+                    </StackPanel>
+                    <StackPanel x:Name="RealityPanel">
+                        <Grid ColumnDefinitions="*,12,160">
+                            <StackPanel>
+                                <TextBlock Text="REALITY public key" Classes="FieldLabel"/>
+                                <TextBox x:Name="PublicKeyBox"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="Short ID" Classes="FieldLabel"/>
+                                <TextBox x:Name="ShortIdBox"/>
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+
+                    <StackPanel x:Name="TransportPanel">
+                        <Border Height="1" Background="{DynamicResource Divider}" Margin="0,18,0,0"/>
+                        <TextBlock Text="Transport" Classes="FieldLabel"/>
+                        <ComboBox x:Name="TransportBox" SelectionChanged="OnSecurityChanged" HorizontalAlignment="Stretch">
+                            <ComboBoxItem Content="TCP" Tag="tcp"/>
+                            <ComboBoxItem Content="WebSocket" Tag="ws"/>
+                            <ComboBoxItem Content="gRPC" Tag="grpc"/>
+                            <ComboBoxItem Content="HTTP/2" Tag="http"/>
+                            <ComboBoxItem Content="HTTPUpgrade" Tag="httpupgrade"/>
+                        </ComboBox>
+                        <Grid x:Name="PathHostGrid" ColumnDefinitions="*,12,*">
+                            <StackPanel>
+                                <TextBlock Text="Path" Classes="FieldLabel"/>
+                                <TextBox x:Name="PathBox"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="Host header" Classes="FieldLabel"/>
+                                <TextBox x:Name="HostBox"/>
+                            </StackPanel>
+                        </Grid>
+                        <StackPanel x:Name="ServiceNamePanel">
+                            <TextBlock Text="gRPC service name" Classes="FieldLabel"/>
+                            <TextBox x:Name="ServiceNameBox"/>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <StackPanel x:Name="HysteriaPanel">
+                        <Border Height="1" Background="{DynamicResource Divider}" Margin="0,18,0,0"/>
+                        <TextBlock Text="Obfuscation password (salamander, optional)" Classes="FieldLabel"/>
+                        <TextBox x:Name="ObfsBox" PasswordChar="●"/>
+                        <Grid ColumnDefinitions="*,12,*">
+                            <StackPanel>
+                                <TextBlock Text="Upload Mbps (optional)" Classes="FieldLabel"/>
+                                <TextBox x:Name="UpBox"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="Download Mbps (optional)" Classes="FieldLabel"/>
+                                <TextBox x:Name="DownBox"/>
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+
+                    <StackPanel x:Name="TuicPanel">
+                        <TextBlock Text="Congestion control" Classes="FieldLabel"/>
+                        <ComboBox x:Name="CongestionBox" IsEditable="True" HorizontalAlignment="Stretch">
+                            <ComboBoxItem Content="bbr"/>
+                            <ComboBoxItem Content="cubic"/>
+                            <ComboBoxItem Content="new_reno"/>
+                        </ComboBox>
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- ============ SSH only ============ -->
+                <StackPanel x:Name="SshPanel">
+                    <DockPanel Margin="0,14,0,6">
+                        <Button DockPanel.Dock="Right" Theme="{StaticResource GhostButton}" Content="Load key file…" Click="OnLoadKey" Height="26"/>
+                        <TextBlock Text="Private key (instead of, or as well as, a password)" Classes="Muted" VerticalAlignment="Center"/>
+                    </DockPanel>
+                    <TextBox x:Name="KeyBox" AcceptsReturn="True" TextWrapping="NoWrap" Height="78" FontSize="10.5"
+                             ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Auto"/>
+                    <TextBlock Text="Key passphrase" Classes="Muted" Margin="0,8,0,4"/>
+                    <TextBox x:Name="PassphraseBox" PasswordChar="●"/>
+
+                    <Border Height="1" Background="{DynamicResource Divider}" Margin="0,18,0,0"/>
+
+                    <TextBlock Text="Connection mode" Classes="FieldLabel"/>
+                    <ComboBox x:Name="ModeBox" SelectionChanged="OnModeChanged" HorizontalAlignment="Stretch">
+                        <ComboBoxItem Content="Direct — plain SSH" Tag="direct"/>
+                        <ComboBoxItem Content="Payload — send an HTTP request first" Tag="payload"/>
+                        <ComboBoxItem Content="SSL/TLS — SSH inside TLS with a chosen SNI" Tag="tls"/>
+                        <ComboBoxItem Content="SSL + payload — TLS, then the payload (e.g. WebSocket)" Tag="tls-payload"/>
+                        <ComboBoxItem Content="Payload + SSL — payload (e.g. CONNECT), then TLS" Tag="payload-tls"/>
+                    </ComboBox>
+
+                    <StackPanel x:Name="PayloadPanel">
+                        <TextBlock Text="Payload" Classes="FieldLabel"/>
+                        <TextBox x:Name="PayloadBox" AcceptsReturn="True" TextWrapping="Wrap" Height="72" FontSize="11.5"
+                                 ScrollViewer.VerticalScrollBarVisibility="Auto"/>
+                        <TextBlock Classes="Muted" Margin="0,4,0,0"
+                                   Text="Placeholders: [host] [port] [host_port] [protocol] [ua] [raw] [crlf] [lf] [cr] [split]. Example: CONNECT [host_port] [protocol][crlf]Host: example.com[crlf][crlf]"/>
+                        <CheckBox x:Name="SkipResponseBox" Content="Don't wait for a reply to the payload" Margin="0,10,0,0"/>
+                        <StackPanel x:Name="RemoteProxyPanel">
+                            <TextBlock Text="Remote HTTP proxy (optional, host:port)" Classes="FieldLabel"/>
+                            <TextBox x:Name="RemoteProxyBox"/>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <StackPanel x:Name="SniPanel">
+                        <TextBlock Text="SNI (server name sent in TLS; empty = the server address)" Classes="FieldLabel"/>
+                        <TextBox x:Name="SniBox"/>
+                    </StackPanel>
+
+                    <StackPanel x:Name="HostKeyPanel" Margin="0,16,0,0">
+                        <TextBlock Text="Trusted host key" Classes="Muted"/>
+                        <DockPanel Margin="0,4,0,0">
+                            <Button DockPanel.Dock="Right" Theme="{StaticResource GhostButton}" Content="Forget" Click="OnForgetHostKey" Height="26"/>
+                            <TextBlock x:Name="HostKeyText" FontSize="10.5" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                        </DockPanel>
+                    </StackPanel>
+                </StackPanel>
+
+                <TextBlock Text="Name (optional)" Classes="FieldLabel"/>
+                <TextBox x:Name="LabelBox"/>
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+</Window>

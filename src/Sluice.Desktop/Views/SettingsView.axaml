@@ -1,0 +1,127 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Sluice.Desktop.ViewModels"
+             x:Class="Sluice.Desktop.Views.SettingsView"
+             x:DataType="vm:SettingsViewModel">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0,0,12,0">
+        <StackPanel MaxWidth="760" HorizontalAlignment="Left">
+
+            <!-- Name resolution -->
+            <Border Classes="CardBox" Margin="0,0,0,16">
+                <StackPanel>
+                    <TextBlock Text="Name resolution" Classes="SectionTitle"/>
+                    <TextBlock Classes="Muted" Text="Send hostnames through the tunnel instead of resolving them on this PC. Apps receive placeholder addresses (198.18.x.x) while Sluice is capturing."/>
+                    <CheckBox Theme="{StaticResource Switch}" Margin="0,16,0,0" IsChecked="{Binding ResolveViaProxy}">
+                        <StackPanel>
+                            <TextBlock Text="Resolve hostnames through the tunnel" FontWeight="Bold"/>
+                            <TextBlock Classes="Muted" Text="Needed for host rules like *.example.com to match captured traffic."/>
+                        </StackPanel>
+                    </CheckBox>
+                    <TextBlock Text="Resolve these names locally" Classes="FieldLabel" Margin="0,16,0,4"/>
+                    <TextBox Text="{Binding ExclusionList}"/>
+                    <CheckBox Content="Invert: resolve ONLY the names above through the tunnel" IsChecked="{Binding OnlyListed}" Margin="0,8,0,0"/>
+                    <Border Height="1" Background="{DynamicResource Divider}" Margin="0,16"/>
+                    <CheckBox Theme="{StaticResource Switch}" IsChecked="{Binding LeakPrevention}">
+                        <StackPanel>
+                            <TextBlock Text="DNS and IP leak prevention" FontWeight="Bold"/>
+                            <TextBlock Classes="Muted" Text="Never resolve names locally, whatever the setting above says."/>
+                        </StackPanel>
+                    </CheckBox>
+                    <CheckBox Theme="{StaticResource Switch}" Margin="0,14,0,0" IsChecked="{Binding BlockNonATypes}">
+                        <StackPanel>
+                            <TextBlock Text="Block other DNS query types" FontWeight="Bold"/>
+                            <TextBlock Classes="Muted" Text="Answer TXT, MX, SRV… with no data for names resolved through the tunnel."/>
+                        </StackPanel>
+                    </CheckBox>
+                </StackPanel>
+            </Border>
+
+            <!-- Connections -->
+            <Border Classes="CardBox" Margin="0,0,0,16">
+                <StackPanel>
+                    <TextBlock Text="Connections" Classes="SectionTitle"/>
+                    <CheckBox Theme="{StaticResource Switch}" Margin="0,12,0,0" IsChecked="{Binding LoopDetection}">
+                        <StackPanel>
+                            <TextBlock Text="Infinite connection loop detection" FontWeight="Bold"/>
+                            <TextBlock Classes="Muted" Text="A tunnel client running on this PC (e.g. SSH or Xray) always connects directly, so it never routes into itself."/>
+                        </StackPanel>
+                    </CheckBox>
+                    <CheckBox Theme="{StaticResource Switch}" Margin="0,14,0,0" IsChecked="{Binding HandleDirect}">
+                        <StackPanel>
+                            <TextBlock Text="Handle direct connections" FontWeight="Bold"/>
+                            <TextBlock Classes="Muted" Text="Route Direct connections through Sluice too, so they appear in Connections and Statistics."/>
+                        </StackPanel>
+                    </CheckBox>
+                    <CheckBox Theme="{StaticResource Switch}" Margin="0,14,0,0" IsChecked="{Binding ProcessServices}">
+                        <StackPanel>
+                            <TextBlock Text="Include system services" FontWeight="Bold"/>
+                            <TextBlock Classes="Muted" Text="Also apply rules to system processes whose owner cannot be identified."/>
+                        </StackPanel>
+                    </CheckBox>
+                </StackPanel>
+            </Border>
+
+            <!-- Tunnels -->
+            <Border Classes="CardBox" Margin="0,0,0,16">
+                <StackPanel>
+                    <TextBlock Text="Tunnels" Classes="SectionTitle"/>
+                    <TextBlock Classes="Muted" TextWrapping="Wrap"
+                               Text="Encrypted tunnels (SSH, VLESS, …) connect when capture starts or on first use, are checked every 30 seconds, and reconnect on their own. After 5 failed attempts in a row Sluice stops trying until you press Check or turn the tunnel off and on."/>
+                    <TextBlock Text="Stop a tunnel nothing uses" Classes="FieldLabel" Margin="0,14,0,4"/>
+                    <ComboBox ItemsSource="{Binding IdleOptions}" SelectedIndex="{Binding IdleIndex}" HorizontalAlignment="Left" MinWidth="420"/>
+                    <CheckBox Theme="{StaticResource Switch}" Margin="0,16,0,0" IsChecked="{Binding TunnelNotifications}">
+                        <StackPanel>
+                            <TextBlock Text="Tunnel notifications" FontWeight="Bold"/>
+                            <TextBlock Classes="Muted" Text="Show a desktop notification when a tunnel connects, disconnects or gives up."/>
+                        </StackPanel>
+                    </CheckBox>
+                </StackPanel>
+            </Border>
+
+            <!-- UDP -->
+            <Border Classes="CardBox" Margin="0,0,0,16">
+                <StackPanel>
+                    <TextBlock Text="UDP" Classes="SectionTitle"/>
+                    <TextBlock Classes="Muted" TextWrapping="Wrap"
+                               Text="What happens to UDP (QUIC, games, voice and video calls) from apps whose rule uses a tunnel. Direct rules always pass and Block rules always drop. Applies while traffic is captured."/>
+                    <ComboBox ItemsSource="{Binding UdpModes}" SelectedIndex="{Binding UdpIndex}" Margin="0,12,0,0" HorizontalAlignment="Left" MinWidth="420"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Passwords -->
+            <Border Classes="CardBox" Margin="0,0,0,16">
+                <StackPanel>
+                    <TextBlock Text="Tunnel passwords in the profile" Classes="SectionTitle"/>
+                    <TextBlock Classes="Muted" Text="Uses the same encryption as Proxifier, so profiles stay interchangeable."/>
+                    <ComboBox ItemsSource="{Binding EncryptionModes}" SelectedIndex="{Binding EncryptionIndex}" Margin="0,12,0,0" HorizontalAlignment="Left" MinWidth="420"/>
+                </StackPanel>
+            </Border>
+
+            <!-- App -->
+            <Border Classes="CardBox" Margin="0,0,0,16">
+                <StackPanel>
+                    <TextBlock Text="Sluice on this computer" Classes="SectionTitle"/>
+                    <CheckBox Theme="{StaticResource Switch}" Margin="0,12,0,0" IsChecked="{Binding StartInterceptionOnLaunch}"
+                              Content="Start capturing traffic when Sluice opens"/>
+                    <CheckBox Theme="{StaticResource Switch}" Margin="0,14,0,0" IsChecked="{Binding MinimizeToTray}"
+                              Content="Keep running in the tray when the window is closed"/>
+                    <CheckBox Theme="{StaticResource Switch}" Margin="0,14,0,0" IsChecked="{Binding FileLog}">
+                        <StackPanel>
+                            <TextBlock Text="Write a log file"/>
+                            <TextBlock Classes="Muted" Text="{Binding LogDirectory}"/>
+                        </StackPanel>
+                    </CheckBox>
+                    <Button Theme="{StaticResource GhostButton}" Content="Open log folder" Command="{Binding OpenLogFolderCommand}"
+                            HorizontalAlignment="Left" Margin="-8,6,0,0"/>
+
+                    <TextBlock Text="Local SOCKS5 server port" Classes="FieldLabel" Margin="0,14,0,4"/>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBox Text="{Binding SocksPortText}" Width="110"/>
+                        <Button Theme="{StaticResource SecondaryButton}" Content="Apply" Command="{Binding ApplySocksPortCommand}" Margin="8,0,0,0"/>
+                    </StackPanel>
+                    <TextBlock Classes="Muted" Margin="0,6,0,0" Text="Apps you point at 127.0.0.1 on this port use Sluice's rules even without capturing."/>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

@@ -55,12 +55,13 @@ public sealed class EngineHost : IAsyncDisposable
             var name = t.Label ?? $"{t.Address}:{t.Port}";
             switch (st.State)
             {
-                case Sluice.Core.Tunnels.SessionState.Connected when prev != Sluice.Core.Tunnels.SessionState.Connected:
+                // Not responding then fine again: it never really dropped, so stay quiet.
+                case Sluice.Core.Tunnels.SessionState.Connected when prev is not (Sluice.Core.Tunnels.SessionState.Connected or Sluice.Core.Tunnels.SessionState.NotResponding):
                     var again = prev is Sluice.Core.Tunnels.SessionState.Reconnecting;
                     title = again ? $"{name} reconnected" : $"{name} connected";
                     text = $"{t.Type.DisplayName()} tunnel is up.";
                     break;
-                case Sluice.Core.Tunnels.SessionState.Reconnecting when prev == Sluice.Core.Tunnels.SessionState.Connected:
+                case Sluice.Core.Tunnels.SessionState.Reconnecting when prev is Sluice.Core.Tunnels.SessionState.Connected or Sluice.Core.Tunnels.SessionState.NotResponding:
                     title = $"{name} disconnected";
                     text = $"{st.Detail}. Reconnecting…";
                     error = true;
@@ -75,7 +76,7 @@ public sealed class EngineHost : IAsyncDisposable
                     text = $"{st.Detail}. Check the tunnel, or turn it off and on, to try again.";
                     error = true;
                     break;
-                case Sluice.Core.Tunnels.SessionState.Idle when prev == Sluice.Core.Tunnels.SessionState.Connected:
+                case Sluice.Core.Tunnels.SessionState.Idle when prev is Sluice.Core.Tunnels.SessionState.Connected or Sluice.Core.Tunnels.SessionState.NotResponding:
                     title = $"{name} disconnected";
                     text = $"{st.Detail}.";
                     break;

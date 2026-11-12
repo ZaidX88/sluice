@@ -54,7 +54,7 @@
 
         <Border Grid.Row="1" Classes="CardBox" Padding="8,12,8,8">
             <Grid>
-                <DataGrid Classes="Grid" ItemsSource="{Binding Rows}" SelectedItem="{Binding Selected}" DoubleTapped="OnRowDoubleTapped">
+                <DataGrid x:Name="Grid" Classes="Grid" ItemsSource="{Binding Rows}" SelectedItem="{Binding Selected}" DoubleTapped="OnRowDoubleTapped">
                     <DataGrid.Columns>
                         <DataGridTemplateColumn Header="On" Width="58">
                             <DataGridTemplateColumn.CellTemplate>
@@ -84,7 +84,7 @@
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTextColumn Header="Address" Binding="{ReflectionBinding Endpoint}" Width="1.3*" MinWidth="0"/>
+                        <DataGridTextColumn Header="Address" Binding="{ReflectionBinding Endpoint}" Width="1.3*"/>
                         <DataGridTemplateColumn Header="Session" Width="150">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate x:DataType="vm:TunnelRow">

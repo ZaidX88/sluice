@@ -18,7 +18,16 @@ public sealed class DnsRedirector(FakeIpPool pool, Func<DnsPolicy> policy, int o
         if (!TryParseUdp(packet, out var ipLen, out var srcPort, out var dstPort, out var v6)) return null;
         if (dstPort != 53 || srcPort == ownResolverPort) return null;
 
-        var dns = packet[(ipLen + 8)..];
+        var answer = TryAnswerQuery(packet[(ipLen + 8)..]);
+        return answer is null ? null : BuildReply(packet, ipLen, v6, answer);
+    }
+
+    /// <summary>
+    /// DNS reply message for the query message <paramref name="dns"/> (UDP payload), or null when the name is
+    /// not faked and the query should go to a real resolver.
+    /// </summary>
+    public byte[]? TryAnswerQuery(ReadOnlySpan<byte> dns)
+    {
         var q = DnsMessage.TryParseQuery(dns);
         if (q is null || q.Class != DnsMessage.ClassIN) return null;
 
@@ -44,7 +53,7 @@ public sealed class DnsRedirector(FakeIpPool pool, Func<DnsPolicy> policy, int o
         }
 
         Answered?.Invoke(q.Name, q.Type);
-        return BuildReply(packet, ipLen, v6, answer);
+        return answer;
     }
 
     private static bool TryParseUdp(ReadOnlySpan<byte> p, out int ipLen, out ushort src, out ushort dst, out bool v6)

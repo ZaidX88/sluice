@@ -1,0 +1,147 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:c="using:Sluice.Desktop.Controls">
+    <!-- Style classes ported from the WPF Theme/Styles.xaml: use with Classes="PageTitle" etc. -->
+
+    <Style Selector="Window">
+        <Setter Property="FontFamily" Value="{StaticResource UiFont}"/>
+        <Setter Property="FontSize" Value="12.5"/>
+        <Setter Property="Background" Value="{DynamicResource Bg}"/>
+        <Setter Property="Foreground" Value="{DynamicResource Text}"/>
+    </Style>
+
+    <Style Selector="TextBox, ComboBox, ComboBoxItem, AutoCompleteBox">
+        <Setter Property="FontFamily" Value="{StaticResource UiFont}"/>
+        <Setter Property="FontSize" Value="12.5"/>
+    </Style>
+
+    <!-- ===== Typography ===== -->
+    <Style Selector="TextBlock.PageTitle">
+        <Setter Property="FontSize" Value="19"/>
+        <Setter Property="FontWeight" Value="Bold"/>
+        <Setter Property="Foreground" Value="{DynamicResource Text}"/>
+    </Style>
+    <Style Selector="TextBlock.PageSubtitle">
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="Margin" Value="0,6,0,0"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
+        <Setter Property="TextWrapping" Value="Wrap"/>
+    </Style>
+    <Style Selector="TextBlock.SectionTitle">
+        <Setter Property="FontSize" Value="14"/>
+        <Setter Property="FontWeight" Value="Bold"/>
+        <Setter Property="Foreground" Value="{DynamicResource Text}"/>
+        <Setter Property="Margin" Value="0,0,0,4"/>
+    </Style>
+    <Style Selector="TextBlock.Muted">
+        <Setter Property="FontSize" Value="11.5"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
+        <Setter Property="TextWrapping" Value="Wrap"/>
+    </Style>
+    <Style Selector="TextBlock.GroupHeader">
+        <Setter Property="FontSize" Value="11"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
+        <Setter Property="Margin" Value="30,22,0,8"/>
+    </Style>
+    <Style Selector="TextBlock.FieldLabel">
+        <Setter Property="FontSize" Value="11.5"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
+        <Setter Property="Margin" Value="0,14,0,6"/>
+    </Style>
+
+    <!-- ===== Card: white, thin border, soft shadow ===== -->
+    <Style Selector="Border.CardBox">
+        <Setter Property="Background" Value="{DynamicResource Card}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource CardBorder}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="8"/>
+        <Setter Property="Padding" Value="20"/>
+        <Setter Property="BoxShadow" Value="{DynamicResource SoftShadow}"/>
+    </Style>
+
+    <!-- ===== Status pill ===== -->
+    <Style Selector="Border.Pill">
+        <Setter Property="CornerRadius" Value="10"/>
+        <Setter Property="Padding" Value="8,2"/>
+        <Setter Property="HorizontalAlignment" Value="Left"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+
+    <!-- ===== Lists: airy rows, muted headers, the selected row lifts out ===== -->
+    <Style Selector="DataGrid.Grid">
+        <Setter Property="AutoGenerateColumns" Value="False"/>
+        <Setter Property="IsReadOnly" Value="True"/>
+        <Setter Property="HeadersVisibility" Value="Column"/>
+        <Setter Property="GridLinesVisibility" Value="None"/>
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="SelectionMode" Value="Single"/>
+        <Setter Property="CanUserResizeColumns" Value="True"/>
+        <Setter Property="RowHeight" Value="44"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="Foreground" Value="{DynamicResource Text}"/>
+    </Style>
+    <Style Selector="DataGrid.Grid DataGridColumnHeader">
+        <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
+        <Setter Property="FontSize" Value="11"/>
+        <Setter Property="FontWeight" Value="Normal"/>
+        <Setter Property="Padding" Value="10,0,10,10"/>
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="SeparatorBrush" Value="Transparent"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource Divider}"/>
+        <Setter Property="BorderThickness" Value="0,0,0,1"/>
+        <Setter Property="VerticalContentAlignment" Value="Bottom"/>
+    </Style>
+    <!-- A plain header: no hover/pressed/sorted fills (the WPF header has none). -->
+    <Style Selector="DataGrid.Grid DataGridColumnHeader">
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}">
+                    <ContentPresenter Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"
+                                      HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                      VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                </Border>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+    <Style Selector="DataGrid.Grid DataGridColumnHeader:pointerover">
+        <Setter Property="Foreground" Value="{DynamicResource Text}"/>
+    </Style>
+    <Style Selector="DataGrid.Grid DataGridRow">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{DynamicResource Text}"/>
+        <Setter Property="Margin" Value="0,1"/>
+        <Setter Property="CornerRadius" Value="6"/>
+    </Style>
+    <Style Selector="DataGrid.Grid DataGridRow:pointerover /template/ Rectangle#BackgroundRectangle">
+        <Setter Property="Fill" Value="{DynamicResource RowHover}"/>
+        <Setter Property="Opacity" Value="1"/>
+    </Style>
+    <Style Selector="DataGrid.Grid DataGridRow:selected /template/ Rectangle#BackgroundRectangle">
+        <Setter Property="Fill" Value="{DynamicResource RowSelected}"/>
+        <Setter Property="Opacity" Value="1"/>
+        <Setter Property="Effect" Value="{DynamicResource LiftEffect}"/>
+    </Style>
+    <Style Selector="DataGrid.Grid DataGridRow /template/ Rectangle#BackgroundRectangle">
+        <Setter Property="RadiusX" Value="6"/>
+        <Setter Property="RadiusY" Value="6"/>
+    </Style>
+    <Style Selector="DataGrid.Grid DataGridRow:selected">
+        <Setter Property="FontWeight" Value="Bold"/>
+        <Setter Property="ZIndex" Value="1"/>
+    </Style>
+    <Style Selector="DataGrid.Grid DataGridCell">
+        <Setter Property="Foreground" Value="{DynamicResource Text}"/>
+        <Setter Property="FontSize" Value="{DynamicResource ControlContentThemeFontSize}"/>
+        <Setter Property="Padding" Value="10,0"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="FocusAdorner" Value="{x:Null}"/>
+    </Style>
+    <!-- Text columns add their own 12px margin; the cell padding already spaces them like WPF. -->
+    <Style Selector="DataGrid.Grid DataGridCell TextBlock">
+        <Setter Property="Margin" Value="0"/>
+    </Style>
+    <Style Selector="DataGrid.Grid DataGridCell:focus /template/ Grid#FocusVisual">
+        <Setter Property="IsVisible" Value="False"/>
+    </Style>
+</Styles>

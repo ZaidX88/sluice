@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Sluice.Core\Sluice.Core.csproj" />
+    <ProjectReference Include="..\..\src\Sluice.Platform.Linux\Sluice.Platform.Linux.csproj" />
   </ItemGroup>
 
 </Project>

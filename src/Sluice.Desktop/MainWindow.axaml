@@ -1,0 +1,200 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Sluice.Desktop.ViewModels"
+        xmlns:v="using:Sluice.Desktop.Views"
+        xmlns:c="using:Sluice.Desktop.Controls"
+        x:Class="Sluice.Desktop.MainWindow"
+        x:DataType="vm:MainViewModel"
+        Title="Sluice" Width="1280" Height="800" MinWidth="1040" MinHeight="620"
+        WindowStartupLocation="CenterScreen">
+    <Window.DataTemplates>
+        <DataTemplate DataType="vm:ConnectionsViewModel"><v:ConnectionsView/></DataTemplate>
+        <DataTemplate DataType="vm:StatisticsViewModel"><v:StatisticsView/></DataTemplate>
+        <DataTemplate DataType="vm:LogViewModel"><v:LogView/></DataTemplate>
+        <DataTemplate DataType="vm:TunnelsViewModel"><v:TunnelsView/></DataTemplate>
+        <DataTemplate DataType="vm:RulesViewModel"><v:RulesView/></DataTemplate>
+        <DataTemplate DataType="vm:SettingsViewModel"><v:SettingsView/></DataTemplate>
+    </Window.DataTemplates>
+
+    <Window.Styles>
+        <Style Selector="Border.Banner"><Setter Property="Background" Value="{DynamicResource AccentSoft}"/></Style>
+        <Style Selector="Border.Banner.Error"><Setter Property="Background" Value="{DynamicResource DangerSoft}"/></Style>
+        <Style Selector="c|IconView.BannerIcon"><Setter Property="Kind" Value="info"/><Setter Property="Foreground" Value="{DynamicResource Text}"/></Style>
+        <Style Selector="c|IconView.BannerIcon.Error"><Setter Property="Kind" Value="warning"/><Setter Property="Foreground" Value="{DynamicResource Danger}"/></Style>
+    </Window.Styles>
+
+    <Grid Background="{DynamicResource Bg}" ColumnDefinitions="232,*" RowDefinitions="64,*,80">
+
+        <!-- ================= Brand (top-left) ================= -->
+        <Border Background="{DynamicResource Bg}" BorderBrush="{DynamicResource Divider}" BorderThickness="0,0,1,1">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="28,0,0,0">
+                <Image x:Name="Logo" Width="26" Height="26"/>
+                <TextBlock Text="sluice" FontSize="19" FontWeight="Bold" VerticalAlignment="Center" Margin="10,0,0,1"/>
+            </StackPanel>
+        </Border>
+
+        <!-- ================= Top bar ================= -->
+        <Border Grid.Column="1" Background="{DynamicResource Bg}" BorderBrush="{DynamicResource Divider}" BorderThickness="0,0,0,1">
+            <DockPanel>
+                <!-- Profile chip (like the user avatar in the reference) -->
+                <Border DockPanel.Dock="Right" BorderBrush="{DynamicResource Divider}" BorderThickness="1,0,0,0" Padding="22,0,24,0">
+                    <Button Background="Transparent" BorderThickness="0" Cursor="Hand" Padding="0" ToolTip.Tip="{Binding ProfileHint}">
+                        <Button.Template>
+                            <ControlTemplate><ContentPresenter Content="{TemplateBinding Content}" Background="Transparent"/></ControlTemplate>
+                        </Button.Template>
+                        <Button.Flyout>
+                            <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                <MenuItem Header="Open profile…" Command="{Binding OpenCommand}"/>
+                                <MenuItem Header="Save" Command="{Binding SaveCommand}"/>
+                                <MenuItem Header="Save as…" Command="{Binding SaveAsCommand}"/>
+                                <MenuItem Header="Export for Proxifier (.ppx)…" Command="{Binding ExportProxifierCommand}"/>
+                                <Separator/>
+                                <MenuItem Header="New profile" Command="{Binding NewCommand}"/>
+                            </MenuFlyout>
+                        </Button.Flyout>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <Grid Width="34" Height="34">
+                                <Ellipse Fill="{DynamicResource Accent}"/>
+                                <TextBlock Text="{Binding ProfileInitial}" Foreground="{DynamicResource OnAccent}" FontWeight="Bold" FontSize="14"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Grid>
+                            <StackPanel Margin="12,0,14,0" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding ProfileName}" FontWeight="Bold" FontSize="12" MaxWidth="150" TextTrimming="CharacterEllipsis"/>
+                                <TextBlock Text="Profile" Classes="Muted" FontSize="10.5"/>
+                            </StackPanel>
+                            <Border Width="22" Height="22" CornerRadius="11" BorderBrush="{DynamicResource CardBorder}" BorderThickness="1">
+                                <c:IconView Kind="chevron-down" Size="11" Foreground="{DynamicResource TextMuted}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                        </StackPanel>
+                    </Button>
+                </Border>
+
+                <!-- Capture state (like the notification bell) -->
+                <Border DockPanel.Dock="Right" BorderBrush="{DynamicResource Divider}" BorderThickness="1,0,0,0" Padding="22,0">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" ToolTip.Tip="{Binding Status}">
+                        <Grid Width="10" Height="10" Margin="0,0,10,0">
+                            <Ellipse Stroke="{DynamicResource Text}" StrokeThickness="1.5"/>
+                            <Ellipse Fill="{DynamicResource Text}" Margin="2.5" IsVisible="{Binding Intercepting}"/>
+                        </Grid>
+                        <TextBlock Text="{Binding CaptureTitle}" FontSize="11.5" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Search -->
+                <Grid Margin="32,0,24,0" VerticalAlignment="Center">
+                    <c:IconView Kind="search" Size="14" Foreground="{DynamicResource TextFaint}" HorizontalAlignment="Left" VerticalAlignment="Center"/>
+                    <TextBox Text="{Binding Search}" Margin="22,0,0,0" BorderThickness="0" Background="Transparent" Padding="0"
+                             MinHeight="0" FontSize="12" VerticalContentAlignment="Center" Classes="Bare"/>
+                    <TextBlock Text="Search connections by app, host or rule" Margin="22,0,0,0" FontSize="12" VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextFaint}" IsHitTestVisible="False"
+                               IsVisible="{Binding Search, Converter={x:Static StringConverters.IsNullOrEmpty}}"/>
+                </Grid>
+            </DockPanel>
+        </Border>
+
+        <!-- ================= Sidebar ================= -->
+        <Border Grid.Row="1" Background="{DynamicResource Sidebar}" BorderBrush="{DynamicResource Divider}" BorderThickness="0,0,1,0">
+            <ItemsControl ItemsSource="{Binding NavGroups}" Margin="0,6,0,0">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:NavGroup">
+                        <StackPanel>
+                            <TextBlock Text="{Binding Header}" Classes="GroupHeader"/>
+                            <ItemsControl ItemsSource="{Binding Pages}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:PageViewModel">
+                                        <RadioButton Theme="{StaticResource NavItem}" GroupName="nav" Content="{Binding Title}" Tag="{Binding Glyph}"
+                                                     IsChecked="{Binding IsCurrent, Mode=OneWay}"
+                                                     Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).NavigateCommand}"
+                                                     CommandParameter="{Binding}"/>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </Border>
+
+        <!-- ================= Content ================= -->
+        <DockPanel Grid.Row="1" Grid.Column="1" Margin="40,30,40,24">
+            <StackPanel DockPanel.Dock="Top" Margin="0,0,0,20">
+                <TextBlock Text="{Binding CurrentPage.Title}" Classes="PageTitle"/>
+                <TextBlock Text="{Binding CurrentPage.Subtitle}" Classes="PageSubtitle"/>
+            </StackPanel>
+
+            <!-- Banner -->
+            <Border DockPanel.Dock="Top" Margin="0,0,0,16" Padding="14,10" CornerRadius="8" Classes="Banner"
+                    Classes.Error="{Binding BannerIsError}" IsVisible="{Binding HasBanner}">
+                <DockPanel>
+                    <Button DockPanel.Dock="Right" Theme="{StaticResource IconButton}" Command="{Binding DismissBannerCommand}" Height="28">
+                        <c:IconView Kind="close" Size="11"/>
+                    </Button>
+                    <Button DockPanel.Dock="Right" Theme="{StaticResource PrimaryButton}" Content="Restart as administrator" Margin="12,0,6,0"
+                            Command="{Binding RestartElevatedCommand}" IsVisible="{Binding BannerOffersElevation}"/>
+                    <Button DockPanel.Dock="Right" Theme="{StaticResource PrimaryButton}" Content="Allow in Windows Firewall" Margin="12,0,6,0"
+                            Command="{Binding AllowFirewallCommand}" IsVisible="{Binding BannerOffersFirewall}"/>
+                    <c:IconView Classes="BannerIcon" Classes.Error="{Binding BannerIsError}" Size="16" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding Banner}" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                </DockPanel>
+            </Border>
+
+            <ContentControl Content="{Binding CurrentPage}" Focusable="False"/>
+        </DockPanel>
+
+        <!-- ================= Capture bar (like the music player bar) ================= -->
+        <Border Grid.Row="2" Grid.ColumnSpan="2" Background="{DynamicResource Card}" BorderBrush="{DynamicResource Divider}" BorderThickness="0,1,0,0">
+            <Grid Margin="28,0,32,0" ColumnDefinitions="232,Auto,*,Auto">
+
+                <!-- Now playing: what Sluice is doing -->
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Border Width="40" Height="40" CornerRadius="8" Background="{DynamicResource AccentSoft}">
+                        <c:IconView Kind="globe" Size="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <StackPanel Margin="12,0,0,0" VerticalAlignment="Center" Width="170">
+                        <TextBlock Text="{Binding CaptureTitle}" FontWeight="Bold" FontSize="12" TextTrimming="CharacterEllipsis"/>
+                        <TextBlock Text="{Binding Status}" Classes="Muted" FontSize="10.5" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"/>
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- Transport controls -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,28,0">
+                    <Button Theme="{StaticResource IconButton}" Command="{Binding DisconnectAllCommand}" ToolTip.Tip="Disconnect all connections">
+                        <c:IconView Kind="close" Size="14" Foreground="{DynamicResource Text}"/>
+                    </Button>
+                    <Button Theme="{StaticResource RoundButton}" Command="{Binding ToggleCaptureCommand}" Margin="14,0"
+                            ToolTip.Tip="Start or stop capturing every application's traffic">
+                        <c:IconView Kind="{Binding CaptureGlyph}" Size="16" Foreground="{DynamicResource OnAccent}"/>
+                    </Button>
+                    <Button Theme="{StaticResource IconButton}" Command="{Binding ShowLogCommand}" ToolTip.Tip="Open the log">
+                        <c:IconView Kind="list" Size="15" Foreground="{DynamicResource Text}"/>
+                    </Button>
+                </StackPanel>
+
+                <!-- Traffic line (like the progress bar) -->
+                <Grid Grid.Column="2" VerticalAlignment="Center" ColumnDefinitions="Auto,*,Auto">
+                    <StackPanel VerticalAlignment="Center" Width="92">
+                        <TextBlock Text="UP" FontSize="9.5" Foreground="{DynamicResource TextFaint}"/>
+                        <TextBlock Text="{Binding UpRate}" FontSize="11.5"/>
+                    </StackPanel>
+                    <Viewbox Grid.Column="1" Stretch="Fill" Height="28" Margin="8,0" ToolTip.Tip="{Binding Peak}">
+                        <Canvas Width="360" Height="28">
+                            <Line StartPoint="0,27" EndPoint="360,27" Stroke="{DynamicResource Divider}" StrokeThickness="1"/>
+                            <Polygon Points="{Binding SparkArea}" Fill="{DynamicResource SparkFill}"/>
+                            <Polyline Points="{Binding SparkLine}" Stroke="{DynamicResource Spark}" StrokeThickness="1.4" StrokeJoin="Round"/>
+                        </Canvas>
+                    </Viewbox>
+                    <StackPanel Grid.Column="2" VerticalAlignment="Center" Width="92" Margin="8,0,0,0">
+                        <TextBlock Text="DOWN" FontSize="9.5" Foreground="{DynamicResource TextFaint}" HorizontalAlignment="Right"/>
+                        <TextBlock Text="{Binding DownRate}" FontSize="11.5" HorizontalAlignment="Right"/>
+                    </StackPanel>
+                </Grid>
+
+                <!-- Right: listener + totals -->
+                <StackPanel Grid.Column="3" VerticalAlignment="Center" Margin="28,0,0,0">
+                    <TextBlock Text="{Binding SocksText}" FontSize="10.5" Foreground="{DynamicResource TextMuted}" HorizontalAlignment="Right"/>
+                    <TextBlock Text="{Binding Totals}" FontSize="10.5" Foreground="{DynamicResource TextMuted}" HorizontalAlignment="Right" Margin="0,2,0,0"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

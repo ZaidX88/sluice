@@ -1,0 +1,388 @@
+using System.Buffers.Binary;
+using System.Collections.Concurrent;
+using System.Diagnostics;
+using System.Net;
+using System.Runtime.InteropServices;
+using Sluice.Core.Dns;
+using Sluice.Core.Engine;
+using Sluice.Core.Inbound;
+using Sluice.Core.Interception;
+using Sluice.Core.Platform;
+using Sluice.Core.Profiles;
+using Sluice.Platform.Linux.Native;
+
+namespace Sluice.Platform.Linux.Capture;
+
+/// <summary>
+/// Linux traffic capture: nftables queues the first packet of each new outbound flow to Sluice (NFQUEUE), which
+/// looks up the owning process and asks the rules, as the Windows capture does on each SYN. Connections to be
+/// handled are marked and redirected by nftables to the transparent relay; the rest are never touched again.
+/// DNS (UDP/53) is redirected to <see cref="LinuxDnsServer"/>, which hands out fake addresses for hostnames
+/// that go through tunnels. See <see cref="NftRules"/> for the ruleset.
+///
+/// Sluice's own sockets are recognised by group: on start the process switches its effective group to a
+/// private GID (inherited by helpers it starts), and nftables skips sockets of that group.
+/// </summary>
+public sealed class LinuxCapture : ITrafficCapture
+{
+    private const ushort QueueNumber = 0x5C1;     // 1473
+    private const uint RedirectMark = 0x5C1CE;
+    private static readonly TimeSpan UdpVerdictTime = TimeSpan.FromSeconds(30);
+
+    private readonly RoutingEngine _engine;
+    private readonly IProcessLookup _lookup;
+    private readonly FakeIpPool _fakeIps = new();
+    private readonly ConcurrentDictionary<IPEndPoint, (OriginalDestination Dest, DateTime At)> _flows = new();
+    private readonly ConcurrentDictionary<(IPEndPoint, IPEndPoint), (bool Drop, DateTime At)> _udpVerdicts = new();
+    private readonly CancellationTokenSource _cts = new();
+    private DnsResolver? _resolver;
+    private LinuxDnsServer? _dns;
+    private TransparentInbound? _relay;
+    private NfQueue? _queue;
+    private Thread? _thread;
+    private Task? _sweeper;
+    private uint? _previousGid;
+    private bool _rulesApplied, _udpTunnelWarned;
+    private (Profile Profile, DnsPolicy Policy)? _policy;
+    private long _redirected, _passed, _udpDropped;
+
+    public LinuxCapture(RoutingEngine engine, IProcessLookup lookup)
+    {
+        _engine = engine;
+        _lookup = lookup;
+    }
+
+    public UdpMode UdpMode { get; private set; }
+    public FakeIpPool FakeIps => _fakeIps;
+
+    /// <summary>A firewall does not stand between nftables' redirect and a loopback relay, so this is never raised.</summary>
+    public event Action? RelayUnreachable { add { } remove { } }
+
+    public bool NeedsRestartFor(Profile profile) => (profile.Options.Udp == UdpMode.Bypass) != (UdpMode == UdpMode.Bypass);
+
+    public void Start()
+    {
+        try
+        {
+            StartCore();
+        }
+        catch
+        {
+            Cleanup();
+            throw;
+        }
+    }
+
+    private void StartCore()
+    {
+        if (!LinuxPlatform.CheckCaptureRights()) throw new InvalidOperationException(LinuxPlatform.RightsHint);
+        if (NftRules.FindNft() is null) throw new InvalidOperationException("nftables is not installed (no nft command). Install the \"nftables\" package.");
+
+        // From here on, sockets Sluice (and helpers it starts) creates carry this group and are left alone by the rules.
+        var gid = SluiceGroup.Pick();
+        var before = Libc.getegid();
+        if (Libc.setresgid(Libc.Unchanged, gid, Libc.Unchanged) != 0)
+            throw new InvalidOperationException($"Could not switch to Sluice's network group: {Libc.Error(Marshal.GetLastPInvokeError())}");
+        _previousGid = before;
+
+        // Sluice's own lookups go straight to the real upstream servers (the local stub would be redirected back to us).
+        _resolver = new DnsResolver(() => LinuxDnsServer.UpstreamServers());
+        _engine.HostResolver = _resolver.ResolveAsync;
+        var redirector = new DnsRedirector(_fakeIps, CurrentPolicy, _resolver.LocalPort);
+        redirector.Answered += (name, type) =>
+            _engine.Tracker.Write(LogLevel.Debug, $"DNS {name} type {type} answered locally ({(type == 1 ? _fakeIps.GetOrAdd(name) : "no data")})");
+
+        int? dnsPort = null;
+        if (LinuxDnsServer.UpstreamServers().Count > 0)
+        {
+            _dns = new LinuxDnsServer(redirector, () => LinuxDnsServer.UpstreamServers(), m => _engine.Tracker.Write(LogLevel.Error, m));
+            _dns.Start();
+            dnsPort = _dns.Port;
+        }
+        else
+        {
+            _engine.Tracker.Write(LogLevel.Error,
+                "No upstream DNS server found (/run/systemd/resolve/resolv.conf, /etc/resolv.conf): DNS is not captured, so host rules only match connections by address.");
+        }
+
+        _relay = new TransparentInbound(_engine, new IPEndPoint(IPAddress.IPv6Any, 0), new FlowTable(this));
+        _relay.Start();
+
+        _queue = NfQueue.Open(QueueNumber);
+        UdpMode = _engine.Profile.Options.Udp;
+        NftRules.Apply(new NftRules.Settings(QueueNumber, RedirectMark, gid, _relay.LocalEndPoint.Port, dnsPort, QueueUdp: UdpMode != UdpMode.Bypass));
+        _rulesApplied = true;
+
+        _thread = new Thread(QueueLoop) { IsBackground = true, Name = "Sluice NFQUEUE" };
+        _thread.Start();
+        _sweeper = Task.Run(SweepLoop);
+        FlushResolverCache();
+
+        if (CurrentPolicy().Enabled)
+            _engine.Tracker.Write(LogLevel.Normal, "Name resolution through tunnels is ON (fake IPs from 198.18.0.0/15)");
+        _engine.Tracker.Write(LogLevel.Normal, $"Capture started (nftables + NFQUEUE {QueueNumber}, relay port {_relay.LocalEndPoint.Port}" +
+            $"{(dnsPort is null ? "" : $", DNS port {dnsPort}")}; UDP: {UdpMode switch
+            {
+                UdpMode.Tunnel => "tunneling is not available on Linux yet, so UDP of tunneled apps is blocked",
+                UdpMode.BlockQuic => "QUIC of tunneled apps blocked",
+                UdpMode.BlockAll => "blocked for tunneled apps",
+                _ => "not captured",
+            }})");
+    }
+
+    private DnsPolicy CurrentPolicy()
+    {
+        var profile = _engine.Profile;
+        if (_policy is { } c && ReferenceEquals(c.Profile, profile)) return c.Policy;
+        var p = new DnsPolicy(profile.Options.Resolve, profile.Options.LeakPreventionMode, Environment.MachineName);
+        _policy = (profile, p);
+        return p;
+    }
+
+    // ---------------------------------------------------------------- per-flow decisions
+
+    private void QueueLoop()
+    {
+        var q = _queue!;
+        try
+        {
+            while (q.Receive(OnPacket)) { }
+        }
+        catch (Exception ex)
+        {
+            _engine.Tracker.Write(LogLevel.Error, $"Capture stopped working: {ex.Message}. Connections now go direct; turn capture off and on again.");
+        }
+    }
+
+    private void OnPacket(NfQueue.Packet p)
+    {
+        uint verdict = NfQueue.Accept;
+        uint? mark = null;
+        try
+        {
+            if (PacketInfo.TryParse(p.Payload, out var f))
+            {
+                if (f.Protocol == PacketInfo.Tcp)
+                {
+                    if (DecideTcp(f.Source, f.Destination)) mark = RedirectMark;
+                }
+                else if (DecideUdpDrop(f.Source, f.Destination)) verdict = NfQueue.Drop;
+            }
+        }
+        catch (Exception ex)
+        {
+            _engine.Tracker.Write(LogLevel.Error, $"Packet handling failed, letting it through: {ex.Message}");
+        }
+        _queue!.Verdict(p.Id, verdict, mark);
+    }
+
+    /// <summary>True to redirect this new TCP connection to the relay.</summary>
+    private bool DecideTcp(IPEndPoint local, IPEndPoint remote)
+    {
+        var pid = _lookup.FindTcpOwner(local, remote);
+        var fake = _fakeIps.TryGetHost(remote.Address, out var hostname);
+
+        // A fake address only works through the relay (which connects by name), whoever uses it.
+        if (!fake)
+        {
+            if (pid == Environment.ProcessId || _engine.Backends.IsHelperProcess(pid)) return Pass();
+            // DNS over TCP goes to the real resolver, never into a tunnel (whose server cannot reach this LAN).
+            if (remote.Port == 53) return Pass();
+            if (FakeIpPool.IsFake(remote.Address))
+                _engine.Tracker.Write(LogLevel.Error, $"Connection to unknown fake address {remote} (stale DNS cache?)");
+            if (pid == 0 && !_engine.Profile.Options.ProcessServices) return Pass();
+        }
+
+        var path = pid == 0 ? null : _lookup.GetProcessPath(pid);
+        var host = fake ? hostname : remote.Address.ToString();
+        var match = _engine.Classify(new InboundRequest(host, remote.Port, pid, path));
+        var redirect = fake || match.Action.Type != RuleActionType.Direct || _engine.Profile.Options.HandleDirectConnections;
+        _engine.Tracker.Write(LogLevel.Debug, $"SYN {local} -> {host}:{remote.Port} pid {pid} ({Path.GetFileName(path) ?? "?"}) rule {match.Rule.Name} => {(redirect ? "redirect" : "pass")}");
+        if (!redirect)
+        {
+            _engine.Tracker.Write(LogLevel.Verbose, $"{Path.GetFileName(path) ?? "?"} ({pid}) - {remote} direct (rule {match.Rule.Name}, not intercepted)");
+            return Pass();
+        }
+        _flows[Norm(local)] = (new OriginalDestination(remote, pid, fake ? hostname : null), DateTime.UtcNow);
+        Interlocked.Increment(ref _redirected);
+        return true;
+    }
+
+    private bool Pass()
+    {
+        Interlocked.Increment(ref _passed);
+        return false;
+    }
+
+    /// <summary>True to drop this new UDP flow. UDP is not tunneled on Linux yet: flows meant for a tunnel are blocked.</summary>
+    private bool DecideUdpDrop(IPEndPoint local, IPEndPoint remote)
+    {
+        var key = (Norm(local), Norm(remote));
+        if (_udpVerdicts.TryGetValue(key, out var cached) && DateTime.UtcNow - cached.At < UdpVerdictTime) return Count(cached.Drop);
+
+        var pid = _lookup.FindUdpOwner(local);
+        var fake = _fakeIps.TryGetHost(remote.Address, out var hostname);
+        bool drop;
+        if (!fake && (pid == Environment.ProcessId || _engine.Backends.IsHelperProcess(pid))) drop = false;
+        else if (!fake && pid == 0 && !_engine.Profile.Options.ProcessServices) drop = false;
+        else
+        {
+            var path = pid == 0 ? null : _lookup.GetProcessPath(pid);
+            var route = _engine.ClassifyUdp(new InboundRequest(fake ? hostname : remote.Address.ToString(), remote.Port, pid, path));
+            drop = fake || route.Verdict != UdpVerdict.Pass;   // a fake address is unreachable without a tunnel
+            if (route.Verdict == UdpVerdict.Tunnel && !_udpTunnelWarned)
+            {
+                _udpTunnelWarned = true;
+                _engine.Tracker.Write(LogLevel.Normal,
+                    "UDP through tunnels is not available on Linux yet: UDP of tunneled apps is blocked, so browsers fall back from QUIC to TCP.");
+            }
+            _engine.Tracker.Write(drop ? LogLevel.Verbose : LogLevel.Debug,
+                $"{Path.GetFileName(path) ?? "?"} ({pid}) - UDP {(fake ? hostname : remote.Address.ToString())}:{remote.Port} {(drop ? "blocked" : "direct")} (rule {route.Match.Rule.Name})");
+        }
+        _udpVerdicts[key] = (drop, DateTime.UtcNow);
+        return Count(drop);
+    }
+
+    private bool Count(bool drop)
+    {
+        if (drop) Interlocked.Increment(ref _udpDropped);
+        return drop;
+    }
+
+    private static IPEndPoint Norm(IPEndPoint ep) => IRedirectTable.Normalize(ep);
+
+    /// <summary>Original destination of a redirected connection, by the app's endpoint (REDIRECT keeps the source).</summary>
+    private sealed class FlowTable(LinuxCapture owner) : IRedirectTable
+    {
+        public bool TryGetOriginal(IPEndPoint clientEndPoint, out OriginalDestination original)
+        {
+            if (owner._flows.TryRemove(Norm(clientEndPoint), out var f))
+            {
+                original = f.Dest;
+                return true;
+            }
+            original = null!;
+            return false;
+        }
+    }
+
+    private async Task SweepLoop()
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(10));
+        try
+        {
+            while (await timer.WaitForNextTickAsync(_cts.Token))
+            {
+                var now = DateTime.UtcNow;
+                foreach (var (k, v) in _flows)
+                    if (now - v.At > TimeSpan.FromMinutes(1)) _flows.TryRemove(k, out _);
+                foreach (var (k, v) in _udpVerdicts)
+                    if (now - v.At > UdpVerdictTime) _udpVerdicts.TryRemove(k, out _);
+                _engine.Tracker.Write(LogLevel.Debug,
+                    $"Capture stats: {Interlocked.Read(ref _redirected):N0} redirected, {Interlocked.Read(ref _passed):N0} passed, " +
+                    $"{Interlocked.Read(ref _udpDropped):N0} UDP dropped, DNS {_dns?.Answered ?? 0:N0} answered / {_dns?.Forwarded ?? 0:N0} forwarded, {_fakeIps.Count} fake IPs");
+            }
+        }
+        catch (OperationCanceledException) { }
+    }
+
+    /// <summary>systemd-resolved may have cached answers from before (or fake ones from Sluice): drop them.</summary>
+    private static void FlushResolverCache()
+    {
+        try
+        {
+            using var p = Process.Start(new ProcessStartInfo("resolvectl", "flush-caches") { UseShellExecute = false, RedirectStandardError = true, RedirectStandardOutput = true });
+            p?.WaitForExit(3000);
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException) { /* no systemd-resolved */ }
+    }
+
+    private void Cleanup()
+    {
+        _cts.Cancel();
+        if (_rulesApplied) NftRules.Remove();     // first: no new packets are queued or redirected
+        _rulesApplied = false;
+        _queue?.Stop();
+        _thread?.Join(2000);
+        _queue?.Dispose();
+        _queue = null;
+        if (_previousGid is { } g) Libc.setresgid(Libc.Unchanged, g, Libc.Unchanged);
+        _previousGid = null;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        Cleanup();
+        if (_sweeper is not null) await _sweeper;
+        if (_relay is not null) await _relay.DisposeAsync();
+        if (_dns is not null) await _dns.DisposeAsync();
+        _engine.HostResolver = null;
+        _resolver?.Dispose();
+        if (_fakeIps.Count > 0) FlushResolverCache();
+        _engine.Tracker.Write(LogLevel.Normal,
+            $"Capture stopped ({Interlocked.Read(ref _redirected):N0} connections redirected, {_dns?.Answered ?? 0:N0} DNS queries answered)");
+    }
+}
+
+/// <summary>Protocol and endpoints of a captured IPv4/IPv6 packet.</summary>
+internal static class PacketInfo
+{
+    public const int Tcp = 6, Udp = 17;
+
+    public readonly record struct Flow(int Protocol, IPEndPoint Source, IPEndPoint Destination);
+
+    public static bool TryParse(ReadOnlySpan<byte> p, out Flow flow)
+    {
+        flow = default;
+        if (p.Length < 20) return false;
+        int ipLen, proto;
+        IPAddress src, dst;
+        switch (p[0] >> 4)
+        {
+            case 4:
+                ipLen = (p[0] & 0xF) * 4;
+                proto = p[9];
+                src = new IPAddress(p.Slice(12, 4));
+                dst = new IPAddress(p.Slice(16, 4));
+                break;
+            case 6:
+                if (p.Length < 40) return false;
+                ipLen = 40;
+                proto = p[6];                     // extension headers are not followed (rare on a first packet)
+                src = new IPAddress(p.Slice(8, 16));
+                dst = new IPAddress(p.Slice(24, 16));
+                break;
+            default:
+                return false;
+        }
+        if (proto is not (Tcp or Udp) || p.Length < ipLen + 4) return false;
+        var sp = BinaryPrimitives.ReadUInt16BigEndian(p[ipLen..]);
+        var dp = BinaryPrimitives.ReadUInt16BigEndian(p[(ipLen + 2)..]);
+        flow = new Flow(proto, new IPEndPoint(src, sp), new IPEndPoint(dst, dp));
+        return true;
+    }
+}
+
+/// <summary>The private group Sluice's sockets carry while capturing (nftables matches it with meta skgid).</summary>
+internal static class SluiceGroup
+{
+    private const uint Preferred = 0x5C1CE;   // 377294: far above normal user and system groups
+
+    /// <summary>A GID not used by any group in /etc/group.</summary>
+    public static uint Pick(string groupFile = "/etc/group")
+    {
+        var used = new HashSet<uint>();
+        try
+        {
+            foreach (var line in File.ReadLines(groupFile))
+            {
+                var f = line.Split(':');
+                if (f.Length > 2 && uint.TryParse(f[2], out var g)) used.Add(g);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+        var gid = Preferred;
+        while (used.Contains(gid)) gid++;
+        return gid;
+    }
+}

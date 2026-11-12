@@ -10,8 +10,19 @@ namespace Sluice.Core.Platform;
 /// Finds which process owns a local TCP endpoint (iphlpapi GetExtendedTcpTable),
 /// and resolves a PID to its executable path.
 /// </summary>
+public interface IProcessLookup
+{
+    int FindTcpOwner(IPEndPoint local, IPEndPoint remote);
+    int FindUdpOwner(IPEndPoint local);
+    HashSet<int> FindListeners(int port);
+    string? GetProcessPath(int pid);
+}
+
 public static class ProcessLookup
 {
+    /// <summary>Set by a platform module (Linux) to replace the built-in Windows lookups.</summary>
+    public static IProcessLookup? Backend { get; set; }
+
     private const int AF_INET = 2, AF_INET6 = 23;
     private const int TCP_TABLE_OWNER_PID_ALL = 5;
 
@@ -34,6 +45,7 @@ public static class ProcessLookup
     /// <summary>PID owning the TCP socket whose local endpoint is <paramref name="local"/> and remote is <paramref name="remote"/>.</summary>
     public static int FindTcpOwner(IPEndPoint local, IPEndPoint remote)
     {
+        if (Backend is { } b) return b.FindTcpOwner(local, remote);
         if (!OperatingSystem.IsWindows()) return 0;
         var v6 = local.AddressFamily == AddressFamily.InterNetworkV6 && !local.Address.IsIPv4MappedToIPv6;
         foreach (var row in ReadTable(v6))
@@ -53,6 +65,7 @@ public static class ProcessLookup
     /// <summary>PID owning the UDP socket bound to <paramref name="local"/> (exact address or wildcard), or 0.</summary>
     public static int FindUdpOwner(IPEndPoint local)
     {
+        if (Backend is { } b) return b.FindUdpOwner(local);
         if (!OperatingSystem.IsWindows()) return 0;
         var addr = local.Address.IsIPv4MappedToIPv6 ? local.Address.MapToIPv4() : local.Address;
         var v6 = addr.AddressFamily == AddressFamily.InterNetworkV6;
@@ -110,6 +123,7 @@ public static class ProcessLookup
     /// <summary>PIDs with a TCP socket listening on <paramref name="port"/> (IPv4 and IPv6 tables).</summary>
     public static HashSet<int> FindListeners(int port)
     {
+        if (Backend is { } b) return b.FindListeners(port);
         var pids = new HashSet<int>();
         if (!OperatingSystem.IsWindows()) return pids;
         foreach (var v6 in new[] { false, true })
@@ -123,6 +137,7 @@ public static class ProcessLookup
 
     public static string? GetProcessPath(int pid)
     {
+        if (Backend is { } b) return b.GetProcessPath(pid);
         if (pid <= 4) return pid == 4 ? "System" : null;
         if (PathCache.TryGetValue(pid, out var c) && DateTime.UtcNow - c.At < TimeSpan.FromSeconds(30)) return c.Path;
 

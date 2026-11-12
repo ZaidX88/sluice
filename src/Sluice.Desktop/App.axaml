@@ -1,0 +1,25 @@
+﻿<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Sluice.Desktop.App"
+             RequestedThemeVariant="Default">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceInclude Source="avares://Sluice.Desktop/Theme/Palette.axaml"/>
+                <ResourceInclude Source="avares://Sluice.Desktop/Theme/Controls.axaml"/>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Application.Resources>
+
+    <Application.Styles>
+        <!-- Fluent for standard controls, recoloured to the monochrome accent of the WPF app. -->
+        <FluentTheme>
+            <FluentTheme.Palettes>
+                <ColorPaletteResources x:Key="Light" Accent="#0A0A0A" RegionColor="#FFFFFF"/>
+                <ColorPaletteResources x:Key="Dark" Accent="#FAFAFA" RegionColor="#0B0B0C"/>
+            </FluentTheme.Palettes>
+        </FluentTheme>
+        <StyleInclude Source="avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml"/>
+        <StyleInclude Source="avares://Sluice.Desktop/Theme/Styles.axaml"/>
+    </Application.Styles>
+</Application>

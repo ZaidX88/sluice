@@ -1,0 +1,56 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Sluice.Desktop.ViewModels"
+             x:Class="Sluice.Desktop.Views.LogView"
+             x:DataType="vm:LogViewModel">
+    <UserControl.Styles>
+        <Style Selector="ListBox#List ListBoxItem">
+            <Setter Property="Padding" Value="8,3"/>
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="CornerRadius" Value="4"/>
+        </Style>
+        <Style Selector="ListBox#List ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource RowHover}"/>
+        </Style>
+        <Style Selector="ListBox#List ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource AccentSoft}"/>
+        </Style>
+        <Style Selector="TextBlock.Level"><Setter Property="Foreground" Value="{DynamicResource TextMuted}"/></Style>
+        <Style Selector="TextBlock.Level.Error">
+            <Setter Property="Foreground" Value="{DynamicResource Danger}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+        <Style Selector="TextBlock.Message"><Setter Property="Foreground" Value="{DynamicResource Text}"/></Style>
+        <Style Selector="TextBlock.Message.Quiet"><Setter Property="Foreground" Value="{DynamicResource TextMuted}"/></Style>
+        <Style Selector="TextBlock.Message.Error"><Setter Property="Foreground" Value="{DynamicResource Danger}"/></Style>
+    </UserControl.Styles>
+    <Grid RowDefinitions="Auto,*">
+
+        <DockPanel Margin="0,0,0,14">
+            <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+                <Button Theme="{StaticResource SecondaryButton}" Content="Copy" Command="{Binding CopyCommand}" Margin="0,0,8,0"/>
+                <Button Theme="{StaticResource GhostButton}" Content="Clear" Command="{Binding ClearCommand}"/>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="Show" Classes="Muted" FontSize="13" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                <ComboBox ItemsSource="{Binding Levels}" SelectedIndex="{Binding LevelIndex}" Width="160"/>
+            </StackPanel>
+        </DockPanel>
+
+        <Border Grid.Row="1" Classes="CardBox" Padding="6">
+            <ListBox x:Name="List" ItemsSource="{Binding Lines}" BorderThickness="0" Background="Transparent"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled" FontFamily="{StaticResource MonoFont}" FontSize="12">
+                <ListBox.ItemTemplate>
+                    <DataTemplate x:DataType="vm:LogLine">
+                        <Grid ColumnDefinitions="70,70,*">
+                            <TextBlock Text="{Binding TimeText}" Foreground="{DynamicResource TextFaint}"/>
+                            <TextBlock Grid.Column="1" Text="{Binding LevelText}" Classes="Level" Classes.Error="{Binding IsError}"/>
+                            <TextBlock Grid.Column="2" Text="{Binding Message}" TextWrapping="Wrap" Classes="Message"
+                                       Classes.Quiet="{Binding IsQuiet}" Classes.Error="{Binding IsError}"/>
+                        </Grid>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+        </Border>
+    </Grid>
+</UserControl>

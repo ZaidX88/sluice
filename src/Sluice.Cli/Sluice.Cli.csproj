@@ -2,6 +2,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Sluice.Core\Sluice.Core.csproj" />
+    <!-- Linux capture; on Windows the CLI uses the WinDivert interceptor in Core. -->
+    <ProjectReference Include="..\Sluice.Platform.Linux\Sluice.Platform.Linux.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

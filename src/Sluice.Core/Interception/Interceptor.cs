@@ -19,7 +19,7 @@ namespace Sluice.Core.Interception;
 ///  - Network layer: on each new flow's SYN, asks the rule engine; non-direct flows are
 ///    reflected to the <see cref="TransparentInbound"/> relay (see <see cref="PacketReflector"/>).
 /// </summary>
-public sealed class Interceptor : IAsyncDisposable
+public sealed class Interceptor : ITrafficCapture
 {
     private const int MaxPacket = 0xFFFF + 40;
 

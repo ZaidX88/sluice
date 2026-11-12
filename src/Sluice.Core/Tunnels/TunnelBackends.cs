@@ -16,6 +16,8 @@ public enum SessionState
     Connected,
     /// <summary>Lost or failed; Sluice will try again shortly.</summary>
     Reconnecting,
+    /// <summary>Running, but a health check just failed; checked again in a few seconds, restarted if it fails again.</summary>
+    NotResponding,
     /// <summary>Gave up after repeated failures; stays stopped until the user checks or re-enables it.</summary>
     Failed,
     /// <summary>Stopped because nothing used it for a while; starts again on the next connection.</summary>
@@ -54,6 +56,7 @@ public sealed class TunnelBackends : IAsyncDisposable
         public DateTime LastProbe;
         public int Probing;
         public int Leases;
+        public DateTime LastUrgentProbe;
         public long LastUseTicks = DateTime.UtcNow.Ticks;
     }
 
@@ -69,7 +72,94 @@ public sealed class TunnelBackends : IAsyncDisposable
     public TunnelBackends(Action<string>? log = null)
     {
         Log = log ?? (_ => { });
+        _network = NetworkSnapshot();
+        System.Net.NetworkInformation.NetworkChange.NetworkAddressChanged += OnNetworkAddressChanged;
         _monitor = Task.Run(MonitorLoop);
+    }
+
+    // ------------------------------------------------------------------ network changes
+
+    private string _network;
+    private long _networkChangedTicks;
+
+    /// <summary>React to network changes (new Wi-Fi, IP change, resume from sleep).</summary>
+    public bool RestartOnNetworkChange { get; set; } = true;
+
+    private void OnNetworkAddressChanged(object? sender, EventArgs e) =>
+        Interlocked.Exchange(ref _networkChangedTicks, DateTime.UtcNow.Ticks);
+
+    /// <summary>Addresses and gateways of the interfaces that are up: what decides whether old connections still work.</summary>
+    internal static string NetworkSnapshot()
+    {
+        try
+        {
+            var parts = System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces()
+                .Where(n => n.OperationalStatus == System.Net.NetworkInformation.OperationalStatus.Up &&
+                            n.NetworkInterfaceType != System.Net.NetworkInformation.NetworkInterfaceType.Loopback)
+                .SelectMany(n =>
+                {
+                    var ip = n.GetIPProperties();
+                    return ip.UnicastAddresses.Select(a => a.Address.ToString())
+                        .Concat(ip.GatewayAddresses.Select(g => "gw " + g.Address));
+                })
+                .Where(s => !s.StartsWith("fe80", StringComparison.OrdinalIgnoreCase))
+                .OrderBy(s => s, StringComparer.Ordinal);
+            return string.Join(",", parts);
+        }
+        catch (System.Net.NetworkInformation.NetworkInformationException)
+        {
+            return "";
+        }
+    }
+
+    /// <summary>
+    /// After the network changed (debounced, and only if addresses or gateways really differ), connections made
+    /// over the old network are dead or soon will be: restart every running session now instead of waiting for checks.
+    /// </summary>
+    internal async Task<bool> CheckNetworkChangeAsync(bool force = false)
+    {
+        var changedAt = Interlocked.Read(ref _networkChangedTicks);
+        if (!force && (changedAt == 0 || DateTime.UtcNow.Ticks - changedAt < TimeSpan.FromSeconds(3).Ticks)) return false;
+        Interlocked.CompareExchange(ref _networkChangedTicks, 0, changedAt);
+        var now = NetworkSnapshot();
+        if (!force && now == _network) return false;
+        _network = now;
+        if (!RestartOnNetworkChange && !force) return false;
+        foreach (var (id, s) in _sessions)
+        {
+            if (!_tunnels.TryGetValue(id, out var t) || !_sessions.TryRemove(new KeyValuePair<int, IBackendSession>(id, s))) continue;
+            await s.DisposeAsync();
+            var h = HealthOf(id);
+            if (Wanted(h, DateTime.UtcNow))
+            {
+                Log($"{t.Type.DisplayName()} {t}: network changed, reconnecting");
+                h.Failures = 0;
+                h.PendingReconnect = true;
+                h.NextAttempt = DateTime.UtcNow;
+                SetStatus(t, SessionState.Reconnecting, "network changed");
+            }
+            else SetStatus(t, SessionState.Idle, "network changed; starts again when needed");
+        }
+        return true;
+    }
+
+    // ------------------------------------------------------------------ problems seen by real connections
+
+    /// <summary>
+    /// A connection through <paramref name="tunnelId"/> failed in a way that points at the tunnel (handshake timed
+    /// out, local endpoint gone). Check the tunnel now rather than at the next scheduled check; if that check fails
+    /// too, restart it at once.
+    /// </summary>
+    public void ReportProblem(int tunnelId, string reason)
+    {
+        if (!_tunnels.TryGetValue(tunnelId, out var t) || !_sessions.TryGetValue(tunnelId, out var s)) return;
+        var h = HealthOf(tunnelId);
+        if (DateTime.UtcNow - h.LastUrgentProbe < TimeSpan.FromSeconds(5)) return;   // one check covers a burst
+        if (Interlocked.CompareExchange(ref h.Probing, 1, 0) != 0) return;
+        h.LastUrgentProbe = DateTime.UtcNow;
+        h.LastProbe = DateTime.UtcNow;
+        Log($"{t.Type.DisplayName()} {t}: {reason}; checking the tunnel now");
+        _ = ProbeAsync(t, s, h, urgent: true);
     }
 
     public Action<string> Log { get; set; }
@@ -82,6 +172,9 @@ public sealed class TunnelBackends : IAsyncDisposable
 
     /// <summary>Stop a session nothing has used for this long (Zero = never).</summary>
     public TimeSpan IdleTimeout { get; set; } = TimeSpan.FromMinutes(10);
+
+    /// <summary>How long one test connection may take before the tunnel counts as not responding.</summary>
+    public TimeSpan ProbeTimeout { get; set; } = TimeSpan.FromSeconds(6);
 
     /// <summary>How often a connected session is checked by opening a test connection through it (Zero = never).</summary>
     public TimeSpan HealthInterval { get; set; } = TimeSpan.FromSeconds(30);
@@ -271,7 +364,11 @@ public sealed class TunnelBackends : IAsyncDisposable
         {
             while (await timer.WaitForNextTickAsync(_cts.Token))
             {
-                try { await MonitorOnceAsync(); }
+                try
+                {
+                    await CheckNetworkChangeAsync();
+                    await MonitorOnceAsync();
+                }
                 catch (Exception ex) { Log($"Tunnel monitor: {ex.Message}"); }
             }
         }
@@ -347,18 +444,28 @@ public sealed class TunnelBackends : IAsyncDisposable
         catch { /* recorded and logged */ }
     }
 
-    private async Task ProbeAsync(Tunnel t, IBackendSession s, TunnelHealth h)
+    private async Task ProbeAsync(Tunnel t, IBackendSession s, TunnelHealth h, bool urgent = false)
     {
         try
         {
-            if (await ProbeSessionAsync(t, s, _cts.Token))
+            if (await ProbeSessionAsync(t, s, _cts.Token, ProbeTimeout))
             {
                 h.ProbeFailures = 0;
+                if (GetStatus(t.Id).State == SessionState.NotResponding && _sessions.TryGetValue(t.Id, out var cur) && cur == s)
+                    SetStatus(t, SessionState.Connected, $"responding again; local SOCKS {s.SocksEndPoint}");
                 return;
             }
             h.ProbeFailures++;
             Log($"{t.Type.DisplayName()} {t}: health check failed ({h.ProbeFailures} in a row)");
-            if (h.ProbeFailures >= 2 && _sessions.TryRemove(new KeyValuePair<int, IBackendSession>(t.Id, s)))
+            // A failure seen by a real connection plus a failed check is enough. A scheduled check gets a second
+            // chance a few seconds later: one lost packet should not tear down a working tunnel.
+            if (!urgent && h.ProbeFailures < 2)
+            {
+                SetStatus(t, SessionState.NotResponding, "health check failed; checking again");
+                h.LastProbe = DateTime.UtcNow - HealthInterval + TimeSpan.FromSeconds(5);
+                return;
+            }
+            if (_sessions.TryRemove(new KeyValuePair<int, IBackendSession>(t.Id, s)))
             {
                 await s.DisposeAsync();
                 h.ProbeFailures = 0;
@@ -376,21 +483,24 @@ public sealed class TunnelBackends : IAsyncDisposable
     }
 
     /// <summary>
-    /// A test connection through the session. Several targets, so one blocked site is not taken for a dead tunnel;
-    /// for SSH the server's own SSH port first (answers without leaving the server).
+    /// A test connection through the session. Several targets, so one blocked site is not taken for a dead tunnel.
+    /// Targets that need no name lookup come first (some servers resolve names slowly): for SSH the server's own
+    /// SSH port, then 1.1.1.1, then the server's own address and a well-known site. Each gets half the timeout,
+    /// so a stuck tunnel is recognised within about 2 x timeout.
     /// </summary>
-    internal static async Task<bool> ProbeSessionAsync(Tunnel t, IBackendSession s, CancellationToken ct)
+    internal static async Task<bool> ProbeSessionAsync(Tunnel t, IBackendSession s, CancellationToken ct, TimeSpan? timeout = null)
     {
         if (s.SocksEndPoint is not { } ep) return false;
+        var perTarget = (timeout ?? TimeSpan.FromSeconds(15)) / 2;
         var targets = new List<(string, int)>();
         if (t.Type == TunnelType.Ssh) targets.Add(("127.0.0.1", 22));
-        targets.Add((t.Address, t.Port));     // the server reaching itself: works without the open internet
         targets.Add(("1.1.1.1", 443));
+        targets.Add((t.Address, t.Port));     // the server reaching itself: works without the open internet
         targets.Add(("www.google.com", 443));
         foreach (var (host, port) in targets)
         {
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            cts.CancelAfter(TimeSpan.FromSeconds(15));
+            cts.CancelAfter(perTarget);
             try
             {
                 using var c = new TcpClient();
@@ -401,7 +511,7 @@ public sealed class TunnelBackends : IAsyncDisposable
             catch (Exception ex) when (ex is ProxyException or IOException or SocketException ||
                                        (ex is OperationCanceledException && !ct.IsCancellationRequested))
             {
-                // try the next target
+                // refused, unreachable from the server, or no answer in time: try the next target
             }
         }
         return false;
@@ -497,6 +607,7 @@ public sealed class TunnelBackends : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        System.Net.NetworkInformation.NetworkChange.NetworkAddressChanged -= OnNetworkAddressChanged;
         _cts.Cancel();
         try { await _monitor; } catch { /* stopping */ }
         foreach (var s in _sessions.Values) await s.DisposeAsync();

@@ -535,6 +535,101 @@ public class LiveSingBoxTests : IAsyncLifetime
         Assert.Equal(SessionState.Connected, b.GetStatus(t.Id).State);
     }
 
+    // ---------------- dead-but-"connected" tunnels: a frozen server accepts TCP and never answers ----------------
+
+    [System.Runtime.InteropServices.DllImport("ntdll.dll")]
+    private static extern int NtSuspendProcess(IntPtr process);
+
+    [System.Runtime.InteropServices.DllImport("ntdll.dll")]
+    private static extern int NtResumeProcess(IntPtr process);
+
+    private sealed class Frozen : IDisposable
+    {
+        private readonly Process _p;
+        public Frozen(Process p) { _p = p; NtSuspendProcess(p.Handle); }
+        public void Dispose() => NtResumeProcess(_p.Handle);
+    }
+
+    private TunnelBackends FastBackends() => new()
+    {
+        SingBoxPath = Exe,
+        HealthInterval = TimeSpan.Zero,
+        ProbeTimeout = TimeSpan.FromSeconds(2),
+        RestartOnNetworkChange = false,
+    };
+
+    private static async Task WaitForState(TunnelBackends b, int id, SessionState state, int seconds = 20)
+    {
+        for (var i = 0; i < seconds * 5 && b.GetStatus(id).State != state; i++) await Task.Delay(200);
+        Assert.Equal(state, b.GetStatus(id).State);
+    }
+
+    [Fact]
+    public async Task DeadLink_RealConnectionTimeout_TriggersImmediateCheckAndRestart()
+    {
+        if (!Enabled) return;
+        await using var b = FastBackends();
+        var t = TrojanTunnel();
+        var profile = Profile.CreateDefault();
+        profile.Tunnels.Add(t);
+        await b.PruneAsync(profile);
+        await b.GetLocalSocksAsync(t, default);
+        var seen = new List<SessionState>();
+        b.StatusChanged += (_, st) => { lock (seen) seen.Add(st.State); };
+        var conn = new TunnelConnector(profile, b) { DirectConnectTimeout = TimeSpan.FromSeconds(2) };
+        await using var echo = new EchoServer();
+
+        using (new Frozen(_server!))
+        {
+            var ex = await Assert.ThrowsAsync<TimeoutException>(() =>
+                conn.ConnectAsync(RuleAction.ViaTunnel(t.Id), "r", "127.0.0.1", echo.Port));
+            Assert.Contains("checking it now", ex.Message);
+            // The failure itself starts the check; no scheduled check is involved (HealthInterval is off).
+            await WaitForState(b, t.Id, SessionState.Reconnecting, 15);
+        }
+        // Server answers again: the monitor brings the tunnel back by itself.
+        await WaitForState(b, t.Id, SessionState.Connected, 30);
+        lock (seen) Assert.DoesNotContain(SessionState.NotResponding, seen);   // a real failure + failed check = restart at once
+        using var c = await conn.ConnectAsync(RuleAction.ViaTunnel(t.Id), "r", "127.0.0.1", echo.Port);
+    }
+
+    [Fact]
+    public async Task DeadLink_ScheduledCheck_NotRespondingThenReconnect()
+    {
+        if (!Enabled) return;
+        await using var b = FastBackends();
+        b.HealthInterval = TimeSpan.FromSeconds(1);
+        var t = TrojanTunnel();
+        await b.GetLocalSocksAsync(t, default);
+        var seen = new List<SessionState>();
+        b.StatusChanged += (_, st) => { lock (seen) seen.Add(st.State); };
+
+        using (new Frozen(_server!))
+        {
+            await WaitForState(b, t.Id, SessionState.NotResponding, 15);    // first failed check: warn, check again soon
+            await WaitForState(b, t.Id, SessionState.Reconnecting, 20);     // second failed check: restart
+        }
+        await WaitForState(b, t.Id, SessionState.Connected, 30);
+        lock (seen) Assert.Equal([SessionState.NotResponding, SessionState.Reconnecting], seen.Where(x => x is SessionState.NotResponding or SessionState.Reconnecting).Distinct());
+    }
+
+    [Fact]
+    public async Task NetworkChange_RestartsRunningTunnels()
+    {
+        if (!Enabled) return;
+        await using var b = FastBackends();
+        var t = TrojanTunnel();
+        await b.GetLocalSocksAsync(t, default);
+        var helper = Process.GetProcessesByName("sing-box").Select(p => p.Id).Single(b.IsHelperProcess);
+
+        Assert.True(await b.CheckNetworkChangeAsync(force: true));
+        Assert.Equal(SessionState.Reconnecting, b.GetStatus(t.Id).State);
+        Assert.Equal("network changed", b.GetStatus(t.Id).Detail);
+        await WaitForState(b, t.Id, SessionState.Connected, 30);
+        Assert.NotEqual(helper, Process.GetProcessesByName("sing-box").Select(p => p.Id).Single(b.IsHelperProcess));
+        Assert.False(await b.CheckNetworkChangeAsync());   // nothing changed since: no restart
+    }
+
     [Fact]
     public async Task WrongPassword_FailsCleanly()
     {

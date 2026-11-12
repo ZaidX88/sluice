@@ -131,8 +131,19 @@ public sealed class TunnelConnector(Profile profile, Tunnels.TunnelBackends? bac
     private async Task<TcpClient> ThroughHopsAsync(IReadOnlyList<Tunnel> hops, string host, int port,
         TimeSpan timeout, CancellationToken ct)
     {
+        // An encrypted first hop runs as a local session; failures that point at it are reported so it is checked now.
+        var session = Tunnels.TunnelBackends.Handles(hops[0].Type) ? hops[0] : null;
         hops = await ResolveBackendHopsAsync(hops, ct);
-        var client = await OpenTcpAsync(hops[0].Address, hops[0].Port, timeout, ct);
+        TcpClient client;
+        try
+        {
+            client = await OpenTcpAsync(hops[0].Address, hops[0].Port, timeout, ct);
+        }
+        catch (Exception ex) when (session is not null && ex is SocketException or TimeoutException)
+        {
+            backends?.ReportProblem(session.Id, "its local endpoint did not accept a connection");
+            throw;
+        }
         try
         {
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -148,6 +159,11 @@ public sealed class TunnelConnector(Profile profile, Tunnels.TunnelBackends? bac
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
             client.Dispose();
+            if (session is not null)
+            {
+                backends?.ReportProblem(session.Id, $"a connection to {host}:{port} got no answer within {timeout.TotalSeconds:F0} s");
+                throw new TimeoutException($"{session.Type.DisplayName()} tunnel {session} did not answer within {timeout.TotalSeconds:F0} s (checking it now)");
+            }
             throw new TimeoutException($"Tunnel handshake timed out via {hops[0]}");
         }
         catch

@@ -62,6 +62,7 @@ public sealed class TunnelRow(Tunnel tunnel, string? source = null, Action<Tunne
         SessionState.Connecting => "Connecting…",
         SessionState.Connected => $"Connected {_session.Since:HH:mm}",
         SessionState.Reconnecting => "Reconnecting…",
+        SessionState.NotResponding => "Not responding",
         SessionState.Failed => "Failed",
         SessionState.Idle => "Idle",
         SessionState.Disabled => "Off",
@@ -72,7 +73,7 @@ public sealed class TunnelRow(Tunnel tunnel, string? source = null, Action<Tunne
     public bool? SessionOk => !Tunnel.Enabled ? null : _session.State switch
     {
         SessionState.Connected => true,
-        SessionState.Failed or SessionState.Reconnecting => false,
+        SessionState.Failed or SessionState.Reconnecting or SessionState.NotResponding => false,
         _ => null,
     };
 

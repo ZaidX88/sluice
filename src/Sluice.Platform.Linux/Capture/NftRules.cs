@@ -41,7 +41,7 @@ internal static class NftRules
                 }
             }
 
-            """;
+            """.ReplaceLineEndings("\n");   // a raw string keeps the source file's line endings (CRLF on Windows checkouts); nft rejects CR
     }
 
     public static void Apply(Settings s) => Run(Build(s));
@@ -66,7 +66,7 @@ internal static class NftRules
         // Under setcap (not root) nft would start without CAP_NET_ADMIN: hand it on explicitly.
         Native.Libc.RaiseAmbient(Native.Libc.CAP_NET_ADMIN, out var capProblem);
         using var p = Process.Start(psi) ?? throw new InvalidOperationException("Could not run nft.");
-        p.StandardInput.Write(script);
+        p.StandardInput.Write(script.ReplaceLineEndings("\n"));
         p.StandardInput.Close();
         var err = p.StandardError.ReadToEnd();
         p.StandardOutput.ReadToEnd();

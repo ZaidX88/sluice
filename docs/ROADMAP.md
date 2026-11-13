@@ -5,7 +5,8 @@ A handoff document: where the project stands, how it is put together, and what t
 and what "done" means. Read this, `README.md` and `ANALYSIS.md` (the Proxifier analysis the project started
 from) before starting.
 
-Last updated: 2026-11-13 (main at `be1c197`).
+Last updated: 2026-11-13 (main at `b53ea44`), including findings from recording the real app for the promo video
+(sections 2.5–2.9 and 6).
 
 ---
 
@@ -29,6 +30,7 @@ sing-box as a helper process for the encrypted protocols.
 | Avalonia desktop app `Sluice.Desktop` (Windows + Linux) | done, matches the WPF design; verified on Windows and on Linux under WSLg |
 | Old WPF app `Sluice.App` | still in the repo; to be removed (see 3.4) |
 | Platform split into modules | started: notifications + capture + process lookup go through `IPlatformServices`; WinDivert code still lives in Core (see 3.1) |
+| Promo video | first cut done: `promo/sluice-promo.mp4` (52.7 s, 1080p, silent); `promo/` is **not in git** yet (see 6) |
 
 ### Projects
 
@@ -83,6 +85,8 @@ sing-box as a helper process for the encrypted protocols.
 ### 2.2 Tests that fail because of the developer machine
 - `HappyEyeballsTests.DeadFirstAddress_DoesNotDelayTheWorkingOne` fails whenever a Sluice capture is running on the machine (the relay accepts every connection). Make the test detect this (e.g. skip if 127.0.0.1:dead-port accepts) instead of failing.
 - `Sluice.Cli.exe` has no Windows Firewall allow rule on Private networks, so CLI capture tests fail there. The desktop app can add its own rule (banner + "Allow" button, `EngineHost.AllowThroughFirewall`). Give the CLI the same (`--allow-firewall`) or document it.
+- `scripts/linux/test-socks5.py` (the stand-in tunnel of the Linux live test) accepts connections but **relays no data on Windows**. It is fine for its Linux job. On Windows, use the CLI as a stand-in SOCKS5 tunnel instead: `Sluice.Cli --socks 127.0.0.1:<port>`.
+- Any test or demo that makes real connections misbehaves while a Sluice capture is running on the same machine. Fake-DNS answers and tunnel routing apply to the test's own helper processes too. Pause capture (and see 2.6) before such runs.
 
 ### 2.3 Avalonia UI gaps (small)
 - **Dark title bar on Windows** (the WPF app used DWM `DWMWA_USE_IMMERSIVE_DARK_MODE`). Do it in `Sluice.Platform.Windows` behind a new `IPlatformServices` method, or via Avalonia's `TransparencyLevelHint`/`ExtendClientAreaToDecorationsHint`.
@@ -97,6 +101,56 @@ sing-box as a helper process for the encrypted protocols.
 - `LinuxProcessLookup` scans `/proc/*/fd` on a miss, newest processes first, with a recent-owner list. That is fast enough in tests (20 parallel connections in ~0.15 s). On machines with tens of thousands of fds, consider `NETLINK_SOCK_DIAG` + an inode→pid cache refreshed in the background, or eBPF later.
 - The relay listens on `[::]:random`, which is reachable from the LAN. Lookups fail and close for unknown clients, but binding to loopback would be tidier. REDIRECT targets 127.0.0.1 / ::1, so bind two loopback sockets like the DNS server does.
 - **Running the GUI as root on Linux** breaks notifications (root has no session bus) and Wayland may refuse root apps. Recommended path: `setcap` on the binary (hint shown in the UI). Long-term: a small privileged helper/daemon (see 4.10).
+
+### 2.5 Stale fake addresses after Sluice restarts — **high**
+**Seen live (Windows, real SSH tunnel):** after Sluice restarted, the log filled with lines like
+`claude.exe - 198.18.0.49:443 error via SSH <server>: SSH tunnel <server> did not answer within 20 s` and
+`sing-box <server>: ERROR … open connection to 198.18.0.43:443 … ssh: rejected: connect failed (Connection timed out)`.
+
+**Why:**
+- The new process starts with an empty `FakeIpPool`, but apps still hold fake addresses from the previous run. Chromium/Electron apps (Claude, Vivaldi, Edge) keep their **own** DNS caches, which flushing the OS cache doesn't clear.
+- `Interceptor.Decide` (`Interception/Interceptor.cs` ~line 195) logs "Connection to unknown fake address" but then classifies the flow normally and sends the **raw 198.18.x.x address** through the tunnel. The tunnel server can't reach it, so each connection hangs about 20 s.
+- Those failures also make the health monitor think the tunnel died ("did not answer within 20 s; checking the tunnel now"), so a healthy tunnel gets probed and reported as not responding.
+
+**To do:**
+1. **Persist the fake pool:** save host↔address pairs (with last use) to `%APPDATA%\Sluice\fake-dns.json`, or `~/.config/Sluice` on Linux, and reload it on start. Old cached answers then still map to the right host. `LinuxCapture` has the same pool and needs the same treatment.
+2. **Fail fast for unknown fakes:** never send a 198.18.0.0/15 destination to a tunnel or direct. Reset the connection at once so the app retries and re-resolves. With WinDivert, reflect the flow and close it in the relay. On Linux, redirect it and close it.
+3. **Keep health checks honest:** don't count such failures toward tunnel health.
+
+**Done when:** you restart Sluice with Chrome and Claude open, existing tabs reconnect within a few seconds, and no `198.18.` address appears in "via SSH/…" log lines.
+
+### 2.6 Fake DNS answers outliving capture — investigate
+**Seen once** with the old WPF build (`Sluice.App`, started the day before):
+- The user reported capture as paused.
+- `ipconfig /flushdns` followed by `Resolve-DnsName www.google.com` still returned `198.18.0.25`.
+- Programs connecting to those addresses got nowhere.
+
+Either "pause" did not stop interception in that build, or something else kept answering DNS.
+
+**To do:** in the Avalonia app, check every way to stop capture: the capture button, the tray "Capture traffic" item, and quitting. After each, `Resolve-DnsName` must return a real address within a second. `Interceptor.DisposeAsync` already flushes the OS cache when fakes were handed out; confirm it runs on every stop path, and add a log line. If the UI ever offers a "pause" separate from "stop", it must stop fake DNS too.
+
+### 2.7 Layout at narrower window sizes
+**Seen in the live recording**, at a window about 1040×650 DIP (1302×814 px at 125% scaling):
+- **Tunnels page:** with the check panel open, the **Status** column disappears and Session is cut ("Connect…").
+- **Statistics page:** the "Share of traffic" header is cut ("Share of traf").
+
+**To do:**
+- Let the check panel shrink, or move it below the list under a width threshold.
+- Hide the Address and Session columns before Status.
+- Shorten the header to "Share".
+- Add a narrow-window pass to screenshot mode, e.g. `--screenshot DIR --size 1040x650`, to keep this checked.
+
+### 2.8 sing-box output logged at the wrong level
+`SingBoxSession.cs` (~line 107) logs every helper line at the normal level, so sing-box `ERROR[…]` lines appear as **INFO** in the Log page. They are also long and repetitive (connection IDs, `outbound/ssh[out]`).
+
+**To do:**
+- Parse sing-box's level prefix (`ERROR`, `WARN`, `INFO`, `DEBUG`) and map it to `LogLevel`.
+- Show raw helper lines only at Verbose.
+- At Normal, write one short line per distinct error, e.g. "SSH tunnel X: the server refused a connection to host:port (timed out)", and collapse repeats.
+
+### 2.9 Screenshot and recording notes
+- `RenderTargetBitmap` mis-scales DataGrid content above 100% DPI (2.3). Live recordings avoid this: `promo/capture-window.ps1` uses `PrintWindow` with `PW_RENDERFULLCONTENT` and works on the Avalonia window even when covered.
+- `PrintWindow` sizes are wrong unless the capturing process is DPI-aware (`SetProcessDPIAware`); the script does that.
 
 ---
 
@@ -206,6 +260,32 @@ Ordered roughly by value. Numbers match the earlier suggestion list where applic
 - **Diagnostics bundle:** one button that zips logs, settings and the profile with secrets removed.
 - **README refresh** for Avalonia, Linux and the module layout.
 
+### Promo video and its tooling (`promo/`, not in git yet)
+The first cut, `promo/sluice-promo.mp4` (52.7 s, 1920×1080, 30 fps, silent, 14 scenes), mixes two sources:
+- **Live recordings** of the real app capturing real traffic: Connections, Tunnels with a passing check, Statistics, Log.
+- **Screenshot-mode images:** Rules, the dialogs, Settings, dark theme.
+
+Files:
+
+| File | Purpose |
+|---|---|
+| `promo/render.py` | Scene list + ffmpeg pipeline: text on the left, screenshot on the right with shadow and a slow push-in, title/end cards with the logo, crossfades. `python promo/render.py` renders everything; `python promo/render.py 05` re-renders one scene and re-joins. |
+| `promo/capture-window.ps1` | Records the running `Sluice.Desktop` window every N seconds via `PrintWindow`, without clicking or typing. |
+| `promo/blur_live.py` | Blurs the private parts of chosen live frames (tunnel server, SSH user, profile name; pixel boxes per frame) and crops the Windows title bar into `promo/shots/live/`. Blur in RGB with a downscale/upscale; `gblur`/`boxblur` on YUV left green fringes. |
+| `promo/PROMPT.md` | A step-by-step prompt for another model to make a video from screenshot mode only. |
+| `promo/shots/`, `promo/work/`, `promo/build*/`, `promo/live/` | Generated. **`promo/live/` holds unblurred recordings with the real server name and username: never commit it.** |
+
+To do:
+- **Commit the scripts** (`render.py`, `blur_live.py`, `capture-window.ps1`, `PROMPT.md`) under `scripts/promo/`, and add the generated folders and the `.mp4` to `.gitignore`.
+- **Promo traffic in screenshot mode (lost, to redo):** a variant of `Services/ScreenshotMode.cs` was built in a temporary worktree that has since been deleted. It sent real app traffic through the SOCKS listener:
+  - headless Edge with `--proxy-server=socks5://…` and its own `--user-data-dir`, routed by the "Browsers" rule;
+  - `curl --limit-rate … --socks5-hostname …` downloads under a new "Downloads" rule (`curl.exe` → Local tunnel);
+  - a blocked tracker request;
+  - a stand-in SOCKS5 tunnel on 6002 (`Sluice.Cli --socks 127.0.0.1:6002`) so the Local tunnel check passes.
+
+  Add it as an option, e.g. `--screenshot DIR --demo-traffic`, so promo screenshots are reproducible without a real profile.
+- Before publishing: add music. Then re-check scenes 2, 9 and 10: they show real app names and some sites a browser visited (blurred only where they named the tunnel server).
+
 ---
 
 ## 7. How to build, test and verify
@@ -226,6 +306,11 @@ Sluice.Desktop --screenshot <dir> [--theme dark]
 - **Visual check of the Linux UI:** WSL2 with WSLg (Windows 11) runs `dotnet Sluice.Desktop.dll` (net10.0 build) in a window. Avalonia needs libX11, libICE, libSM, fontconfig (present in Ubuntu 24.04).
 - **Linux capture live test:** see the header of `scripts/linux/capture-livetest.sh`. It needs root, nftables, python3, curl, wget, bc and the .NET 10 runtime. On WSL, turn off a Windows Sluice capture first, or pass an upstream DNS argument (see 2.1).
 - **Restores through a slow tunnel:** if Sluice itself is capturing `dotnet.exe` through a slow tunnel, NuGet's parallel downloads of large packages (SkiaSharp/HarfBuzz natives) time out and restart forever. Add a Direct rule for `dotnet.exe`, pause capture, or run `dotnet restore --disable-parallel`.
+- **Recording the real app** (for docs or promo):
+  - Run `powershell -ExecutionPolicy Bypass -File promo\capture-window.ps1 -Seconds 180 -Every 2` while someone clicks through the pages.
+  - Frames land in `promo/live/`. Identify pages by cropping the title area of each frame; contact sheets built with ffmpeg `tile` can drop frames and mislabel them.
+  - Blur private details with `promo/blur_live.py` before using any frame.
+- **Rendering the promo:** `python promo/render.py` (needs ffmpeg with drawtext/zoompan/xfade, e.g. the gyan.dev essentials build). Then extract one frame per scene with `ffmpeg -ss <t> -i promo/sluice-promo.mp4 -frames:v 1` and look at each.
 
 ## 8. Conventions
 

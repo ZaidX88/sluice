@@ -30,7 +30,7 @@ sing-box as a helper process for the encrypted protocols.
 | Avalonia desktop app `Sluice.Desktop` (Windows + Linux) | done, matches the WPF design; verified on Windows and on Linux under WSLg |
 | Old WPF app `Sluice.App` | still in the repo; to be removed (see 3.4) |
 | Platform split into modules | started: notifications + capture + process lookup go through `IPlatformServices`; WinDivert code still lives in Core (see 3.1) |
-| Promo video | first cut done: `promo/sluice-promo.mp4` (52.7 s, 1080p, silent); `promo/` is **not in git** yet (see 6) |
+| Promo video | first cut done: `promo/sluice-promo.mp4` (52.7 s, 1080p, silent; output is ignored by git); scripts in `scripts/promo/` (see 6) |
 
 ### Projects
 
@@ -149,7 +149,7 @@ Either "pause" did not stop interception in that build, or something else kept a
 - At Normal, write one short line per distinct error, e.g. "SSH tunnel X: the server refused a connection to host:port (timed out)", and collapse repeats.
 
 ### 2.9 Screenshot and recording notes
-- `RenderTargetBitmap` mis-scales DataGrid content above 100% DPI (2.3). Live recordings avoid this: `promo/capture-window.ps1` uses `PrintWindow` with `PW_RENDERFULLCONTENT` and works on the Avalonia window even when covered.
+- `RenderTargetBitmap` mis-scales DataGrid content above 100% DPI (2.3). Live recordings avoid this: `scripts/promo/capture-window.ps1` uses `PrintWindow` with `PW_RENDERFULLCONTENT` and works on the Avalonia window even when covered.
 - `PrintWindow` sizes are wrong unless the capturing process is DPI-aware (`SetProcessDPIAware`); the script does that.
 
 ---
@@ -260,7 +260,7 @@ Ordered roughly by value. Numbers match the earlier suggestion list where applic
 - **Diagnostics bundle:** one button that zips logs, settings and the profile with secrets removed.
 - **README refresh** for Avalonia, Linux and the module layout.
 
-### Promo video and its tooling (`promo/`, not in git yet)
+### Promo video and its tooling (scripts in `scripts/promo/`, output in `promo/`)
 The first cut, `promo/sluice-promo.mp4` (52.7 s, 1920×1080, 30 fps, silent, 14 scenes), mixes two sources:
 - **Live recordings** of the real app capturing real traffic: Connections, Tunnels with a passing check, Statistics, Log.
 - **Screenshot-mode images:** Rules, the dialogs, Settings, dark theme.
@@ -269,14 +269,13 @@ Files:
 
 | File | Purpose |
 |---|---|
-| `promo/render.py` | Scene list + ffmpeg pipeline: text on the left, screenshot on the right with shadow and a slow push-in, title/end cards with the logo, crossfades. `python promo/render.py` renders everything; `python promo/render.py 05` re-renders one scene and re-joins. |
-| `promo/capture-window.ps1` | Records the running `Sluice.Desktop` window every N seconds via `PrintWindow`, without clicking or typing. |
-| `promo/blur_live.py` | Blurs the private parts of chosen live frames (tunnel server, SSH user, profile name; pixel boxes per frame) and crops the Windows title bar into `promo/shots/live/`. Blur in RGB with a downscale/upscale; `gblur`/`boxblur` on YUV left green fringes. |
-| `promo/PROMPT.md` | A step-by-step prompt for another model to make a video from screenshot mode only. |
-| `promo/shots/`, `promo/work/`, `promo/build*/`, `promo/live/` | Generated. **`promo/live/` holds unblurred recordings with the real server name and username: never commit it.** |
+| `scripts/promo/render.py` | Scene list + ffmpeg pipeline: text on the left, screenshot on the right with shadow and a slow push-in, title/end cards with the logo, crossfades. `python scripts/promo/render.py` renders everything; `python scripts/promo/render.py 05` re-renders one scene and re-joins. |
+| `scripts/promo/capture-window.ps1` | Records the running `Sluice.Desktop` window every N seconds via `PrintWindow`, without clicking or typing. |
+| `scripts/promo/blur_live.py` | Blurs the private parts of chosen live frames (tunnel server, SSH user, profile name; pixel boxes per frame) and crops the Windows title bar into `promo/shots/live/`. Blur in RGB with a downscale/upscale; `gblur`/`boxblur` on YUV left green fringes. |
+| `scripts/promo/PROMPT.md` | A step-by-step prompt for another model to make a video from screenshot mode only. |
+| `promo/` | All output (ignored by git): `shots/`, `work/`, `build*/`, `assets/logo.png` (made from the app icon by `render.py`), the `.mp4`, and `live/`. **`promo/live/` holds unblurred recordings with the real server name and username: never share it.** |
 
 To do:
-- **Commit the scripts** (`render.py`, `blur_live.py`, `capture-window.ps1`, `PROMPT.md`) under `scripts/promo/`, and add the generated folders and the `.mp4` to `.gitignore`.
 - **Promo traffic in screenshot mode (lost, to redo):** a variant of `Services/ScreenshotMode.cs` was built in a temporary worktree that has since been deleted. It sent real app traffic through the SOCKS listener:
   - headless Edge with `--proxy-server=socks5://…` and its own `--user-data-dir`, routed by the "Browsers" rule;
   - `curl --limit-rate … --socks5-hostname …` downloads under a new "Downloads" rule (`curl.exe` → Local tunnel);
@@ -307,10 +306,10 @@ Sluice.Desktop --screenshot <dir> [--theme dark]
 - **Linux capture live test:** see the header of `scripts/linux/capture-livetest.sh`. It needs root, nftables, python3, curl, wget, bc and the .NET 10 runtime. On WSL, turn off a Windows Sluice capture first, or pass an upstream DNS argument (see 2.1).
 - **Restores through a slow tunnel:** if Sluice itself is capturing `dotnet.exe` through a slow tunnel, NuGet's parallel downloads of large packages (SkiaSharp/HarfBuzz natives) time out and restart forever. Add a Direct rule for `dotnet.exe`, pause capture, or run `dotnet restore --disable-parallel`.
 - **Recording the real app** (for docs or promo):
-  - Run `powershell -ExecutionPolicy Bypass -File promo\capture-window.ps1 -Seconds 180 -Every 2` while someone clicks through the pages.
+  - Run `powershell -ExecutionPolicy Bypass -File scripts\promo\capture-window.ps1 -Seconds 180 -Every 2` while someone clicks through the pages.
   - Frames land in `promo/live/`. Identify pages by cropping the title area of each frame; contact sheets built with ffmpeg `tile` can drop frames and mislabel them.
-  - Blur private details with `promo/blur_live.py` before using any frame.
-- **Rendering the promo:** `python promo/render.py` (needs ffmpeg with drawtext/zoompan/xfade, e.g. the gyan.dev essentials build). Then extract one frame per scene with `ffmpeg -ss <t> -i promo/sluice-promo.mp4 -frames:v 1` and look at each.
+  - Blur private details with `scripts/promo/blur_live.py` before using any frame.
+- **Rendering the promo:** `python scripts/promo/render.py` (needs ffmpeg with drawtext/zoompan/xfade, e.g. the gyan.dev essentials build). Then extract one frame per scene with `ffmpeg -ss <t> -i promo/sluice-promo.mp4 -frames:v 1` and look at each.
 
 ## 8. Conventions
 

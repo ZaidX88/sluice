@@ -491,3 +491,6 @@ dist/
 # Release packages (large; shared outside git). INSTALL.md is tracked.
 release-linux/*.tar.gz
 release-linux/*.tar.gz.sha256
+
+# Promo video work: renders, screenshots and UNBLURRED live recordings (the scripts are in scripts/promo/)
+/promo/

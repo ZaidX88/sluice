@@ -484,8 +484,6 @@ $RECYCLE.BIN/
 # Vendored WinDivert runtime (must be committed)
 !lib/WinDivert/x64/
 
-# sing-box helper binary: fetched by scripts/get-sing-box.ps1, not committed (keep its licence/source notes)
-lib/sing-box/sing-box.exe
 # Built packages (scripts/package-linux.sh)
 dist/
 # Release packages (large; shared outside git). INSTALL.md is tracked.
@@ -494,3 +492,10 @@ release-linux/*.tar.gz.sha256
 
 # Promo video work: renders, screenshots and UNBLURRED live recordings (the scripts are in scripts/promo/)
 /promo/
+
+# Third-party binaries fetched by the build (build/Dependencies.targets)
+.deps/
+lib/
+# Local material that must never be committed
+promo/
+release-linux/

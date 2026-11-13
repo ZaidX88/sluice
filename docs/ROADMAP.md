@@ -186,17 +186,21 @@ The design that fits the current capture:
 **Done when:** `UdpMode.Tunnel` carries a QUIC request (`curl --http3`) and a DNS query through a SOCKS5 tunnel in the live test.
 
 ### 3.3 Linux packaging and integration
-**Done (2026-11-13):** a standalone x64 package, `sluice-linux-x64.tar.gz` (~73 MB, no .NET needed).
+**Done (2026-11-13):** the x64 package `sluice-linux-x64.tar.gz` (~13 MB) holds only the app (framework-dependent);
+`install.sh` installs what is missing.
 - **Build:**
-  1. `dotnet publish` `Sluice.Desktop -f net10.0` and `Sluice.Cli` with `-r linux-x64 --self-contained` into one folder.
-  2. `scripts/get-sing-box.sh` fetches sing-box (SHA-256 checked).
-  3. `scripts/package-linux.sh <publish dir> <sing-box tar.gz> <out dir>`, run on Linux/WSL, assembles the package.
-- **Contents:** `app/` (the app, `Sluice.Cli`, `sing-box`), `install.sh`, `uninstall.sh`, `sluice.desktop`, `sluice.png`, `README.txt`.
-- **`install.sh`:**
-  - installs to `/opt/sluice` (root-owned, nothing group/other-writable);
-  - adds the `sluice` / `sluice-cli` links, menu entry and icon;
-  - runs `setcap cap_net_admin,cap_setgid,cap_sys_ptrace,cap_dac_read_search+ep` on both binaries.
-- **Verified** in WSL Ubuntu 24.04: fresh install, UI renders with no system .NET, capture works as a **normal user** (no root).
+  1. `dotnet publish` `Sluice.Desktop -f net10.0` and `Sluice.Cli` with `-r linux-x64 --self-contained false` into one folder.
+  2. `scripts/package-linux.sh <publish dir> <out dir>`, run on Linux/WSL, assembles the package.
+- **Contents:** `app/`, `install.sh`, `uninstall.sh`, `sluice.desktop`, `sluice.png`, `README.txt`.
+- **`install.sh`** (`--check` only reports):
+  - installs missing packages with apt/dnf/yum/pacman/zypper: .NET 10 runtime, nftables, libcap, X11/ICE/SM, fontconfig, notify-send;
+  - falls back to Microsoft's `dotnet-install.sh` into `/usr/share/dotnet` where there is no .NET 10 package;
+  - writes `/etc/dotnet/install_location_x64` when .NET is somewhere non-default, because the setcap'd apphost ignores `DOTNET_ROOT`;
+  - downloads sing-box 1.14.4 from GitHub (SHA-256 checked), or uses the archive placed next to it;
+  - installs to `/opt/sluice` (root-owned, nothing group/other-writable) and runs `setcap` on both binaries.
+- **Verified** in WSL Ubuntu 24.04: no internet (package and sing-box failures handled), local sing-box archive, then
+  capture as a normal user, all 8 protocols end to end, and the UI with no `dotnet` on PATH.
+  The online paths (apt install, the Microsoft installer, the GitHub download) could not be run here.
 - **Two setcap pitfalls, now handled in code:**
   - File capabilities are not inherited by `nft`. `NftRules.Run` raises `CAP_NET_ADMIN` as an ambient capability first (`Libc.RaiseAmbient`).
   - The kernel strips ambient capabilities when a program starts with effective group ≠ real group, so `LinuxCapture` sets **both** to Sluice's network group (`setresgid(gid, gid, -1)`).

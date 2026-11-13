@@ -488,3 +488,6 @@ $RECYCLE.BIN/
 lib/sing-box/sing-box.exe
 # Built packages (scripts/package-linux.sh)
 dist/
+# Release packages (large; shared outside git). INSTALL.md is tracked.
+release-linux/*.tar.gz
+release-linux/*.tar.gz.sha256

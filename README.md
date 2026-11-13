@@ -1,104 +1,70 @@
 # Sluice
 
-A rule-based tunnelling client for Windows. Sluice decides, per application, host and port, whether
-traffic goes direct, gets blocked, or flows through a tunnel (SSH, VLESS, VMess, Trojan, Shadowsocks,
-Hysteria2, TUIC, SOCKS or HTTP) or a chain of tunnels.
+A rule-based tunnelling client for **Windows and Linux**. Sluice captures other applications' connections and decides,
+per application, host and port, whether each one goes **direct**, gets **blocked**, or flows through a **tunnel** (SSH,
+SOCKS, HTTP(S), VLESS, VMess, Trojan, Shadowsocks, Hysteria2, TUIC) or a chain of tunnels. Apps need no proxy settings.
 
-Built with C# / .NET 10: WinDivert for interception, WPF for the app. Profiles are saved as
-`.sluice` (JSON); Proxifier 4 `.ppx` files can be imported and exported. See [ANALYSIS.md](ANALYSIS.md) for the reference
-analysis and the build plan.
+- **Capture without app support:** WinDivert on Windows, nftables + NFQUEUE on Linux. Apps can also use Sluice's local
+  SOCKS5 server instead.
+- **Hostnames reach the tunnel:** a built-in fake-DNS server keeps names intact, so rules like `*.example.com` work and
+  DNS doesn't leak.
+- **Every common tunnel type:** SSH (direct, HTTP-payload and TLS/SNI modes), SOCKS4/5, HTTP(S), and through the sing-box
+  helper Shadowsocks (incl. 2022), VMess, VLESS (REALITY/Vision), Trojan, Hysteria2 and TUIC over TCP, WebSocket, gRPC or
+  HTTP transports.
+- **Share links and subscriptions** (`vless://`, `vmess://`, `ss://`, `trojan://`, `hysteria2://`, `tuic://`, `ssh://`…).
+- **Tunnel health:** checks, automatic reconnect, idle stop, notifications.
+- **Proxifier compatible:** imports and exports Proxifier 4 `.ppx` profiles; native profiles are `.sluice` (JSON).
+- **Desktop app** (light/dark, tray) and a **command line** for headless machines.
 
-## Status
+Status per platform, including what isn't done yet: [docs/STATUS.md](docs/STATUS.md).
 
-| Step | | |
-|---|---|---|
-| 1 | Profiles (`.ppx`), rule engine, SOCKS4/4a/5 and HTTPS proxy clients, chains | done |
-| 2 | Engine and relay, connection tracking, local SOCKS5 listener, process detection, CLI | done |
-| 3 | Transparent TCP interception with WinDivert (`--intercept`, needs Administrator) | done |
-| 4 | DNS through proxy: fake IPs (198.18.0.0/15), hostname rules for intercepted traffic, loop prevention | done |
-| 5 | Profile password encryption, byte-compatible with Proxifier (disabled / basic / account / master) | done |
-| 6 | Proxy checker (3 tests), statistics per app/target/rule, daily file log, clean shutdown | done |
-| 7 | WPF app: Fluent light/dark UI, connections, statistics, log, tunnels (+checker), rules, settings, tray | done |
-| 8.1 | Proxy → **Tunnel** model, Sluice `.sluice` profile format, `.ppx` import/export | done |
-| 8.2 | SSH tunnels: password/key login, host-key pinning, modes direct / payload / SSL / SSL+payload / payload+SSL; carried by sing-box's SSH client (per-connection flow control), SSH.NET as fallback | done |
-| 8.3 | sing-box helper: Shadowsocks (incl. 2022), VMess, VLESS (+REALITY/Vision), Trojan, Hysteria2, TUIC; WS/gRPC/HTTP transports | done |
-| 8.4 | Share links (vless / vmess / trojan / ss / hysteria2 / tuic / ssh / socks / http): import, copy link, subscriptions with stable tunnel ids | done |
-| 8.5 | UDP through tunnels (SOCKS5 UDP ASSOCIATE; all sing-box protocols): QUIC, games and calls follow the rules; modes tunnel / block QUIC / block all / bypass | done |
+## Getting started
 
-![Rules](docs/screenshots/rules-light.png)
-![Tunnels, dark theme](docs/screenshots/proxies-dark.png)
+- **Use it:** [docs/QUICKSTART.md](docs/QUICKSTART.md)
+- **Linux:** install a release with [docs/linux/INSTALL.md](docs/linux/INSTALL.md) (`sudo ./install.sh` adds .NET,
+  nftables and the rest); build from source with [docs/linux/BUILD.md](docs/linux/BUILD.md).
+- **Windows:** build and run from source with [docs/windows/BUILD.md](docs/windows/BUILD.md) (a release package is planned).
+
+## Building
+
+Needs the [.NET 10 SDK](https://dotnet.microsoft.com/download).
+
+```bash
+git clone <this repository> && cd sluice
+dotnet build src/Sluice.Desktop -f net10.0-windows10.0.19041.0   # Windows app
+dotnet build src/Sluice.Desktop -f net10.0                       # Linux app
+dotnet test  tests/Sluice.Tests
+```
+
+The first build downloads the two runtime helpers, pinned and checked against their SHA-256: **WinDivert 2.2.2-A**
+(Windows capture driver) and **sing-box 1.14.4** (encrypted tunnels). Details and the offline switch are in
+`build/Dependencies.targets`.
 
 ## Layout
 
 ```
-src/Sluice.Core    engine: profiles, rules, tunnels, relay, listeners (no UI)
-src/Sluice.App     WPF desktop app (Sluice.exe)
-src/Sluice.Cli     console host
-tests/Sluice.Tests xUnit tests with in-process SOCKS/HTTP test servers
+src/Sluice.Core              engine: rules, tunnels, relay, DNS, profiles (shared, no UI)
+src/Sluice.Platform.Windows  Windows-specific code (notifications, WinDivert capture)
+src/Sluice.Platform.Linux    Linux-specific code (nftables/NFQUEUE capture, /proc lookups, notifications)
+src/Sluice.Desktop           the desktop app (Avalonia), Windows and Linux
+src/Sluice.Cli               command line
+src/Sluice.App               the old WPF app (being retired)
+tests/Sluice.Tests           xUnit tests, including live tests against local sing-box servers
+build/                       build-time dependency fetching
+packaging/, scripts/         Linux release package and installer, test helpers
+docs/                        user guides, status, plans
+claude/                      notes for continuing the work with an AI agent
 ```
 
-## Try it
+## Contributing and continuing the work
 
-```bash
-dotnet test
-```
+[CONTINUING.md](CONTINUING.md) explains how to pick the project up, by hand or with an AI coding agent. The plan of record
+is in [docs/REQUIRED.md](docs/REQUIRED.md), [docs/FIXES.md](docs/FIXES.md) and [docs/FEATURES.md](docs/FEATURES.md).
 
-The desktop app opens your last profile and listens for SOCKS5 on 127.0.0.1:1080. Turn on **Capture traffic** to
-route every app (it asks to restart as administrator when needed):
+## Third-party software
 
-```bash
-dotnet run --project src/Sluice.App
-```
+Not stored in this repository; downloaded by the build or the Linux installer:
+- [WinDivert](https://github.com/basil00/WinDivert), LGPL-3.0 / GPL-2.0;
+- [sing-box](https://github.com/SagerNet/sing-box), GPL-3.0, which runs as a separate helper process.
 
-Render every page to PNG (demo profile, no admin rights, nothing saved):
-
-```bash
-dotnet run --project src/Sluice.App -- --screenshot shots --theme dark
-```
-
-```bash
-dotnet run --project src/Sluice.Cli -- "%APPDATA%\Proxifier4\Profiles\Default.ppx" --socks 127.0.0.1:1080 --log verbose
-```
-
-```bash
-curl --socks5-hostname 127.0.0.1:1080 https://example.com/
-```
-
-Transparent mode captures every application's TCP traffic, with no settings needed in the apps.
-Run it from an Administrator terminal, and quit Proxifier or any other redirector first:
-
-```bash
-dotnet run --project src/Sluice.Cli -- my-profile.sluice --intercept --log verbose
-```
-
-Check tunnels like Proxifier's Proxy Checker: test a whole profile or a single tunnel URL:
-
-```bash
-dotnet run --project src/Sluice.Cli -- check my-profile.sluice
-```
-
-```bash
-dotnet run --project src/Sluice.Cli -- check socks5://user:pass@proxy.example:1080 --target example.com:80
-```
-
-Any share link works too, and links or subscriptions can be added to a profile:
-
-```bash
-dotnet run --project src/Sluice.Cli -- check "trojan://password@server.example:443#My server"
-```
-
-```bash
-dotnet run --project src/Sluice.Cli -- import my-profile.sluice --subscription https://provider.example/sub/TOKEN
-```
-
-```bash
-dotnet run --project src/Sluice.Cli -- update my-profile.sluice
-```
-
-Encrypted tunnels other than SSH use [sing-box](https://github.com/SagerNet/sing-box) (GPL-3.0) as a helper process. It is not committed; fetch the pinned, SHA-256-checked build with:
-
-```bash
-powershell -ExecutionPolicy Bypass -File scripts/get-sing-box.ps1
-```
-
-WinDivert 2.2.2 (x64) is vendored in `lib/WinDivert` (LGPLv3 / GPLv2) and copied next to the build output.
+NuGet packages (Avalonia, SSH.NET, …) come under their own licences.

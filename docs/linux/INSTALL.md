@@ -7,10 +7,11 @@ The package holds only Sluice itself (about 13 MB). The installer adds whatever 
 
 | File | What it is |
 |---|---|
-| `sluice-linux-x64.tar.gz` | the package |
+| `sluice-linux-x64.tar.gz` | the release package |
 | `sluice-linux-x64.tar.gz.sha256` | its checksum, to check the download |
-| `INSTALL.md` | this guide |
-| `QUICKSTART.md` | the short version: install, add a tunnel, add rules, start |
+
+The short version (install, add a tunnel, add rules, start) is [../QUICKSTART.md](../QUICKSTART.md); building the
+package yourself is in [BUILD.md](BUILD.md).
 
 ---
 

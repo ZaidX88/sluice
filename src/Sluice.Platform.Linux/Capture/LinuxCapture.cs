@@ -41,7 +41,7 @@ public sealed class LinuxCapture : ITrafficCapture
     private NfQueue? _queue;
     private Thread? _thread;
     private Task? _sweeper;
-    private uint? _previousGid;
+    private (uint Real, uint Effective)? _previousGid;
     private bool _rulesApplied, _udpTunnelWarned;
     private (Profile Profile, DnsPolicy Policy)? _policy;
     private long _redirected, _passed, _udpDropped;
@@ -80,8 +80,10 @@ public sealed class LinuxCapture : ITrafficCapture
 
         // From here on, sockets Sluice (and helpers it starts) creates carry this group and are left alone by the rules.
         var gid = SluiceGroup.Pick();
-        var before = Libc.getegid();
-        if (Libc.setresgid(Libc.Unchanged, gid, Libc.Unchanged) != 0)
+        // Real and effective both: if they differed, the kernel would treat every program Sluice starts as setgid
+        // and strip the capability nft needs under setcap. The saved group keeps the original for switching back.
+        var before = (Libc.getgid(), Libc.getegid());
+        if (Libc.setresgid(gid, gid, Libc.Unchanged) != 0)
             throw new InvalidOperationException($"Could not switch to Sluice's network group: {Libc.Error(Marshal.GetLastPInvokeError())}");
         _previousGid = before;
 
@@ -306,7 +308,7 @@ public sealed class LinuxCapture : ITrafficCapture
         _thread?.Join(2000);
         _queue?.Dispose();
         _queue = null;
-        if (_previousGid is { } g) Libc.setresgid(Libc.Unchanged, g, Libc.Unchanged);
+        if (_previousGid is { } g) Libc.setresgid(g.Real, g.Effective, Libc.Unchanged);
         _previousGid = null;
     }
 

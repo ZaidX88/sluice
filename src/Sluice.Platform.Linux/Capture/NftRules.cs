@@ -63,6 +63,8 @@ internal static class NftRules
         {
             UseShellExecute = false, RedirectStandardInput = true, RedirectStandardError = true, RedirectStandardOutput = true,
         };
+        // Under setcap (not root) nft would start without CAP_NET_ADMIN: hand it on explicitly.
+        Native.Libc.RaiseAmbient(Native.Libc.CAP_NET_ADMIN, out var capProblem);
         using var p = Process.Start(psi) ?? throw new InvalidOperationException("Could not run nft.");
         p.StandardInput.Write(script);
         p.StandardInput.Close();
@@ -70,6 +72,8 @@ internal static class NftRules
         p.StandardOutput.ReadToEnd();
         if (!p.WaitForExit(10_000)) { try { p.Kill(); } catch { } throw new InvalidOperationException("nft did not finish."); }
         if (p.ExitCode != 0)
-            throw new InvalidOperationException($"nft failed: {err.Trim()}" + (err.Contains("Operation not permitted") ? " (needs root or CAP_NET_ADMIN)" : ""));
+            throw new InvalidOperationException($"nft failed: {err.Trim()}" + (err.Contains("Operation not permitted")
+                ? capProblem is null ? " (needs root or CAP_NET_ADMIN)" : $" (could not pass CAP_NET_ADMIN to nft: {capProblem})"
+                : ""));
     }
 }

@@ -55,7 +55,7 @@ public sealed class LinuxPlatform : IPlatformServices
 
     internal const string RightsHint =
         "Capturing traffic needs root, or these capabilities on the Sluice binary: " +
-        "sudo setcap cap_net_admin,cap_setgid,cap_sys_ptrace,cap_dac_read_search+ep Sluice.Desktop";
+        "sudo setcap cap_net_admin,cap_setgid,cap_sys_ptrace,cap_dac_read_search+ep Sluice.Desktop (the Linux package's install.sh does this).";
 
     private const int CapSetGid = 6, CapNetAdmin = 12;
 

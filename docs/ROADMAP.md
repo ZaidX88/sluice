@@ -132,14 +132,28 @@ The design that fits the current capture:
 **Done when:** `UdpMode.Tunnel` carries a QUIC request (`curl --http3`) and a DNS query through a SOCKS5 tunnel in the live test.
 
 ### 3.3 Linux packaging and integration
-- **sing-box on Linux.** `SingBoxSession` looks for `sing-box.exe`; use `sing-box` on Linux. Add `scripts/get-sing-box.sh` (pinned version 1.14.4 linux-amd64/arm64, SHA-256 checked) and copy it to the output in the Linux module's csproj.
-- **Desktop entry:** `.desktop` file, icon in `hicolor`, optional autostart file, which is the Linux counterpart of `StartMenuShortcut`. Put it in `LinuxPlatform.OnAppStart` or the installer.
-- **Settings and profiles:** `AppSettings` uses `SpecialFolder.ApplicationData`, which is `~/.config/Sluice` on Linux. That works; check that the profiles folder and file pickers behave.
-- **Packages:**
-  - A self-contained `dotnet publish -r linux-x64` and `linux-arm64`.
-  - A `.deb` and/or AppImage whose post-install runs `setcap` on the binary.
-  - Not Flatpak or Snap: a sandbox can't use nftables.
-- **"Restart with rights" on Linux:** currently `CanRestartElevated = false` and the banner shows the setcap command. Consider a pkexec-based "Grant capture rights" button that runs the setcap once.
+**Done (2026-11-13):** a standalone x64 package, `sluice-linux-x64.tar.gz` (~73 MB, no .NET needed).
+- **Build:**
+  1. `dotnet publish` `Sluice.Desktop -f net10.0` and `Sluice.Cli` with `-r linux-x64 --self-contained` into one folder.
+  2. `scripts/get-sing-box.sh` fetches sing-box (SHA-256 checked).
+  3. `scripts/package-linux.sh <publish dir> <sing-box tar.gz> <out dir>`, run on Linux/WSL, assembles the package.
+- **Contents:** `app/` (the app, `Sluice.Cli`, `sing-box`), `install.sh`, `uninstall.sh`, `sluice.desktop`, `sluice.png`, `README.txt`.
+- **`install.sh`:**
+  - installs to `/opt/sluice` (root-owned, nothing group/other-writable);
+  - adds the `sluice` / `sluice-cli` links, menu entry and icon;
+  - runs `setcap cap_net_admin,cap_setgid,cap_sys_ptrace,cap_dac_read_search+ep` on both binaries.
+- **Verified** in WSL Ubuntu 24.04: fresh install, UI renders with no system .NET, capture works as a **normal user** (no root).
+- **Two setcap pitfalls, now handled in code:**
+  - File capabilities are not inherited by `nft`. `NftRules.Run` raises `CAP_NET_ADMIN` as an ambient capability first (`Libc.RaiseAmbient`).
+  - The kernel strips ambient capabilities when a program starts with effective group ≠ real group, so `LinuxCapture` sets **both** to Sluice's network group (`setresgid(gid, gid, -1)`).
+- `TunnelBackends.SingBoxPath` is `sing-box` on Linux and `sing-box.exe` on Windows.
+
+Still to do:
+- **ARM64 package** (`-r linux-arm64` + sing-box linux-arm64).
+- **`.deb` / AppImage** wrapping the same layout (post-install = `install.sh` steps). Not Flatpak or Snap: a sandbox can't use nftables.
+- **Package downloads behind a slow tunnel.** NuGet restores of the runtime pack may stall. The workaround used: download the `.nupkg` with resumable `curl -C -` into a folder and pass `-p:RestoreAdditionalProjectSources=<folder>`.
+- **"Grant capture rights" button** (pkexec + setcap) for people who run the app without the installer; `CanRestartElevated` is still false.
+- **Autostart entry** (`~/.config/autostart`) as a setting.
 
 ### 3.4 Retire the WPF app
 Before deleting `src/Sluice.App`, check these Avalonia features by hand on Windows:

@@ -167,8 +167,8 @@ public sealed class TunnelBackends : IAsyncDisposable
     /// <summary>Resolver for tunnel server names (must bypass Sluice's fake DNS answers).</summary>
     public TunnelTransport.Resolver? Resolver { get; set; }
 
-    /// <summary>Path of sing-box.exe (default: next to the running program).</summary>
-    public string SingBoxPath { get; set; } = Path.Combine(AppContext.BaseDirectory, "sing-box.exe");
+    /// <summary>Path of the sing-box helper (default: next to the running program; "sing-box.exe" on Windows, "sing-box" elsewhere).</summary>
+    public string SingBoxPath { get; set; } = Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "sing-box.exe" : "sing-box");
 
     /// <summary>Stop a session nothing has used for this long (Zero = never).</summary>
     public TimeSpan IdleTimeout { get; set; } = TimeSpan.FromMinutes(10);
@@ -540,7 +540,7 @@ public sealed class TunnelBackends : IAsyncDisposable
         }
         else if (choice == "auto")
         {
-            Log($"SSH {t}: sing-box.exe not found; using the built-in SSH client (one slow connection can slow the others)");
+            Log($"SSH {t}: sing-box not found; using the built-in SSH client (one slow connection can slow the others)");
         }
         return await StartAsync(new SshSession(t, fp, Resolver, Log, (tun, fingerprint) => HostKeyLearned?.Invoke(tun, fingerprint, null)), ct);
     }

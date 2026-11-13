@@ -1,0 +1,87 @@
+<Project>
+  <!--
+    Third-party binaries Sluice needs at run time, fetched on the first build like NuGet packages (they are not in git):
+
+      WinDivert 2.2.2-A  (Windows capture driver; LGPL-3.0 / GPL-2.0)  https://github.com/basil00/WinDivert
+      sing-box 1.14.4    (helper for encrypted tunnels; GPL-3.0)        https://github.com/SagerNet/sing-box
+
+    Each archive is pinned to an exact release and checked against its SHA-256 before use, then cached in .deps/ at the
+    repository root (git-ignored), so later builds work offline. The files are copied next to every app that references
+    Sluice.Core.
+
+    Which OS's binaries: the target runtime (-r win-x64 / linux-x64), otherwise the OS you build on.
+    Turn fetching off with  -p:SluiceFetchDependencies=false  (offline builds, or the Linux release package, whose
+    install.sh downloads sing-box itself). Without the binaries Sluice still builds; capture on Windows and the encrypted
+    tunnels then report that their helper is missing.
+  -->
+  <PropertyGroup>
+    <SluiceFetchDependencies Condition="'$(SluiceFetchDependencies)' == ''">true</SluiceFetchDependencies>
+    <SluiceDepsDir>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\.deps'))\</SluiceDepsDir>
+
+    <SluiceDepsOS Condition="'$(RuntimeIdentifier)' != '' and $(RuntimeIdentifier.StartsWith('linux'))">linux</SluiceDepsOS>
+    <SluiceDepsOS Condition="'$(SluiceDepsOS)' == '' and '$(RuntimeIdentifier)' != '' and $(RuntimeIdentifier.StartsWith('win'))">windows</SluiceDepsOS>
+    <SluiceDepsOS Condition="'$(SluiceDepsOS)' == '' and $([MSBuild]::IsOSPlatform('Linux'))">linux</SluiceDepsOS>
+    <SluiceDepsOS Condition="'$(SluiceDepsOS)' == ''">windows</SluiceDepsOS>
+
+    <WinDivertName>WinDivert-2.2.2-A</WinDivertName>
+    <WinDivertUrl>https://github.com/basil00/WinDivert/releases/download/v2.2.2/$(WinDivertName).zip</WinDivertUrl>
+    <WinDivertSha256>63cb41763bb4b20f600b6de04e991a9c2be73279e317d4d82f237b150c5f3f15</WinDivertSha256>
+
+    <SingBoxVersion>1.14.4</SingBoxVersion>
+    <SingBoxName Condition="'$(SluiceDepsOS)' == 'windows'">sing-box-$(SingBoxVersion)-windows-amd64</SingBoxName>
+    <SingBoxName Condition="'$(SluiceDepsOS)' == 'linux'">sing-box-$(SingBoxVersion)-linux-amd64</SingBoxName>
+    <SingBoxArchive Condition="'$(SluiceDepsOS)' == 'windows'">$(SingBoxName).zip</SingBoxArchive>
+    <SingBoxArchive Condition="'$(SluiceDepsOS)' == 'linux'">$(SingBoxName).tar.gz</SingBoxArchive>
+    <SingBoxSha256 Condition="'$(SluiceDepsOS)' == 'windows'">99185d75d314a07dbba4a130c8ad986cbeb629a07927975636b341ca61f991df</SingBoxSha256>
+    <SingBoxSha256 Condition="'$(SluiceDepsOS)' == 'linux'">699a1b510aa4396b2176d32d1181920399ebf1e267835da6f3b598d0f7c24968</SingBoxSha256>
+    <SingBoxUrl>https://github.com/SagerNet/sing-box/releases/download/v$(SingBoxVersion)/$(SingBoxArchive)</SingBoxUrl>
+    <SingBoxExe Condition="'$(SluiceDepsOS)' == 'windows'">sing-box.exe</SingBoxExe>
+    <SingBoxExe Condition="'$(SluiceDepsOS)' == 'linux'">sing-box</SingBoxExe>
+  </PropertyGroup>
+
+  <!-- Copied to the output (paths exist once SluiceFetchDependencies has run, before the copy step). -->
+  <ItemGroup Condition="'$(SluiceFetchDependencies)' == 'true'">
+    <None Include="$(SluiceDepsDir)$(SingBoxName)\$(SingBoxExe)" Link="$(SingBoxExe)" CopyToOutputDirectory="PreserveNewest" Visible="false" />
+    <None Include="$(SluiceDepsDir)$(SingBoxName)\LICENSE" Link="sing-box-LICENSE.txt" CopyToOutputDirectory="PreserveNewest" Visible="false" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(SluiceFetchDependencies)' == 'true' and '$(SluiceDepsOS)' == 'windows'">
+    <None Include="$(SluiceDepsDir)$(WinDivertName)\x64\WinDivert.dll" Link="WinDivert.dll" CopyToOutputDirectory="PreserveNewest" Visible="false" />
+    <None Include="$(SluiceDepsDir)$(WinDivertName)\x64\WinDivert64.sys" Link="WinDivert64.sys" CopyToOutputDirectory="PreserveNewest" Visible="false" />
+    <None Include="$(SluiceDepsDir)$(WinDivertName)\LICENSE" Link="WinDivert-LICENSE.txt" CopyToOutputDirectory="PreserveNewest" Visible="false" />
+  </ItemGroup>
+
+  <Target Name="SluiceFetchDependencies" BeforeTargets="AssignTargetPaths;GetCopyToOutputDirectoryItems"
+          Condition="'$(SluiceFetchDependencies)' == 'true'">
+    <!-- sing-box -->
+    <CallTarget Targets="_SluiceFetchSingBox" Condition="!Exists('$(SluiceDepsDir)$(SingBoxName)\$(SingBoxExe)')" />
+    <!-- WinDivert (Windows only) -->
+    <CallTarget Targets="_SluiceFetchWinDivert" Condition="'$(SluiceDepsOS)' == 'windows' and !Exists('$(SluiceDepsDir)$(WinDivertName)\x64\WinDivert.dll')" />
+  </Target>
+
+  <Target Name="_SluiceFetchSingBox">
+    <Message Importance="high" Text="Sluice: downloading $(SingBoxArchive) (first build only) ..." />
+    <DownloadFile SourceUrl="$(SingBoxUrl)" DestinationFolder="$(SluiceDepsDir)" DestinationFileName="$(SingBoxArchive)" Retries="3" RetryDelayMilliseconds="2000" />
+    <GetFileHash Files="$(SluiceDepsDir)$(SingBoxArchive)" Algorithm="SHA256">
+      <Output TaskParameter="Hash" PropertyName="_SingBoxHash" />
+    </GetFileHash>
+    <Delete Files="$(SluiceDepsDir)$(SingBoxArchive)" Condition="'$(_SingBoxHash.ToLowerInvariant())' != '$(SingBoxSha256)'" />
+    <Error Condition="'$(_SingBoxHash.ToLowerInvariant())' != '$(SingBoxSha256)'"
+           Text="Sluice: $(SingBoxArchive) failed its SHA-256 check (got $(_SingBoxHash)); the download was incomplete or altered. Build again to retry, or build with -p:SluiceFetchDependencies=false." />
+    <Unzip Condition="'$(SluiceDepsOS)' == 'windows'" SourceFiles="$(SluiceDepsDir)$(SingBoxArchive)" DestinationFolder="$(SluiceDepsDir)" />
+    <Exec Condition="'$(SluiceDepsOS)' == 'linux'" Command="tar -xzf &quot;$(SingBoxArchive)&quot;" WorkingDirectory="$(SluiceDepsDir)" />
+    <Delete Files="$(SluiceDepsDir)$(SingBoxArchive)" />
+  </Target>
+
+  <Target Name="_SluiceFetchWinDivert">
+    <Message Importance="high" Text="Sluice: downloading $(WinDivertName).zip (first build only) ..." />
+    <DownloadFile SourceUrl="$(WinDivertUrl)" DestinationFolder="$(SluiceDepsDir)" DestinationFileName="$(WinDivertName).zip" Retries="3" RetryDelayMilliseconds="2000" />
+    <GetFileHash Files="$(SluiceDepsDir)$(WinDivertName).zip" Algorithm="SHA256">
+      <Output TaskParameter="Hash" PropertyName="_WinDivertHash" />
+    </GetFileHash>
+    <Delete Files="$(SluiceDepsDir)$(WinDivertName).zip" Condition="'$(_WinDivertHash.ToLowerInvariant())' != '$(WinDivertSha256)'" />
+    <Error Condition="'$(_WinDivertHash.ToLowerInvariant())' != '$(WinDivertSha256)'"
+           Text="Sluice: $(WinDivertName).zip failed its SHA-256 check (got $(_WinDivertHash)); the download was incomplete or altered. Build again to retry, or build with -p:SluiceFetchDependencies=false." />
+    <Unzip SourceFiles="$(SluiceDepsDir)$(WinDivertName).zip" DestinationFolder="$(SluiceDepsDir)" />
+    <Delete Files="$(SluiceDepsDir)$(WinDivertName).zip" />
+  </Target>
+</Project>

@@ -6,8 +6,8 @@
 #   scripts/package-linux.sh <publish dir> <output dir>
 #
 # <publish dir>: framework-dependent publish of Sluice.Desktop (-f net10.0) and Sluice.Cli into ONE folder:
-#   dotnet publish src/Sluice.Desktop -f net10.0 -r linux-x64 --self-contained false -c Release -o out/app
-#   dotnet publish src/Sluice.Cli            -r linux-x64 --self-contained false -c Release -o out/app
+#   dotnet publish src/Sluice.Desktop -f net10.0 -r linux-x64 --self-contained false -c Release -p:SluiceFetchDependencies=false -o out/app
+#   dotnet publish src/Sluice.Cli            -r linux-x64 --self-contained false -c Release -p:SluiceFetchDependencies=false -o out/app
 set -euo pipefail
 PUB=$(realpath "$1"); OUT=$(realpath -m "$2")
 REPO=$(cd "$(dirname "$0")/.." && pwd)

@@ -129,6 +129,10 @@ public class LinuxCaptureTests
 
         var noUdp = NftRules.Build(new NftRules.Settings(1473, 1, 2, 41000, null, QueueUdp: false));
         Assert.DoesNotContain("udp", noUdp);
+
+        // nft rejects CR ("unexpected CRLF line terminators"); the source file may be checked out with CRLF.
+        Assert.DoesNotContain('\r', r);
+        Assert.DoesNotContain('\r', noUdp);
     }
 
     [Fact]

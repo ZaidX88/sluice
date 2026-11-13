@@ -59,7 +59,8 @@ public static class TunnelChecker
             {
                 if (backends is null) throw new ProxyException($"{proxy.Type.DisplayName()} tunnels cannot be checked here");
                 local = await backends.AsLocalSocksAsync(original, c);
-                return $"{original.Type.DisplayName()} session to {original.Address}:{original.Port} established as {original.Username}";
+                return $"{original.Type.DisplayName()} session to {original.Address}:{original.Port} established" +
+                       (string.IsNullOrEmpty(original.Username) ? "" : $" as {original.Username}");
             }, TimeSpan.FromSeconds(Math.Max(settings.Timeout.TotalSeconds, 30)), ct);
             if (local is not null) proxy = local;   // tests 2 and 3 run through the session
         }

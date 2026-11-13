@@ -155,13 +155,17 @@ public static class SingBoxConfig
         if (security is "tls" or "reality")
         {
             var tls = new JsonObject { ["enabled"] = true };
-            var sni = Get("sni") ?? (IPAddress.TryParse(t.Address, out _) ? null : t.Address);
+            // Like v2rayN/Xray: with no explicit SNI, the HTTP host (the real site behind a CDN address) comes before the address.
+            var sni = Get("sni") ?? Get("host") ?? (IPAddress.TryParse(t.Address, out _) ? null : t.Address);
             if (sni is not null) tls["server_name"] = sni;
             if (Get("insecure") is "true" or "1") tls["insecure"] = true;
             var alpn = Get("alpn")?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                        ?? (t.Type == TunnelType.Tuic ? ["h3"] : null);
             if (alpn is { Length: > 0 }) tls["alpn"] = new JsonArray(alpn.Select(a => (JsonNode)a).ToArray());
-            var fingerprint = Get("fingerprint") ?? (security == "reality" ? "chrome" : null);
+            // Only fingerprints sing-box knows. Xray links also carry values like "unsafe" (= no uTLS) or "chrome_psk",
+            // which would stop sing-box from starting; those mean plain TLS here. REALITY needs uTLS: default chrome.
+            var fingerprint = Get("fingerprint")?.ToLowerInvariant() is { } fp && SingBoxFingerprints.Contains(fp) ? fp : null;
+            if (fingerprint is null && security == "reality") fingerprint = "chrome";
             if (fingerprint is not null) tls["utls"] = new JsonObject { ["enabled"] = true, ["fingerprint"] = fingerprint };
             if (security == "reality")
             {
@@ -185,7 +189,8 @@ public static class SingBoxConfig
         {
             if (t.Type is not (TunnelType.VMess or TunnelType.VLess or TunnelType.Trojan))
                 throw new ProxyException($"{t.Type.DisplayName()} does not support the {transport} transport");
-            var host = Get("host");
+            // The HTTP Host defaults to the SNI: a CDN routes by it, and the address may be a bare IP.
+            var host = Get("host") ?? (security is "tls" ? Get("sni") : null);
             o["transport"] = transport switch
             {
                 "ws" => new JsonObject
@@ -212,4 +217,8 @@ public static class SingBoxConfig
         }
         return o;
     }
+
+    /// <summary>uTLS fingerprints sing-box accepts (option tls.utls.fingerprint).</summary>
+    private static readonly HashSet<string> SingBoxFingerprints =
+        ["chrome", "firefox", "edge", "safari", "360", "qq", "ios", "android", "random", "randomized"];
 }

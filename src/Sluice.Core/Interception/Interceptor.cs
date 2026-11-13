@@ -66,8 +66,29 @@ public sealed class Interceptor : ITrafficCapture
     /// <summary>True when <paramref name="profile"/> needs a different capture filter (restart interception to apply).</summary>
     public bool NeedsRestartFor(Profile profile) => (profile.Options.Udp == UdpMode.Bypass) != (UdpMode == UdpMode.Bypass);
 
+    /// <summary>Where the name placeholders are kept between runs (null: not kept).</summary>
+    public string? FakeIpStatePath { get; init; } = FakeIpPool.DefaultStatePath;
+
+    private void RestoreFakeIps()
+    {
+        if (FakeIpStatePath is not { } path) return;
+        var n = _fakeIps.Load(path);
+        if (n > 0) _engine.Tracker.Write(LogLevel.Normal, $"Restored {n:N0} name placeholders from the last run, so apps' cached answers still work");
+    }
+
+    private void SaveFakeIps()
+    {
+        if (FakeIpStatePath is not { } path || !_fakeIps.IsDirty) return;
+        try { _fakeIps.Save(path); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _engine.Tracker.Write(LogLevel.Error, $"Could not save the name placeholders to {path}: {ex.Message}");
+        }
+    }
+
     public void Start()
     {
+        RestoreFakeIps();
         // Relay on the dual-stack wildcard: reflected packets arrive addressed to the machine's own IP.
         var relay = new TransparentInbound(_engine, new IPEndPoint(IPAddress.IPv6Any, 0), new LateBoundTable(() => _reflector, _fakeIps));
         _relay = relay;
@@ -192,7 +213,12 @@ public sealed class Interceptor : ITrafficCapture
         // which connects by hostname (directly or through the proxy, per the rules).
         var fake = _fakeIps.TryGetHost(remote.Address, out var hostname);
         if (!fake && FakeIpPool.IsFake(remote.Address))
-            _engine.Tracker.Write(LogLevel.Error, $"Connection to unknown fake address {remote} (stale DNS cache?)");
+        {
+            // A placeholder from before Sluice restarted, still in the app's own DNS cache: unreachable by itself.
+            // The relay resets it at once (RoutingEngine.HandleAsync), so the app looks the name up again.
+            Interlocked.Increment(ref _redirectedFlows);
+            return (true, pid);
+        }
         if (!fake && pid == 0 && !_engine.Profile.Options.ProcessServices) return (false, 0);
 
         var path = pid == 0 ? null : ProcessLookup.GetProcessPath(pid);
@@ -314,6 +340,7 @@ public sealed class Interceptor : ITrafficCapture
         {
             while (await timer.WaitForNextTickAsync(_cts.Token))
             {
+                SaveFakeIps();
                 _engine.Tracker.Write(LogLevel.Debug,
                     $"Interception stats: {PacketsReflected:N0} reflected, {PacketsPassed:N0} passed, {_reflector?.FlowCount ?? 0} flows, " +
                     $"{DnsQueriesAnswered:N0} DNS answered, {_fakeIps.Count} fake IPs, {Interlocked.Read(ref _recvErrors)} recv errors" +
@@ -356,6 +383,7 @@ public sealed class Interceptor : ITrafficCapture
         if (_sweeper is not null) await _sweeper;
         if (_relay is not null) await _relay.DisposeAsync();
         if (_udp is not null) await _udp.DisposeAsync();
+        SaveFakeIps();
         _engine.HostResolver = null;
         _resolver?.Dispose();
         // Fake answers are meaningless once we stop: drop them from the OS cache.

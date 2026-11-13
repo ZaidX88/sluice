@@ -17,7 +17,7 @@ Sluice captures other applications' connections and routes each one by rules: **
 | Tunnels through the sing-box helper: Shadowsocks (incl. 2022), VMess, VLESS (+REALITY/Vision), Trojan, Hysteria2, TUIC; ws / gRPC / HTTP / HTTPUpgrade transports | ✅ | ✅ |
 | Share links and subscriptions | ✅ | ✅ |
 | Capturing other apps' traffic | ✅ WinDivert | ✅ nftables + NFQUEUE |
-| Fake DNS (198.18.0.0/15) so hostnames reach tunnels | ✅ | ✅ |
+| Fake DNS (198.18.0.0/15) so hostnames reach tunnels; kept across restarts (`fake-dns.json`) | ✅ | ✅ |
 | UDP through tunnels (QUIC, games, calls) | ✅ | ❌ blocked for tunneled apps (see [REQUIRED.md](REQUIRED.md#2-udp-through-tunnels-on-linux)) |
 | Tunnel lifecycle: on/off, idle stop, health checks, retries, restart on network change, notifications | ✅ | ✅ |
 | Desktop app (Avalonia, light/dark, tray) | ✅ | ✅ (tray needs a StatusNotifier host) |

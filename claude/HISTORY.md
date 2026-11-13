@@ -35,3 +35,5 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
 - Linux release made app-only; `install.sh` installs .NET 10 and the other dependencies.
 - WinDivert and sing-box fetched at build time instead of committed.
 - Documentation reorganised; agent notes in `claude/`; history cleaned for publishing.
+- Stale fake addresses fixed: the fake-DNS pool is saved between runs (`fake-dns.json`), and a fake address Sluice
+  doesn't know is reset at once instead of being sent into a tunnel.

@@ -24,7 +24,7 @@ Ideas not built yet (roughly by value), performance work, and how to build and t
 13. **Traffic history** saved to disk (per day, per app) with charts on the Statistics page.
 14. **Tray quick switching** (profile, tunnel) and a global hotkey for capture.
 15. **DNS over HTTPS** for Sluice's own resolver.
-16. **Capture WSL / VMs on Windows** (see [FIXES.md](FIXES.md#2-windows-wsl--vms-get-fake-dns-answers-they-cant-use--high)).
+16. **Capture WSL / VMs on Windows** (see [FIXES.md](FIXES.md#1-windows-wsl--vms-get-fake-dns-answers-they-cant-use--high)).
 17. **Demo traffic for screenshot mode** (`--screenshot DIR --demo-traffic`): real traffic through the SOCKS listener
     (headless browser with its own profile, rate-limited `curl` downloads, a blocked tracker, a stand-in SOCKS5 tunnel via
     `Sluice.Cli --socks 127.0.0.1:6002`) so screenshots look alive without a real profile.

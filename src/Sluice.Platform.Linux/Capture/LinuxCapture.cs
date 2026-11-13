@@ -73,8 +73,29 @@ public sealed class LinuxCapture : ITrafficCapture
         }
     }
 
+    /// <summary>Where the name placeholders are kept between runs (null: not kept).</summary>
+    public string? FakeIpStatePath { get; init; } = FakeIpPool.DefaultStatePath;
+
+    private void RestoreFakeIps()
+    {
+        if (FakeIpStatePath is not { } path) return;
+        var n = _fakeIps.Load(path);
+        if (n > 0) _engine.Tracker.Write(LogLevel.Normal, $"Restored {n:N0} name placeholders from the last run, so apps' cached answers still work");
+    }
+
+    private void SaveFakeIps()
+    {
+        if (FakeIpStatePath is not { } path || !_fakeIps.IsDirty) return;
+        try { _fakeIps.Save(path); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _engine.Tracker.Write(LogLevel.Error, $"Could not save the name placeholders to {path}: {ex.Message}");
+        }
+    }
+
     private void StartCore()
     {
+        RestoreFakeIps();
         if (!LinuxPlatform.CheckCaptureRights()) throw new InvalidOperationException(LinuxPlatform.RightsHint);
         if (NftRules.FindNft() is null) throw new InvalidOperationException("nftables is not installed (no nft command). Install the \"nftables\" package.");
 
@@ -191,7 +212,13 @@ public sealed class LinuxCapture : ITrafficCapture
             // DNS over TCP goes to the real resolver, never into a tunnel (whose server cannot reach this LAN).
             if (remote.Port == 53) return Pass();
             if (FakeIpPool.IsFake(remote.Address))
-                _engine.Tracker.Write(LogLevel.Error, $"Connection to unknown fake address {remote} (stale DNS cache?)");
+            {
+                // A placeholder from before Sluice restarted (an app's own DNS cache): the relay resets it at once
+                // (RoutingEngine.HandleAsync), so the app looks the name up again.
+                _flows[Norm(local)] = (new OriginalDestination(remote, pid), DateTime.UtcNow);
+                Interlocked.Increment(ref _redirected);
+                return true;
+            }
             if (pid == 0 && !_engine.Profile.Options.ProcessServices) return Pass();
         }
 
@@ -225,7 +252,8 @@ public sealed class LinuxCapture : ITrafficCapture
         var pid = _lookup.FindUdpOwner(local);
         var fake = _fakeIps.TryGetHost(remote.Address, out var hostname);
         bool drop;
-        if (!fake && (pid == Environment.ProcessId || _engine.Backends.IsHelperProcess(pid))) drop = false;
+        if (!fake && FakeIpPool.IsFake(remote.Address)) drop = true;   // a placeholder from before a restart: leads nowhere
+        else if (!fake && (pid == Environment.ProcessId || _engine.Backends.IsHelperProcess(pid))) drop = false;
         else if (!fake && pid == 0 && !_engine.Profile.Options.ProcessServices) drop = false;
         else
         {
@@ -275,6 +303,7 @@ public sealed class LinuxCapture : ITrafficCapture
         {
             while (await timer.WaitForNextTickAsync(_cts.Token))
             {
+                SaveFakeIps();
                 var now = DateTime.UtcNow;
                 foreach (var (k, v) in _flows)
                     if (now - v.At > TimeSpan.FromMinutes(1)) _flows.TryRemove(k, out _);
@@ -318,6 +347,7 @@ public sealed class LinuxCapture : ITrafficCapture
         if (_sweeper is not null) await _sweeper;
         if (_relay is not null) await _relay.DisposeAsync();
         if (_dns is not null) await _dns.DisposeAsync();
+        SaveFakeIps();
         _engine.HostResolver = null;
         _resolver?.Dispose();
         if (_fakeIps.Count > 0) FlushResolverCache();

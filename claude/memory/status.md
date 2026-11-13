@@ -15,7 +15,8 @@ Plan of record, in order of reading: `docs/STATUS.md` → `docs/REQUIRED.md` →
 Next, as the owner last discussed:
 1. Publishing the repository on GitHub with releases for Linux and Windows (the owner has plans for `scripts/` and
    `packaging/`; discuss before changing them).
-2. High-priority bugs: stale fake addresses after a restart; WSL/VM DNS on Windows (docs/FIXES.md §1–2).
+2. Bug fixing, from docs/FIXES.md (the owner's choice, 2026-11-14). Done: stale fake addresses after a restart. Next
+   high one: WSL/VM DNS on Windows (§1).
 3. UDP through tunnels on Linux (TPROXY), moving Windows-only code out of Core, retiring the WPF app (docs/REQUIRED.md).
 
 Earlier improvement ideas the owner asked for but hasn't chosen yet are in docs/FEATURES.md.

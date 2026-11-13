@@ -123,6 +123,10 @@ public sealed class UdpNat : IAsyncDisposable
     {
         var pid = _findOwner(src);
         var fake = _fakes.TryGetHost(dst.Address, out var hostname);
+        // A placeholder Sluice no longer knows (from an app's DNS cache before a restart) leads nowhere: drop it, so the
+        // app gives up on it and looks the name up again.
+        if (!fake && FakeIpPool.IsFake(dst.Address))
+            return new Flow { Src = src, Dst = dst, Verdict = UdpVerdict.Block };
         if (pid == Environment.ProcessId || (pid == 0 && !fake && !_engine.Profile.Options.ProcessServices))
             return new Flow { Src = src, Dst = dst, Verdict = UdpVerdict.Pass };
 

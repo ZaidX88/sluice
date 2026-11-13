@@ -34,6 +34,6 @@ dotnet run --project src/Sluice.Cli -- check "vless://..."               # test 
 
 - `dotnet test tests/Sluice.Tests` runs everything, including live tests against local sing-box servers.
 - `Sluice.Desktop --screenshot <dir> [--theme dark]` renders every page and dialog off-screen (at 1× scale; see
-  [../FIXES.md](../FIXES.md#6-avalonia-ui-gaps-small)).
+  [../FIXES.md](../FIXES.md#5-avalonia-ui-gaps-small)).
 - While your own Sluice capture is running, real-connection tests and NuGet restores go through it: see the pitfalls in
   [../FEATURES.md](../FEATURES.md#testing).

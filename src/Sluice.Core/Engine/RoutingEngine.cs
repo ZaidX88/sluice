@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
+using Sluice.Core.Dns;
 using Sluice.Core.Profiles;
 using Sluice.Core.Proxy;
 using Sluice.Core.Rules;
@@ -29,6 +30,7 @@ public sealed record UdpRoute(UdpVerdict Verdict, RuleMatch Match, Tunnel? Tunne
 public sealed class RoutingEngine : IAsyncDisposable
 {
     private readonly ConcurrentDictionary<IPEndPoint, byte> _ownEndpoints = new();
+    private readonly ConcurrentDictionary<string, DateTime> _staleReported = new();
     private volatile Snapshot _state;
 
     private sealed record Snapshot(Profile Profile, RuleEngine Rules, TunnelConnector Connector);
@@ -165,6 +167,30 @@ public sealed class RoutingEngine : IAsyncDisposable
 
     // ---------- UDP ----------
 
+    private void ReportStaleFake(InboundRequest req)
+    {
+        var name = Path.GetFileName(req.ProcessPath) ?? "?";
+        var key = $"{req.ProcessId}/{req.Host}";
+        var now = DateTime.UtcNow;
+        if (_staleReported.TryGetValue(key, out var last) && now - last < TimeSpan.FromSeconds(30)) return;
+        _staleReported[key] = now;
+        if (_staleReported.Count > 1000)
+            foreach (var (k, v) in _staleReported) if (now - v > TimeSpan.FromMinutes(1)) _staleReported.TryRemove(k, out _);
+        Tracker.Write(LogLevel.Normal,
+            $"{name} ({req.ProcessId}) - {req.Host}:{req.Port} reset: a placeholder address from before Sluice restarted; the app will look the name up again");
+    }
+
+    /// <summary>Closes with RST, so the app sees a failure at once rather than an orderly empty reply.</summary>
+    private static void ResetConnection(Socket s)
+    {
+        try
+        {
+            s.LingerState = new LingerOption(true, 0);
+            s.Close();
+        }
+        catch (Exception) { /* already closed */ }
+    }
+
     /// <summary>Decides an application's UDP flow per its rule and the profile's UDP mode.</summary>
     public UdpRoute ClassifyUdp(InboundRequest req)
     {
@@ -233,6 +259,17 @@ public sealed class RoutingEngine : IAsyncDisposable
     /// <summary>Serve one application connection end to end. Never throws; owns <paramref name="app"/>.</summary>
     public async Task HandleAsync(Socket app, InboundRequest req, IInboundReply reply, CancellationToken ct)
     {
+        // A fake address Sluice doesn't know (an app's DNS cache from before Sluice restarted) leads nowhere: reset the
+        // connection at once, so the app looks the name up again, instead of sending 198.18.x.x into a tunnel (where it
+        // would hang for the connect timeout and make a healthy tunnel look dead).
+        if (IPAddress.TryParse(req.Host, out var hostIp) && FakeIpPool.IsFake(hostIp))
+        {
+            ReportStaleFake(req);
+            try { await reply.FailAsync(new IOException("stale placeholder address"), ct); } catch (Exception) { /* app gone */ }
+            ResetConnection(app);
+            return;
+        }
+
         var state = _state;
         var target = FormatTarget(req.Host, req.Port);
         var match = Classify(req);

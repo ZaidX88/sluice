@@ -43,6 +43,45 @@ public class SingBoxConfigTests
     }
 
     [Fact]
+    public void CdnFronted_NoSni_UsesTheHttpHost_ForSniAndHostHeader()
+    {
+        // Typical share link behind Cloudflare: address = a CDN IP, host = the real site, no sni.
+        var t = new Tunnel { Type = TunnelType.VMess, Address = "104.18.42.163", Port = 443 };
+        t.Settings["uuid"] = "u";
+        t.Settings["security"] = "tls";
+        t.Settings["transport"] = "ws";
+        t.Settings["host"] = "real.example";
+        t.Settings["path"] = "/ws";
+        var o = Out(t);
+        Assert.Equal("real.example", (string?)o["tls"]!["server_name"]);
+        Assert.Equal("real.example", (string?)o["transport"]!["headers"]!["Host"]);
+
+        // ... and with only sni, the Host header follows it.
+        var v = new Tunnel { Type = TunnelType.VLess, Address = "198.51.100.7", Port = 443 };
+        v.Settings["uuid"] = "u";
+        v.Settings["security"] = "tls";
+        v.Settings["transport"] = "ws";
+        v.Settings["sni"] = "site.example";
+        Assert.Equal("site.example", (string?)Out(v)["transport"]!["headers"]!["Host"]);
+    }
+
+    [Theory]
+    [InlineData("tls", "unsafe", null)]          // Xray: no uTLS — sing-box would refuse to start
+    [InlineData("tls", "chrome_psk", null)]
+    [InlineData("tls", "Firefox", "firefox")]
+    [InlineData("reality", "unsafe", "chrome")]  // REALITY needs uTLS
+    [InlineData("reality", null, "chrome")]
+    public void Fingerprint_OnlyValuesSingBoxKnows(string security, string? fp, string? expected)
+    {
+        var t = new Tunnel { Type = TunnelType.VLess, Address = "edge.example", Port = 443 };
+        t.Settings["uuid"] = "u";
+        t.Settings["security"] = security;
+        if (security == "reality") t.Settings["publickey"] = "PUB";
+        if (fp is not null) t.Settings["fingerprint"] = fp;
+        Assert.Equal(expected, (string?)Out(t)["tls"]!["utls"]?["fingerprint"]);
+    }
+
+    [Fact]
     public void Tls_DefaultsSniToTheHostName_AndTrojanAlwaysUsesTls()
     {
         var t = new Tunnel { Type = TunnelType.Trojan, Address = "tr.example", Port = 443, Password = "p" };

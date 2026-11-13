@@ -83,10 +83,8 @@ internal sealed class SingBoxSession : IBackendSession
 
         var port = FreeLoopbackPort();
         var json = _buildConfig is not null ? _buildConfig(port, ip) : SingBoxConfig.Build(_tunnel, port, ip);
-        var dir = Path.Combine(Path.GetTempPath(), "sluice-sing-box");
-        Directory.CreateDirectory(dir);
-        var configPath = Path.Combine(dir, $"{_tunnel.Id}-{Guid.NewGuid():N}.json");
-        await File.WriteAllTextAsync(configPath, json, ct);
+        var configPath = Path.Combine(ConfigDir.Value, $"{_tunnel.Id}-{Guid.NewGuid():N}.json");
+        await WritePrivateAsync(configPath, json, ct);
 
         var errors = new List<string>();
         try
@@ -98,7 +96,7 @@ internal sealed class SingBoxSession : IBackendSession
                 CreateNoWindow = true,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
-                WorkingDirectory = dir,
+                WorkingDirectory = ConfigDir.Value,
             };
             var p = new Process { StartInfo = psi, EnableRaisingEvents = true };
             void OnLine(string? line)
@@ -145,6 +143,27 @@ internal sealed class SingBoxSession : IBackendSession
             // The config holds secrets; sing-box has read it once it is listening (or has failed).
             try { File.Delete(configPath); } catch { /* best effort */ }
         }
+    }
+
+    /// <summary>
+    /// A private folder per Sluice process for the configs (they hold tunnel passwords and keys). A fixed name under a
+    /// shared /tmp would let another local user read them or pre-create the folder, and would lock out the second user
+    /// to run Sluice; CreateTempSubdirectory makes a fresh owner-only (0700) folder.
+    /// </summary>
+    private static readonly Lazy<string> ConfigDir = new(() =>
+    {
+        var dir = Directory.CreateTempSubdirectory("sluice-sing-box-").FullName;
+        AppDomain.CurrentDomain.ProcessExit += (_, _) => { try { Directory.Delete(dir, recursive: true); } catch { /* best effort */ } };
+        return dir;
+    });
+
+    private static async Task WritePrivateAsync(string path, string text, CancellationToken ct)
+    {
+        var options = new FileStreamOptions { Mode = FileMode.CreateNew, Access = FileAccess.Write };
+        if (!OperatingSystem.IsWindows()) options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+        await using var f = new FileStream(path, options);
+        await using var w = new StreamWriter(f);
+        await w.WriteAsync(text.AsMemory(), ct);
     }
 
     private static async Task<bool> CanConnect(int port, CancellationToken ct)

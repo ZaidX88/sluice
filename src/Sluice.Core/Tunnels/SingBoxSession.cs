@@ -62,7 +62,7 @@ internal sealed class SingBoxSession : IBackendSession
     public async Task StartAsync(CancellationToken ct)
     {
         if (!File.Exists(_exe))
-            throw new ProxyException($"sing-box was not found at {_exe}. Run scripts/get-sing-box.ps1 (or place sing-box.exe next to Sluice).");
+            throw new ProxyException($"sing-box was not found at {_exe}. Run scripts/get-sing-box.ps1 (Windows) or scripts/get-sing-box.sh (Linux), or place the sing-box binary next to Sluice.");
 
         // Resolve the server ourselves: sing-box would ask Windows, whose cache may hold Sluice's fake addresses.
         string? ip = null;

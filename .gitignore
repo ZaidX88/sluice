@@ -486,3 +486,5 @@ $RECYCLE.BIN/
 
 # sing-box helper binary: fetched by scripts/get-sing-box.ps1, not committed (keep its licence/source notes)
 lib/sing-box/sing-box.exe
+# Built packages (scripts/package-linux.sh)
+dist/

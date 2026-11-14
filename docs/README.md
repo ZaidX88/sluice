@@ -3,6 +3,7 @@
 | Document | For |
 |---|---|
 | [QUICKSTART.md](QUICKSTART.md) | Using Sluice: install, add a tunnel, rules, capture (both OSes) |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | How Windows and Linux share one app: modules, per-OS builds, `IPlatformServices` |
 | [STATUS.md](STATUS.md) | What works, project layout, how capture works |
 | [REQUIRED.md](REQUIRED.md) | Must-do work, in order |
 | [FIXES.md](FIXES.md) | Known bugs, with causes and what "fixed" means |

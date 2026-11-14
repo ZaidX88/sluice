@@ -34,6 +34,8 @@ Xray-only uTLS fingerprints.
 
 ## Projects
 
+How the modules fit together and how each build picks its OS module: [ARCHITECTURE.md](ARCHITECTURE.md).
+
 | Project | Target | Role |
 |---|---|---|
 | `src/Sluice.Core` | net10.0 | Everything shared: engine, tunnels, DNS, profiles, inbound listeners, the interfaces `Platform/IPlatformServices.cs`, `Interception/ITrafficCapture.cs` and `IProcessLookup` (in `Platform/ProcessLookup.cs`). **Still contains Windows-only code** (WinDivert interceptor, iphlpapi lookups, DPAPI, Job object); see [REQUIRED.md](REQUIRED.md#1-move-windows-only-code-out-of-core). |

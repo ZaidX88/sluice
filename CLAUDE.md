@@ -8,7 +8,7 @@ sing-box helper). Read these before working:
 @claude/memory/environment.md
 @claude/memory/status.md
 
-Then, as needed: `claude/DECISIONS.md` (settled decisions), `docs/STATUS.md` (architecture), `docs/REQUIRED.md`,
+Then, as needed: `claude/DECISIONS.md` (settled decisions), `docs/ARCHITECTURE.md` (modules, per-OS builds), `docs/STATUS.md` (what works, capture internals), `docs/REQUIRED.md`,
 `docs/FIXES.md`, `docs/FEATURES.md` (the plan), `docs/linux/BUILD.md` and `docs/windows/BUILD.md` (building, testing).
 
 ## Essentials

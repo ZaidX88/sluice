@@ -81,7 +81,16 @@ public static class StartMenuShortcut
         ((IPersistFile)link).Load(path, 0);
         var key = AppUserModelIdKey;
         ((IPropertyStore)link).GetValue(ref key, out var value);
-        try { return value.Vt == 31 ? Marshal.PtrToStringUni(value.Pointer) : null; }
+        try
+        {
+            // A shortcut rewritten by another tool may hold the ID as a BSTR rather than an LPWSTR.
+            return value.Vt switch
+            {
+                PropVariant.VtLpwstr => Marshal.PtrToStringUni(value.Pointer),
+                PropVariant.VtBstr => Marshal.PtrToStringBSTR(value.Pointer),
+                _ => null,
+            };
+        }
         finally { value.Clear(); }
     }
 
@@ -132,21 +141,26 @@ public static class StartMenuShortcut
         public readonly uint PropertyId = propertyId;
     }
 
-    /// <summary>PROPVARIANT holding a VT_LPWSTR.</summary>
+    /// <summary>A PROPVARIANT (24 bytes on x64). Only the string types are read; any type is freed correctly.</summary>
     [StructLayout(LayoutKind.Sequential)]
     private struct PropVariant
     {
+        public const ushort VtBstr = 8, VtLpwstr = 31;
+
         public ushort Vt;
         public ushort R1, R2, R3;
         public IntPtr Pointer;
         public IntPtr Pad;
 
-        public static PropVariant FromString(string s) => new() { Vt = 31 /* VT_LPWSTR */, Pointer = Marshal.StringToCoTaskMemUni(s) };
+        public static PropVariant FromString(string s) => new() { Vt = VtLpwstr, Pointer = Marshal.StringToCoTaskMemUni(s) };
 
-        public void Clear()
-        {
-            if (Pointer != IntPtr.Zero) Marshal.FreeCoTaskMem(Pointer);
-            Pointer = IntPtr.Zero;
-        }
+        /// <summary>
+        /// Frees the value the way its type requires (PropVariantClear). Freeing every pointer with CoTaskMemFree
+        /// corrupts the heap for a BSTR and crashed Sluice at start when it read such a shortcut.
+        /// </summary>
+        public void Clear() => PropVariantClear(ref this);
     }
+
+    [DllImport("ole32.dll")]
+    private static extern int PropVariantClear(ref PropVariant value);
 }

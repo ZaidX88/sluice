@@ -10,6 +10,10 @@ Rules the owner set or confirmed (2026-11-10 … 2026-11-14):
 - **Commit and merge only when the owner says so** (the phrase used was "Commit and merge"). Work on a branch per feature
   or fix (`feature/…`, `fix/…`, `perf/…`, `docs/…`, `chore/…`), then commit, check out `main`, `git merge --no-ff`.
   Sometimes the owner wants a branch kept separate instead of merged: follow the latest instruction. Never push unless asked.
+- **Releases live on their own branches, never on `main`.** `main` is only for code and docs. Release packaging
+  (installer and packaging scripts, version bumps, release notes) goes on a branch named for the version, e.g.
+  `release/v0.1.0`; commit there and **do not merge it into `main`**. A release branch was once merged into `main` by
+  mistake and had to be undone. If a release branch carries a code fix `main` also needs, ask before carrying it over.
 - **Ask before any download** (new NuGet packages, runtimes, tools, binaries); say what and roughly how big. One approval
   covers that download only. (The build's own pinned dependency fetch is part of the project and fine.)
 - **Never simulate mouse clicks or keyboard input on the owner's desktop.** An automated click once hit their video

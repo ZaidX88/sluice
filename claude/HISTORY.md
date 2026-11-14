@@ -37,3 +37,5 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
 - Documentation reorganised; agent notes in `claude/`; history cleaned for publishing.
 - Stale fake addresses fixed: the fake-DNS pool is saved between runs (`fake-dns.json`), and a fake address Sluice
   doesn't know is reset at once instead of being sent into a tunnel.
+- Architecture reference: `docs/ARCHITECTURE.md` (connection and DNS flow) with one page per part in
+  `docs/architecture/`, read from the code.

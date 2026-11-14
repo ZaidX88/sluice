@@ -34,7 +34,8 @@ Xray-only uTLS fingerprints.
 
 ## Projects
 
-How the modules fit together and how each build picks its OS module: [ARCHITECTURE.md](ARCHITECTURE.md).
+How the modules fit together: [ARCHITECTURE.md](ARCHITECTURE.md); how each build picks its OS module:
+[architecture/platforms.md](architecture/platforms.md).
 
 | Project | Target | Role |
 |---|---|---|

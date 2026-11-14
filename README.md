@@ -17,7 +17,7 @@ SOCKS, HTTP(S), VLESS, VMess, Trojan, Shadowsocks, Hysteria2, TUIC) or a chain o
 - **Desktop app** (light/dark, tray) and a **command line** for headless machines.
 
 Status per platform, including what isn't done yet: [docs/STATUS.md](docs/STATUS.md). How one codebase serves both
-Windows and Linux: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+Windows and Linux, and how every part works: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Getting started
 

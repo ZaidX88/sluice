@@ -21,3 +21,7 @@ Decisions made with the owner, newest last, with the reason. Change one only wit
 | 2026-11-14 | **No third-party binaries in git**: the build fetches WinDivert and sing-box (pinned, SHA-256 checked) into `.deps/` | Owner's request: like Maven dependencies |
 | 2026-11-14 | Public history cleaned: no reverse-engineering notes, no promo material, no release artefacts, no real server or user names | Preparing to publish on GitHub |
 | 2026-11-14 | Docs split by purpose (`docs/STATUS`, `REQUIRED`, `FIXES`, `FEATURES`, `QUICKSTART`, `linux/`, `windows/`); agent notes in `claude/` | Owner's request, so anyone can continue |
+
+Considered, not decided: an own **WFP connect-redirect driver** for Windows capture (as Proxifier does) instead of
+per-packet WinDivert. Measurements show it isn't needed for now (docs/FIXES.md §8); it would reverse the 2026-11-10
+decision and needs driver signing. The owner's decision.

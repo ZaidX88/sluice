@@ -291,9 +291,15 @@ public sealed class RoutingEngine : IAsyncDisposable
             entry.State = ConnectionState.Open;
             Tracker.Write(LogLevel.Normal, $"{who} - {target} open through {via} (rule {match.Rule.Name})");
 
+            // Arriving data also tells the health checks the route's tunnels are working (see TunnelBackends.BusyGrace).
+            var tunnelIds = BackendTunnels(state.Profile, match.Action).Select(t => t.Id).ToArray();
             await Relay.RunAsync(app, upstream.Client,
                 n => Tracker.CountSent(entry, n),
-                n => Tracker.CountReceived(entry, n),
+                n =>
+                {
+                    Tracker.CountReceived(entry, n);
+                    foreach (var id in tunnelIds) Backends.NoteData(id);
+                },
                 linked.Token,
                 UsesSsh(state.Profile, match.Action) ? SshDownstreamBuffer : 0);
 

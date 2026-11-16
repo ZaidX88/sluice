@@ -3,7 +3,7 @@
 Where Sluice stands and how it is put together. For what to do next see [REQUIRED.md](REQUIRED.md) (must-do),
 [FIXES.md](FIXES.md) (known bugs) and [FEATURES.md](FEATURES.md) (ideas, with how to test).
 
-Last updated: 2026-11-14.
+Last updated: 2026-11-16.
 
 ## What works
 
@@ -44,7 +44,7 @@ How the modules fit together and how each build picks its OS module: [ARCHITECTU
 | `src/Sluice.Desktop` | net10.0-windows…; net10.0 | The Avalonia app. `#if WINDOWS` in `Services/Platform.cs` picks the platform module. |
 | `src/Sluice.Cli` | net10.0 | Headless engine; `--intercept` uses WinDivert on Windows and `LinuxPlatform` on Linux. |
 | `src/Sluice.App` | net10.0-windows | The old WPF app, kept until the Avalonia app is checked against it ([REQUIRED.md](REQUIRED.md#3-retire-the-wpf-app)). |
-| `tests/Sluice.Tests` | net10.0 | xUnit, 258 tests; references Core and the Linux module. |
+| `tests/Sluice.Tests` | net10.0 | xUnit, 265 tests; references Core and the Linux module. |
 | `build/Dependencies.targets` | — | Fetches WinDivert and sing-box on the first build (pinned, SHA-256 checked) into `.deps/`. |
 | `packaging/linux`, `scripts/` | — | Linux release package and installer; live-test helpers. |
 
@@ -54,6 +54,28 @@ How the modules fit together and how each build picks its OS module: [ARCHITECTU
 finds the owning process (iphlpapi), asks `RoutingEngine.Classify`, and reflects connections to handle into the local
 `TransparentInbound` relay (`PacketReflector`). UDP/53 queries are answered with fake addresses by `DnsRedirector`; other
 UDP of tunneled apps goes through `UdpNat`.
+
+- **Every outbound TCP packet** on the PC passes through one user-mode thread (`Interceptor.NetworkLoop`), not only the
+  first one: WinDivert can't redirect a whole connection, so each packet of a handled flow is rewritten. The tunnels'
+  own traffic is caught too (the network layer has no process ID). This is the main cost of capture compared with the
+  SOCKS listener; see [FIXES.md](FIXES.md).
+- **New flows are decided off the packet thread.** `PacketReflector.DeferDecisions` hands a new flow's first SYN back as
+  `Defer`; one of 4 worker threads (`Interceptor.DecisionLoop`) decides it (`CompleteDeferred`) and sends it on. A
+  retransmitted SYN meanwhile is dropped (`Drop`). So a slow process lookup delays only that connection, not every packet.
+- **Owner lookup:** the PID comes from the socket-layer `CONNECT` event (`_socketPids`). That event arrives on another
+  handle, so a decision waits up to 3 ms for it before falling back to scanning the TCP table (`FindTcpOwner`).
+- **WinDivert queue** is set to its maximum (16384 packets, 32 MB) instead of the default 4096 / 4 MB, so a burst while
+  Sluice is busy isn't dropped silently.
+- **Measuring:** at Verbose (the desktop app's default) the log shows a "Capture timing (5 s)" line: how long packets
+  waited in WinDivert's queue (from WinDivert's capture timestamp), how long Sluice held each one, and how long new
+  connections waited for their decision. Stopping capture logs the totals and how often the owner came from the socket
+  event versus the TCP table (`LatencyStats`).
+
+**Tunnel health checks** (`TunnelBackends`): a connected tunnel is checked every 30 s by opening a test connection
+through it (`ProbeTimeout` 6 s, half per target). Two failed checks in a row (or one after a real connection failed)
+restart it. A failed check is **ignored while the tunnel delivered data in the last 10 s** (`BusyGrace`; the relay calls
+`NoteData`): a tunnel filled by a download can take longer than the check allows to open a new channel, and restarting
+it would reset every connection through it.
 
 **Linux** (`src/Sluice.Platform.Linux/Capture/`):
 

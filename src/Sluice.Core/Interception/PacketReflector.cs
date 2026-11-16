@@ -16,7 +16,13 @@ namespace Sluice.Core.Interception;
 /// </summary>
 public sealed class PacketReflector : IRedirectTable
 {
-    public enum Verdict { Pass, Reflected }
+    /// <summary>
+    /// <see cref="Pass"/>: send unchanged. <see cref="Reflected"/>: rewritten, send as inbound.
+    /// <see cref="Defer"/>: the first SYN of a new flow when <see cref="DeferDecisions"/> is on; the caller keeps a copy
+    /// and later calls <see cref="CompleteDeferred"/> off the packet thread. <see cref="Drop"/>: a repeated SYN while
+    /// that decision is still pending (the app retransmits it).
+    /// </summary>
+    public enum Verdict { Pass, Reflected, Defer, Drop }
 
     private sealed class Flow
     {
@@ -39,10 +45,37 @@ public sealed class PacketReflector : IRedirectTable
         _decide = decide;
     }
 
+    private readonly ConcurrentDictionary<IPEndPoint, long> _pending = new();
+
+    // A decision still pending after this long was lost (should not happen): let a retransmitted SYN try again.
+    private static readonly long PendingTimeout = TimeSpan.FromSeconds(5).Ticks;
+
+    private bool TryMarkPending(IPEndPoint key)
+    {
+        var now = DateTime.UtcNow.Ticks;
+        if (_pending.TryAdd(key, now)) return true;
+        return _pending.TryGetValue(key, out var since) && now - since > PendingTimeout && _pending.TryUpdate(key, now, since);
+    }
+
     public int FlowCount => _flows.Count;
 
+    /// <summary>Flows whose first SYN waits for a decision (see <see cref="DeferDecisions"/>).</summary>
+    public int PendingCount => _pending.Count;
+
+    /// <summary>
+    /// When true, the decision for a new flow (process lookup, rules) is not made on the packet thread:
+    /// <see cref="ProcessOutbound"/> returns <see cref="Verdict.Defer"/> for its first SYN. A slow decision then
+    /// holds up only that connection instead of every packet on the machine.
+    /// </summary>
+    public bool DeferDecisions { get; init; }
+
     /// <summary>Inspect one outbound packet, rewriting it in place when it belongs to a redirected flow.</summary>
-    public Verdict ProcessOutbound(Span<byte> packet)
+    public Verdict ProcessOutbound(Span<byte> packet) => Process(packet, deciding: false);
+
+    /// <summary>Decide a SYN that <see cref="ProcessOutbound"/> deferred, then rewrite it like any other packet.</summary>
+    public Verdict CompleteDeferred(Span<byte> packet) => Process(packet, deciding: true);
+
+    private Verdict Process(Span<byte> packet, bool deciding)
     {
         var tcp = new TcpPacket(packet);
         if (!tcp.IsValid) return Verdict.Pass;
@@ -63,11 +96,19 @@ public sealed class PacketReflector : IRedirectTable
         var flowKey = new IPEndPoint(tcp.DstAddr, tcp.SrcPort);
         _flows.TryGetValue(flowKey, out var flow);
 
-        if (tcp.Syn && !tcp.Ack && (flow is null || flow.Original.Port != remote.Port || IsStale(flow)))
+        if (tcp.Syn && !tcp.Ack && (deciding || flow is null || flow.Original.Port != remote.Port || IsStale(flow)))
         {
-            var (redirect, pid) = _decide(new IPEndPoint(tcp.SrcAddr, tcp.SrcPort), remote);
-            flow = new Flow { Original = remote, ProcessId = pid, Redirect = redirect, LastSeenTicks = DateTime.UtcNow.Ticks };
-            _flows[flowKey] = flow;
+            if (DeferDecisions && !deciding) return TryMarkPending(flowKey) ? Verdict.Defer : Verdict.Drop;
+            try
+            {
+                var (redirect, pid) = _decide(new IPEndPoint(tcp.SrcAddr, tcp.SrcPort), remote);
+                flow = new Flow { Original = remote, ProcessId = pid, Redirect = redirect, LastSeenTicks = DateTime.UtcNow.Ticks };
+                _flows[flowKey] = flow;
+            }
+            finally
+            {
+                if (deciding) _pending.TryRemove(flowKey, out _);
+            }
         }
 
         if (flow is null || !flow.Redirect || flow.Original.Port != remote.Port) return Verdict.Pass;

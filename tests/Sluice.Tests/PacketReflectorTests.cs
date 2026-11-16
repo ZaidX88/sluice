@@ -131,6 +131,61 @@ public class PacketReflectorTests
     }
 
     [Fact]
+    public void DeferredDecision_IsMadeOffThePacketPath()
+    {
+        var calls = 0;
+        var refl = new PacketReflector(Relay, (_, _) => { calls++; return (true, 9); }) { DeferDecisions = true };
+
+        // The first SYN is handed back untouched for a worker to decide; a retransmitted SYN meanwhile is dropped.
+        var syn = Packet(L4, 50005, R4, 443, SYN);
+        var copy = (byte[])syn.Clone();
+        Assert.Equal(PacketReflector.Verdict.Defer, refl.ProcessOutbound(syn));
+        Assert.Equal(copy, syn);
+        Assert.Equal(PacketReflector.Verdict.Drop, refl.ProcessOutbound(Packet(L4, 50005, R4, 443, SYN)));
+        Assert.Equal(0, calls);
+        Assert.Equal(1, refl.PendingCount);
+
+        // The worker decides and rewrites it; later packets follow the decision without asking again.
+        Assert.Equal(PacketReflector.Verdict.Reflected, refl.CompleteDeferred(syn));
+        Assert.Equal((R4, (ushort)50005, L4, Relay), Read(syn));
+        Assert.Equal(0, refl.PendingCount);
+        Assert.Equal(PacketReflector.Verdict.Reflected, refl.ProcessOutbound(Packet(L4, 50005, R4, 443, SYN)));
+        Assert.Equal(PacketReflector.Verdict.Reflected, refl.ProcessOutbound(Packet(L4, 50005, R4, 443, ACK)));
+        Assert.Equal(1, calls);
+    }
+
+    [Fact]
+    public void DeferredDecision_ThatFails_DoesNotBlockTheFlow()
+    {
+        var fail = true;
+        var refl = new PacketReflector(Relay, (_, _) => fail ? throw new InvalidOperationException("boom") : (false, 1)) { DeferDecisions = true };
+        var syn = Packet(L4, 50006, R4, 443, SYN);
+        Assert.Equal(PacketReflector.Verdict.Defer, refl.ProcessOutbound(syn));
+        Assert.Throws<InvalidOperationException>(() => refl.CompleteDeferred(syn));
+        Assert.Equal(0, refl.PendingCount);
+
+        fail = false;
+        Assert.Equal(PacketReflector.Verdict.Defer, refl.ProcessOutbound(Packet(L4, 50006, R4, 443, SYN)));
+    }
+
+    [Fact]
+    public void LatencyStats_TracksAverageMaxAndIntervals()
+    {
+        var s = new LatencyStats { SlowMs = 1 };
+        var ms = System.Diagnostics.Stopwatch.Frequency / 1000;
+        s.Add(ms / 2);
+        s.Add(3 * ms);
+        s.Add(-5);   // clock skew: ignored
+        var i = s.TakeInterval();
+        Assert.Equal(2, i.Count);
+        Assert.Equal(1.75, i.AvgMs, 2);
+        Assert.Equal(3, i.MaxMs, 2);
+        Assert.Equal(1, s.Slow);
+        Assert.Equal(0, s.TakeInterval().Count);
+        Assert.Equal(2, s.Total.Count);
+    }
+
+    [Fact]
     public void NonTcpOrGarbage_Passes()
     {
         var refl = new PacketReflector(Relay, (_, _) => (true, 1));

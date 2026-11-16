@@ -70,6 +70,14 @@ internal static class WinDivertNative
     [DllImport(Dll, EntryPoint = "WinDivertSend", SetLastError = true)]
     public static extern bool Send(IntPtr handle, byte[] packet, uint packetLen, out uint sendLen, ref Address addr);
 
+    public enum Param : int { QueueLength = 0, QueueTime = 1, QueueSize = 2 }
+
+    /// <summary>Upper limits WinDivert 2.2 accepts for <see cref="Param"/> (defaults: 4096 packets, 2000 ms, 4 MB).</summary>
+    public const ulong QueueLengthMax = 16384, QueueSizeMax = 33554432;
+
+    [DllImport(Dll, EntryPoint = "WinDivertSetParam", SetLastError = true)]
+    public static extern bool SetParam(IntPtr handle, Param param, ulong value);
+
     [DllImport(Dll, EntryPoint = "WinDivertShutdown", SetLastError = true)]
     public static extern bool ShutdownHandle(IntPtr handle, Shutdown how);
 

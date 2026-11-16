@@ -58,7 +58,24 @@ public sealed class TunnelBackends : IAsyncDisposable
         public int Leases;
         public DateTime LastUrgentProbe;
         public long LastUseTicks = DateTime.UtcNow.Ticks;
+        public long LastDataTicks;
     }
+
+    /// <summary>
+    /// A failed health check is ignored while the tunnel delivered data this recently: a saturated tunnel (a
+    /// download filling it) can take longer than the check allows to open a new channel, yet it is working.
+    /// Restarting it then would reset every connection through it.
+    /// </summary>
+    public TimeSpan BusyGrace { get; set; } = TimeSpan.FromSeconds(10);
+
+    /// <summary>Data arrived through <paramref name="tunnelId"/> (called by the relay; cheap).</summary>
+    public void NoteData(int tunnelId)
+    {
+        if (_health.TryGetValue(tunnelId, out var h)) Interlocked.Exchange(ref h.LastDataTicks, DateTime.UtcNow.Ticks);
+    }
+
+    private bool CarriedDataRecently(TunnelHealth h) =>
+        DateTime.UtcNow.Ticks - Interlocked.Read(ref h.LastDataTicks) < BusyGrace.Ticks;
 
 
     private readonly ConcurrentDictionary<int, IBackendSession> _sessions = new();
@@ -453,6 +470,12 @@ public sealed class TunnelBackends : IAsyncDisposable
                 h.ProbeFailures = 0;
                 if (GetStatus(t.Id).State == SessionState.NotResponding && _sessions.TryGetValue(t.Id, out var cur) && cur == s)
                     SetStatus(t, SessionState.Connected, $"responding again; local SOCKS {s.SocksEndPoint}");
+                return;
+            }
+            if (CarriedDataRecently(h))
+            {
+                h.ProbeFailures = 0;
+                Log($"{t.Type.DisplayName()} {t}: health check timed out, but the tunnel is still delivering data (busy); keeping it");
                 return;
             }
             h.ProbeFailures++;

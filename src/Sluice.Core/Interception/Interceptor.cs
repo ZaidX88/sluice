@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Net;
 using System.Runtime.InteropServices;
 using Sluice.Core.Dns;
@@ -50,6 +51,21 @@ public sealed class Interceptor : ITrafficCapture
     /// <summary>Log the headers of this many packets at Debug level (troubleshooting).</summary>
     public int DiagnosticPackets;
 
+    // New flows' first SYNs, decided off the packet thread (process lookup and rules can take milliseconds,
+    // and every packet on the machine would wait for them).
+    private const int DecisionWorkers = 4;
+    private readonly BlockingCollection<(byte[] Packet, WinDivertNative.Address Addr)> _deferred = new();
+    private Thread[] _deciders = [];
+
+    // Measurements (see docs/STATUS.md "How capture works"): how long packets wait in WinDivert's queue before
+    // Sluice reads them, how long Sluice holds each one, and how long a new connection waits for its decision.
+    private readonly LatencyStats _queueWait = new(), _handling = new() { SlowMs = 0.5 }, _decisions = new() { SlowMs = 5 };
+    private long _ownerFromSniff, _ownerFromTable;
+
+    public LatencyStats QueueWait => _queueWait;
+    public LatencyStats PacketHandling => _handling;
+    public LatencyStats Decisions => _decisions;
+
     public Interceptor(RoutingEngine engine) => _engine = engine;
 
     public long PacketsReflected => Interlocked.Read(ref _reflected);
@@ -93,7 +109,7 @@ public sealed class Interceptor : ITrafficCapture
         var relay = new TransparentInbound(_engine, new IPEndPoint(IPAddress.IPv6Any, 0), new LateBoundTable(() => _reflector, _fakeIps));
         _relay = relay;
         var port = (ushort)relay.LocalEndPoint.Port;
-        _reflector = new PacketReflector(port, Decide);
+        _reflector = new PacketReflector(port, Decide) { DeferDecisions = true };
         relay.Start();
 
         // Sluice's own lookups must bypass the OS DNS cache (which will hold fake addresses).
@@ -112,6 +128,11 @@ public sealed class Interceptor : ITrafficCapture
                 ? "outbound and !loopback and (tcp or udp)"
                 : "outbound and !loopback and (tcp or (udp and udp.DstPort == 53))",
             WinDivertNative.Layer.Network, WinDivertNative.OpenFlags.None);
+        // Default queue is 4096 packets / 4 MB: a burst beyond that while Sluice is busy is dropped silently,
+        // and TCP then retransmits and halves its window. Use WinDivert's maximum instead.
+        if (!WinDivertNative.SetParam(_net, WinDivertNative.Param.QueueLength, WinDivertNative.QueueLengthMax) |
+            !WinDivertNative.SetParam(_net, WinDivertNative.Param.QueueSize, WinDivertNative.QueueSizeMax))
+            _engine.Tracker.Write(LogLevel.Error, $"Could not enlarge the WinDivert queue ({new Win32Exception(Marshal.GetLastWin32Error()).Message})");
         if (captureUdp) _udp = new UdpNat(_engine, _fakeIps, InjectInbound);
 
         var policy = CurrentPolicy();
@@ -123,6 +144,10 @@ public sealed class Interceptor : ITrafficCapture
 
         _sockThread = new Thread(SocketLoop) { IsBackground = true, Name = "Sluice WinDivert socket" };
         _netThread = new Thread(NetworkLoop) { IsBackground = true, Name = "Sluice WinDivert network" };
+        _deciders = Enumerable.Range(0, DecisionWorkers)
+            .Select(i => new Thread(DecisionLoop) { IsBackground = true, Name = $"Sluice connection decisions {i}" })
+            .ToArray();
+        foreach (var t in _deciders) t.Start();
         _sockThread.Start();
         _netThread.Start();
         _startedAt = DateTime.UtcNow;
@@ -199,9 +224,13 @@ public sealed class Interceptor : ITrafficCapture
     /// <summary>Called on the SYN of every new outbound flow.</summary>
     private (bool Redirect, int Pid) Decide(IPEndPoint local, IPEndPoint remote)
     {
-        var pid = 0;
-        if (_socketPids.TryRemove((local.Port, Norm(remote)), out var hit)) pid = hit.Pid;
-        if (pid == 0) pid = ProcessLookup.FindTcpOwner(local, remote);
+        var pid = OwnerFromSniff(local, remote);
+        if (pid == 0)
+        {
+            Interlocked.Increment(ref _ownerFromTable);
+            pid = ProcessLookup.FindTcpOwner(local, remote);
+        }
+        else Interlocked.Increment(ref _ownerFromSniff);
 
         if (pid == Environment.ProcessId) return (false, pid);
 
@@ -226,10 +255,60 @@ public sealed class Interceptor : ITrafficCapture
         var match = _engine.Classify(new InboundRequest(host, remote.Port, pid, path));
         var redirect = fake || match.Action.Type != RuleActionType.Direct || _engine.Profile.Options.HandleDirectConnections;
         if (redirect) Interlocked.Increment(ref _redirectedFlows);
-        _engine.Tracker.Write(LogLevel.Debug, $"SYN {local} -> {host}:{remote.Port} pid {pid} ({Path.GetFileName(path) ?? "?"}) rule {match.Rule.Name} => {(redirect ? "redirect" : "pass")}");
-        if (!redirect)
+        var level = _engine.Tracker.Level;
+        if (level >= LogLevel.Debug)
+            _engine.Tracker.Write(LogLevel.Debug, $"SYN {local} -> {host}:{remote.Port} pid {pid} ({Path.GetFileName(path) ?? "?"}) rule {match.Rule.Name} => {(redirect ? "redirect" : "pass")}");
+        if (!redirect && level >= LogLevel.Verbose)
             _engine.Tracker.Write(LogLevel.Verbose, $"{Path.GetFileName(path) ?? "?"} ({pid}) - {remote} direct (rule {match.Rule.Name}, not intercepted)");
         return (redirect, pid);
+    }
+
+    /// <summary>
+    /// The owning PID as the socket layer reported it. That event comes on another handle and thread, so it can
+    /// arrive a moment after the SYN: wait up to 3 ms for it before falling back to scanning the TCP table.
+    /// </summary>
+    private int OwnerFromSniff(IPEndPoint local, IPEndPoint remote)
+    {
+        var key = (local.Port, Norm(remote));
+        var deadline = Stopwatch.GetTimestamp() + Stopwatch.Frequency * 3 / 1000;
+        var spin = new SpinWait();
+        while (true)
+        {
+            if (_socketPids.TryRemove(key, out var hit)) return hit.Pid;
+            if (Stopwatch.GetTimestamp() > deadline) return 0;
+            spin.SpinOnce(sleep1Threshold: -1);
+        }
+    }
+
+    private void DecisionLoop()
+    {
+        try
+        {
+            foreach (var (packet, original) in _deferred.GetConsumingEnumerable(_cts.Token))
+            {
+                var addr = original;
+                var started = Stopwatch.GetTimestamp();
+                try
+                {
+                    if (_reflector!.CompleteDeferred(packet) == PacketReflector.Verdict.Reflected)
+                    {
+                        addr.SetOutbound(false);
+                        WinDivertNative.CalcChecksums(packet, (uint)packet.Length, ref addr, 0);
+                        Interlocked.Increment(ref _reflected);
+                    }
+                    else Interlocked.Increment(ref _passed);
+                }
+                catch (Exception ex)
+                {
+                    // Decide failed before rewriting anything: let the connection go out as it was.
+                    _engine.Tracker.Write(LogLevel.Error, $"Connection decision failed, passing through: {ex.Message}");
+                    addr = original;
+                }
+                _decisions.Add(Stopwatch.GetTimestamp() - started);
+                if (_net != IntPtr.Zero) WinDivertNative.Send(_net, packet, (uint)packet.Length, out _, ref addr);
+            }
+        }
+        catch (OperationCanceledException) { }
     }
 
     private void SocketLoop()
@@ -266,61 +345,76 @@ public sealed class Interceptor : ITrafficCapture
                 continue;
             }
 
-            if (DiagnosticPackets > 0 && Interlocked.Decrement(ref DiagnosticPackets) >= 0)
-                _engine.Tracker.Write(LogLevel.Debug,
-                    $"pkt len={len} outbound={addr.Outbound} loop={addr.Loopback} v6={addr.IPv6} head={Convert.ToHexString(buf, 0, (int)Math.Min(len, 48u))}");
+            // WinDivert stamps each packet with the performance counter (the Stopwatch clock) when it captured it.
+            var received = Stopwatch.GetTimestamp();
+            if (addr.Timestamp > 0) _queueWait.Add(received - addr.Timestamp);
+            HandlePacket(buf, len, ref addr);
+            _handling.Add(Stopwatch.GetTimestamp() - received);
+        }
+    }
 
-            // DNS query: answer locally with a fake IP and drop the original.
-            if ((buf[0] >> 4 == 4 && buf[9] == 17) || (buf[0] >> 4 == 6 && buf[6] == 17))
+    private void HandlePacket(byte[] buf, uint len, ref WinDivertNative.Address addr)
+    {
+        if (DiagnosticPackets > 0 && Interlocked.Decrement(ref DiagnosticPackets) >= 0)
+            _engine.Tracker.Write(LogLevel.Debug,
+                $"pkt len={len} outbound={addr.Outbound} loop={addr.Loopback} v6={addr.IPv6} head={Convert.ToHexString(buf, 0, (int)Math.Min(len, 48u))}");
+
+        // DNS query: answer locally with a fake IP and drop the original.
+        if ((buf[0] >> 4 == 4 && buf[9] == 17) || (buf[0] >> 4 == 6 && buf[6] == 17))
+        {
+            byte[]? reply = null;
+            try { reply = _dns!.TryAnswer(buf.AsSpan(0, (int)len)); }
+            catch (Exception ex) { _engine.Tracker.Write(LogLevel.Error, $"DNS handling failed, passing through: {ex.Message}"); }
+
+            if (reply is not null)
             {
-                byte[]? reply = null;
-                try { reply = _dns!.TryAnswer(buf.AsSpan(0, (int)len)); }
-                catch (Exception ex) { _engine.Tracker.Write(LogLevel.Error, $"DNS handling failed, passing through: {ex.Message}"); }
-
-                if (reply is not null)
-                {
-                    var raddr = addr;
-                    raddr.SetOutbound(false);
-                    WinDivertNative.CalcChecksums(reply, (uint)reply.Length, ref raddr, 0);
-                    WinDivertNative.Send(_net, reply, (uint)reply.Length, out _, ref raddr);
-                    Interlocked.Increment(ref _dnsAnswered);
-                    continue;
-                }
-                if (_udp is not null)
-                {
-                    try
-                    {
-                        if (_udp.ProcessOutbound(buf.AsSpan(0, (int)len), addr) == UdpNat.Verdict.Drop) continue;
-                    }
-                    catch (Exception ex)
-                    {
-                        _engine.Tracker.Write(LogLevel.Error, $"UDP handling failed, passing through: {ex.Message}");
-                    }
-                }
-                WinDivertNative.Send(_net, buf, len, out _, ref addr);
-                continue;
+                var raddr = addr;
+                raddr.SetOutbound(false);
+                WinDivertNative.CalcChecksums(reply, (uint)reply.Length, ref raddr, 0);
+                WinDivertNative.Send(_net, reply, (uint)reply.Length, out _, ref raddr);
+                Interlocked.Increment(ref _dnsAnswered);
+                return;
             }
-
-            try
+            if (_udp is not null)
             {
-                if (_reflector!.ProcessOutbound(buf.AsSpan(0, (int)len)) == PacketReflector.Verdict.Reflected)
+                try
                 {
+                    if (_udp.ProcessOutbound(buf.AsSpan(0, (int)len), addr) == UdpNat.Verdict.Drop) return;
+                }
+                catch (Exception ex)
+                {
+                    _engine.Tracker.Write(LogLevel.Error, $"UDP handling failed, passing through: {ex.Message}");
+                }
+            }
+            WinDivertNative.Send(_net, buf, len, out _, ref addr);
+            return;
+        }
+
+        try
+        {
+            switch (_reflector!.ProcessOutbound(buf.AsSpan(0, (int)len)))
+            {
+                case PacketReflector.Verdict.Reflected:
                     addr.SetOutbound(false);
                     WinDivertNative.CalcChecksums(buf, len, ref addr, 0);
                     Interlocked.Increment(ref _reflected);
-                }
-                else
-                {
+                    break;
+                case PacketReflector.Verdict.Defer:
+                    _deferred.Add((buf.AsSpan(0, (int)len).ToArray(), addr));
+                    return;
+                case PacketReflector.Verdict.Drop:
+                    return;   // a repeated SYN while its decision is pending; the app sends it again
+                default:
                     Interlocked.Increment(ref _passed);
-                }
+                    break;
             }
-            catch (Exception ex)
-            {
-                _engine.Tracker.Write(LogLevel.Error, $"Packet handling failed, passing through: {ex.Message}");
-            }
-
-            WinDivertNative.Send(_net, buf, len, out _, ref addr);
         }
+        catch (Exception ex)
+        {
+            _engine.Tracker.Write(LogLevel.Error, $"Packet handling failed, passing through: {ex.Message}");
+        }
+
+        WinDivertNative.Send(_net, buf, len, out _, ref addr);
     }
 
     /// <summary>Injects a reply datagram as if it had arrived on the interface the app's packet left by.</summary>
@@ -345,6 +439,7 @@ public sealed class Interceptor : ITrafficCapture
                     $"Interception stats: {PacketsReflected:N0} reflected, {PacketsPassed:N0} passed, {_reflector?.FlowCount ?? 0} flows, " +
                     $"{DnsQueriesAnswered:N0} DNS answered, {_fakeIps.Count} fake IPs, {Interlocked.Read(ref _recvErrors)} recv errors" +
                     (_udp is null ? "" : $", UDP {_udp.FlowCount} flows / {_udp.DatagramsTunneled:N0} tunneled / {_udp.DatagramsDropped:N0} dropped"));
+                LogTimings();
                 _udp?.Sweep(TimeSpan.FromSeconds(60));
                 _reflector?.Sweep(TimeSpan.FromMinutes(10));
                 CheckRelayReachable();
@@ -355,6 +450,22 @@ public sealed class Interceptor : ITrafficCapture
         }
         catch (OperationCanceledException) { }
     }
+
+    /// <summary>Every 5 s at Verbose, when packets were handled: where captured packets spend their time.</summary>
+    private void LogTimings()
+    {
+        var wait = _queueWait.TakeInterval();
+        var handling = _handling.TakeInterval();
+        var decisions = _decisions.TakeInterval();
+        if (handling.Count == 0 || _engine.Tracker.Level < LogLevel.Verbose) return;
+        _engine.Tracker.Write(LogLevel.Verbose,
+            $"Capture timing (5 s): queue wait {wait}; handling {handling}; new connections {decisions}; pending {_reflector?.PendingCount ?? 0}");
+    }
+
+    private string TimingSummary() =>
+        $"queue wait {_queueWait.Total} ({_queueWait.Slow:N0} over 1 ms); handling {_handling.Total} ({_handling.Slow:N0} over 0.5 ms); " +
+        $"new connections {_decisions.Total} ({_decisions.Slow:N0} over 5 ms); owner from socket event {Interlocked.Read(ref _ownerFromSniff):N0}, " +
+        $"from TCP table {Interlocked.Read(ref _ownerFromTable):N0}";
 
     private void CheckRelayReachable()
     {
@@ -377,6 +488,8 @@ public sealed class Interceptor : ITrafficCapture
             if (h != IntPtr.Zero) WinDivertNative.ShutdownHandle(h, WinDivertNative.Shutdown.Both);
         _netThread?.Join(2000);
         _sockThread?.Join(2000);
+        _deferred.CompleteAdding();
+        foreach (var t in _deciders) t.Join(2000);
         foreach (var h in new[] { _net, _sock })
             if (h != IntPtr.Zero) WinDivertNative.Close(h);
         _net = _sock = IntPtr.Zero;
@@ -389,6 +502,7 @@ public sealed class Interceptor : ITrafficCapture
         // Fake answers are meaningless once we stop: drop them from the OS cache.
         if (_fakeIps.Count > 0) FlushOsDnsCache();
         _engine.Tracker.Write(LogLevel.Normal, $"Interception stopped ({PacketsReflected:N0} packets reflected, {DnsQueriesAnswered:N0} DNS queries answered)");
+        if (_handling.Total.Count > 0) _engine.Tracker.Write(LogLevel.Normal, $"Capture timing: {TimingSummary()}");
     }
 
     [DllImport("dnsapi.dll", EntryPoint = "DnsFlushResolverCache")]

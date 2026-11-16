@@ -55,7 +55,7 @@ OS-specific notes: [windows/BUILD.md](windows/BUILD.md), [linux/BUILD.md](linux/
 ## Testing
 
 ```bash
-dotnet test tests/Sluice.Tests                                         # all 258 tests, incl. live sing-box/SSH tests
+dotnet test tests/Sluice.Tests                                         # all 265 tests, incl. live sing-box/SSH tests
 dotnet test tests/Sluice.Tests --filter "FullyQualifiedName!~Live"     # without the live ones
 ```
 

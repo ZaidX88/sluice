@@ -653,6 +653,39 @@ public class LiveSingBoxTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task BusyTunnel_FailedCheck_IsNotRestarted()
+    {
+        if (!Enabled) return;
+        await using var b = FastBackends();
+        b.HealthInterval = TimeSpan.FromSeconds(1);
+        b.BusyGrace = TimeSpan.FromSeconds(3);
+        var log = new List<string>();
+        b.Log = m => { lock (log) log.Add(m); };
+        var t = TrojanTunnel();
+        await b.GetLocalSocksAsync(t, default);
+        var seen = new List<SessionState>();
+        b.StatusChanged += (_, st) => { lock (seen) seen.Add(st.State); };
+
+        using (new Frozen(_server!))
+        {
+            // Checks time out, but data keeps arriving through the tunnel (a download filling it): keep it.
+            var until = DateTime.UtcNow.AddSeconds(8);
+            while (DateTime.UtcNow < until)
+            {
+                b.NoteData(t.Id);
+                await b.MonitorOnceAsync();
+                await Task.Delay(200);
+            }
+            lock (log) Assert.Contains(log, m => m.Contains("still delivering data"));
+            lock (seen) Assert.DoesNotContain(SessionState.Reconnecting, seen);
+
+            // Data stops: the next failed checks restart it as before.
+            await WaitForState(b, t.Id, SessionState.Reconnecting, 25);
+        }
+        await WaitForState(b, t.Id, SessionState.Connected, 30);
+    }
+
+    [Fact]
     public async Task NetworkChange_RestartsRunningTunnels()
     {
         if (!Enabled) return;

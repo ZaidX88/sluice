@@ -13,7 +13,7 @@ public servers (Windows) and end to end for every protocol on Linux.
 Plan of record, in order of reading: `docs/STATUS.md` → `docs/REQUIRED.md` → `docs/FIXES.md` → `docs/FEATURES.md`.
 
 Next, as the owner last discussed:
-1. **Windows capture speed (2026-11-17):** docs/FIXES.md §8. Fixed on `perf/capture-throughput` (not merged): the
+1. **Windows capture speed (2026-11-17):** docs/FIXES.md §8. Fixed (`perf/capture-throughput`, merged): the
    main cause was the health check restarting a busy tunnel (§9). Chromium and curl now match the SOCKS listener
    through capture on the same server. Pending: the owner's own browser speed test on one hand-picked server in both
    modes. Secure DNS handling (§10) and the WFP driver are the owner's decisions.

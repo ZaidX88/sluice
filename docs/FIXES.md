@@ -81,10 +81,10 @@ one short line per distinct error, repeats collapsed.
   `--filter FullyQualifiedName~LiveSingBoxTests` passes on its own. Give their waits more headroom, or run the live class
   without parallelisation (`[Collection]` with `DisableParallelization`).
 
-## 8. Windows capture seemed slower than the SOCKS listener — fixed on `perf/capture-throughput`
+## 8. Windows capture seemed slower than the SOCKS listener — fixed
 
-**Status:** the main cause, Sluice's health check restarting a busy tunnel (§9), is fixed on `perf/capture-throughput`
-(not merged). Sluice's per-packet path is measured and no longer limits throughput at this tunnel's speed. With the same
+**Status:** the main cause, Sluice's health check restarting a busy tunnel (§9), is fixed (merged
+2026-11-17). Sluice's per-packet path is measured and no longer limits throughput at this tunnel's speed. With the same
 server and the browser's DNS going through Sluice, Chromium and curl get the same speed captured as through the SOCKS
 listener. The owner's remaining browser speed-test gap is explained by the test setup (run 4). Final confirmation: the
 owner runs the browser speed test on the same hand-picked server in both modes.
@@ -135,7 +135,7 @@ owner runs the browser speed test on the same hand-picked server in both modes.
 Proxifier redirects TCP in the kernel at connect time with a WFP callout driver (ALE connect-redirect layer), so data
 packets never reach user mode and the driver supplies the PID.
 
-**Done on `perf/capture-throughput`** (not merged): the busy-tunnel health check fix (§9); WinDivert queue at its maximum
+**Done** (`perf/capture-throughput`, merged 2026-11-17): the busy-tunnel health check fix (§9); WinDivert queue at its maximum
 (16384 packets / 32 MB); new-flow decisions on 4 worker threads (`PacketReflector.DeferDecisions`, `CompleteDeferred`);
 wait up to 3 ms for the sniffed owner before the table scan; log strings built only when needed; timing counters
 (`LatencyStats`).
@@ -158,7 +158,7 @@ captured and through SOCKS back to back, same server; compare with `curl` and `c
 - A Chromium browser's downloads through capture are within ~10% of the SOCKS listener. **Passes** (run 5).
 - The owner's browser speed test on the same hand-picked server, both modes. **Pending.**
 
-## 9. Health check restarts a busy tunnel — fixed on `perf/capture-throughput`
+## 9. Health check restarts a busy tunnel — fixed
 
 **Seen:** during a speed test Sluice restarted a working tunnel, resetting every connection through it.
 

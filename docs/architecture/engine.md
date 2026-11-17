@@ -89,7 +89,9 @@ hostname of fake IPs) and by `LinuxCapture.FlowTable`.
 - **`FileLog`** subscribes to the tracker's log and writes `Sluice-yyyy-MM-dd.log` files with its own level.
 - **`Relay.RunAsync`** pumps bytes both ways with 64 KB buffers, forwards half-closes, and tears down both sides when
   either fails. With `downstreamBuffer > 0` the download side reads into a bounded queue (`ElasticPumpAsync`) so a slow
-  app cannot stall an SSH.NET session shared with other connections.
+  app cannot stall an SSH.NET session shared with other connections. Every read is counted in the engine's
+  **`RelayStats`** (reads, bytes, reads under 4 KB, per direction); `RoutingEngine` logs them every 5 s at Verbose with
+  Sluice's CPU time ("Relay (5 s)") and the totals when it is disposed.
 
 ## Upstream connections: `Proxy/`
 

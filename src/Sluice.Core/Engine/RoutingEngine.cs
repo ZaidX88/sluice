@@ -40,15 +40,37 @@ public sealed class RoutingEngine : IAsyncDisposable
     /// <summary>Client sessions of encrypted tunnels (SSH, …), shared by all connections.</summary>
     public Tunnels.TunnelBackends Backends { get; }
 
+    /// <summary>Reads per direction for every relayed connection (logged every 5 s at Verbose with Sluice's CPU time).</summary>
+    public RelayStats RelayStats { get; } = new();
+
+    private readonly Timer _relayLog;
+
     public RoutingEngine(Profile profile, ConnectionTracker? tracker = null)
     {
         Tracker = tracker ?? new ConnectionTracker();
         Backends = new Tunnels.TunnelBackends(line => Tracker.Write(LogLevel.Normal, line));
         _state = Build(profile);
         _ = Backends.PruneAsync(profile);   // learn the tunnels (and which are turned off)
+        _relayLog = new Timer(_ => LogRelay(), null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
     }
 
-    public async ValueTask DisposeAsync() => await Backends.DisposeAsync();
+    /// <summary>
+    /// "Relay (5 s)" at Verbose: explains CPU spikes. The relay's cost follows the number of reads, so a tunnel that
+    /// delivers data in many small pieces costs more CPU per MB than one that delivers it in large ones.
+    /// </summary>
+    private void LogRelay()
+    {
+        var line = RelayStats.TakeInterval();   // always taken, so each line covers only the last 5 s
+        if (line is not null && Tracker.Level >= LogLevel.Verbose) Tracker.Write(LogLevel.Verbose, $"Relay (5 s): {line}");
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await _relayLog.DisposeAsync();
+        if (RelayStats.TotalDown.Reads + RelayStats.TotalUp.Reads > 0)
+            Tracker.Write(LogLevel.Normal, $"Relay totals: down {RelayStats.TotalDown}; up {RelayStats.TotalUp}");
+        await Backends.DisposeAsync();
+    }
 
     public Profile Profile => _state.Profile;
 
@@ -301,7 +323,8 @@ public sealed class RoutingEngine : IAsyncDisposable
                     foreach (var id in tunnelIds) Backends.NoteData(id);
                 },
                 linked.Token,
-                UsesSsh(state.Profile, match.Action) ? SshDownstreamBuffer : 0);
+                UsesSsh(state.Profile, match.Action) ? SshDownstreamBuffer : 0,
+                RelayStats);
 
             Tracker.Write(LogLevel.Verbose, $"{who} - {target} closed, {entry.BytesSent} bytes sent, {entry.BytesReceived} bytes received");
             Tracker.End(entry, ConnectionState.Closed);

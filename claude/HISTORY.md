@@ -48,3 +48,5 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
 - Narrowed Windows capture filter (2026-11-17): only packets Sluice may rewrite reach user mode (`CaptureFilter`):
   new SYNs, the relay's packets, the fake-address range, and a reopened "followers" handle for redirected real
   addresses. Direct traffic and the tunnel helpers' own connections stay in the kernel (docs/FIXES.md §8).
+- Relay counters (2026-11-17): reads per direction, read size and Sluice's CPU per MB, logged every 5 s at Verbose
+  ("Relay (5 s)"), to explain CPU spikes (`RelayStats`).

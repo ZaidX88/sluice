@@ -158,8 +158,11 @@ same server, back to back): curl 6 × 700 KB capture 1.25 M / 1.58 M vs SOCKS 1.
 100 MB (10 × 10 MB on one connection; the test server ends any response after ~20 s), each build started fresh, back
 to back: before: capture 1.51 / 1.46 MB/s, SOCKS 1.55 / 1.19, Sluice CPU per 100 MB 11.9–12.7 s captured; after:
 capture 1.82 / 1.51, SOCKS 1.48 / 1.56, CPU 2.9 s captured and 1.1–1.3 s through SOCKS. Not yet explained: the same
-build used 7.5–9.1 s per 100 MB after running 38 minutes (with `--log-file`, so at Debug level); worth checking whether
-something grows with uptime.
+build used 7.5–9.1 s per 100 MB after running 38 minutes (with `--log-file`, so at Debug level). Checked afterwards:
+not reproduced at 17–25 minutes, after 500 extra connections, after browser runs, or with the window visible (230–515 ms
+per 10 MB captured, 31–266 ms through SOCKS); the high readings fell in one 12-minute window and hit both builds and
+SOCKS mode too, so they came from outside Sluice's state. The "Relay (5 s)" log line (reads, read size, CPU per MB;
+[STATUS.md](STATUS.md#how-capture-works)) now shows the cause if it happens again.
 
 **Speed-test pitfall:** run the two modes within seconds of each other on the same server, and make sure every test
 browser has exited (a runner whose cleanup failed left headless Chrome instances running and spread the runs over

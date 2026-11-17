@@ -35,7 +35,7 @@ Ideas not built yet (roughly by value), performance work, and how to build and t
 - **Windows capture throughput** (one packet thread doing one receive per packet): measured, not limiting on a
   ~2 Mbps tunnel; may matter on faster ones (locally the WinDivert loop measured ~16–35 MB/s versus ~400 MB/s through
   the SOCKS listener). Possible improvements are listed under "Later" in
-  [FIXES.md](FIXES.md#8-windows-capture-seemed-slower-than-the-socks-listener--fixed-on-perfcapture-throughput).
+  [FIXES.md](FIXES.md#8-windows-capture-seemed-slower-than-the-socks-listener--fixed).
 - **Process lookup on the Linux packet thread** holds up other packets too. Move it to a worker and give verdicts
   out of order (NFQUEUE allows that).
 - **UDP "through tunnels" on Windows** sends every UDP packet through Sluice. Exclude LAN, multicast and always-direct

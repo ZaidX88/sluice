@@ -39,3 +39,6 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   doesn't know is reset at once instead of being sent into a tunnel.
 - Architecture reference: `docs/ARCHITECTURE.md` (connection and DNS flow) with one page per part in
   `docs/architecture/`, read from the code.
+- Windows capture speed (2026-11-17): connection decisions moved off the packet thread to 4 workers, WinDivert queue
+  at its maximum, timing counters; the health check no longer restarts a tunnel that is carrying data. Captured
+  traffic now matches the SOCKS listener on the same server (docs/FIXES.md §8, §9).

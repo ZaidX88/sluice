@@ -23,7 +23,7 @@ They follow the same model:
 |---|---|---|
 | Class | `Interceptor` (`src/Sluice.Core/Interception/`, still in Core) | `LinuxCapture` (`src/Sluice.Platform.Linux/Capture/`) |
 | Packet source | WinDivert driver (`WinDivertNative`): a socket-layer sniff handle (PIDs) and a network-layer handle (packets) | nftables table `inet sluice` (`NftRules`) queueing first SYNs to NFQUEUE 1473, read by `NfQueue` (raw netlink, `Native/Libc.cs`) |
-| PID | WinDivert socket events (`processId`), else iphlpapi (`ProcessLookup`) | `/proc` (`LinuxProcessLookup`) |
+| PID | WinDivert socket events (`processId`; waits up to 3 ms for the event), else iphlpapi (`ProcessLookup`) | `/proc` (`LinuxProcessLookup`) |
 | Steering to the relay | **Reflection**: `PacketReflector` rewrites the packets of a redirected flow and reinjects them inbound, in both directions, for the whole connection | **Mark + REDIRECT**: the verdict sets mark `0x5C1CE`; nftables' nat chain redirects marked SYNs to the relay port; the kernel does the rest |
 | Original destination | `PacketReflector` flow table, keyed by (remote address, app port) | `LinuxCapture.FlowTable`, keyed by the app's endpoint (REDIRECT keeps the source) |
 | DNS | `DnsRedirector.TryAnswer` on captured UDP/53 packets; an answer is injected, the query dropped. Unfaked queries pass | nftables redirects UDP/53 to `LinuxDnsServer` (127.0.0.1:P and [::1]:P); unfaked queries are forwarded to the real upstreams (`UpstreamServers`, skipping loopback stubs) |
@@ -36,12 +36,25 @@ They follow the same model:
 
 ```
   WinDivert socket layer (sniff) ──CONNECT events──▶ _socketPids (local port, remote) → PID
-  WinDivert network layer  ── every outbound packet ──▶ NetworkLoop (own thread)
+  WinDivert network layer  ── every outbound packet ──▶ NetworkLoop (own thread) → HandlePacket
         ├─ UDP: DnsRedirector.TryAnswer → inject reply ;  else UdpNat.ProcessOutbound → drop or re-send
         └─ TCP: PacketReflector.ProcessOutbound
-               ├─ SYN of a new flow → Interceptor.Decide(local, remote) → redirect? (Classify)
+               ├─ first SYN of a new flow → Defer: copy queued ──▶ DecisionLoop (4 worker threads)
+               │       └─ CompleteDeferred → Interceptor.Decide(local, remote) → redirect? (Classify) → send
+               ├─ repeated SYN while its decision is pending → Drop (the app retransmits it)
                └─ redirected flow → rewrite + reinject inbound to TransparentInbound ([::]:random)
 ```
+
+- **Decisions off the packet thread** (`PacketReflector.DeferDecisions`): process lookup and rules can take
+  milliseconds, so a new flow's first SYN is handed to one of 4 `DecisionLoop` threads and every other packet keeps
+  moving. If a decision throws, the SYN goes out unchanged. A decision pending for more than 5 s is treated as lost.
+- **WinDivert queue** at its maximum (16384 packets / 32 MB, `WinDivertNative.QueueLengthMax` / `QueueSizeMax`)
+  instead of the default 4096 / 4 MB, so a burst while Sluice is busy isn't dropped.
+- **Timing counters** (`LatencyStats`): queue wait (WinDivert's capture timestamp to Sluice reading the packet),
+  handling time per packet, decision time per new connection, and whether the owner came from the socket event or the
+  TCP table. Logged every 5 s at Verbose and once as a summary when capture stops. Measurements and what limits speed:
+  [FIXES.md §8](../FIXES.md#8-windows-capture-seemed-slower-than-the-socks-listener--fixed).
+- Log strings for each connection are built only when the log level shows them.
 
 - `Decide` never redirects Sluice's own PID or DNS over TCP to a real server; always redirects fake IPs; skips
   connections with no PID unless `ProcessServices`; otherwise redirects anything that is not Direct (or everything with

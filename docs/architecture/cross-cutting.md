@@ -71,8 +71,9 @@ headers (`Interceptor.DiagnosticPackets`). Helper output (sing-box) is logged li
   ([profiles.md](profiles.md#password-encryption)); the default `Basic` is obfuscation only, so a `.sluice` file should be
   treated as secret unless a master password (or, on Windows, DPAPI) is used. The master password lives only in memory.
   `settings.json` and `fake-dns.json` hold no secrets (but `fake-dns.json` lists hostnames the user visited).
-- **Secrets in helper configs.** sing-box configs contain passwords and keys: written to a fresh owner-only temp
-  folder per process (0700, files 0600 on Linux) and deleted as soon as sing-box is listening.
+- **Secrets in helper configs.** sing-box configs contain passwords and keys: written to a per-user app folder
+  (`HelperConfigFolder`; 0700, files 0600 on Linux), never the shared or temp folder, and deleted as soon as sing-box
+  is listening.
 - **Elevation.** Windows: the whole app runs as administrator to capture (relaunch through UAC). Linux: no root; the
   installer grants `cap_net_admin,cap_setgid` (plus optional caps to see other users' processes) with `setcap`, and
   `CAP_NET_ADMIN` is passed on as an ambient capability only to the `nft` child. Sluice changes its own group with

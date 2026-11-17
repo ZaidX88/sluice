@@ -81,6 +81,11 @@ UDP of tunneled apps goes through `UdpNat`.
   waited in WinDivert's queue (from WinDivert's capture timestamp), how long Sluice held each one, and how long new
   connections waited for their decision. Stopping capture logs the totals and how often the owner came from the socket
   event versus the TCP table (`LatencyStats`).
+- **Relay and CPU** (both platforms, capture or SOCKS listener): every 5 s at Verbose a "Relay (5 s)" line gives reads
+  per direction, bytes, average read size, reads under 4 KB, and Sluice's CPU time over the same 5 s (and per MB)
+  (`RelayStats`, counted by `Relay`, logged by `RoutingEngine`). The relay's CPU follows the number of reads, so a
+  tunnel delivering data in small pieces costs more per MB. Typical (SSH via sing-box, ~1.5 MB/s): ~30 KB per read,
+  15–60 ms of CPU per MB.
 
 **Tunnel health checks** (`TunnelBackends`): a connected tunnel is checked every 30 s by opening a test connection
 through it (`ProbeTimeout` 6 s, half per target). Two failed checks in a row (or one after a real connection failed)

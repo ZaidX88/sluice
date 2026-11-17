@@ -19,14 +19,17 @@ public static class Relay
     /// with an unlimited window and writes them from one thread): one slow reader would otherwise stall every
     /// connection sharing the SSH session.
     /// </param>
+    /// <param name="stats">Counts every read per direction (see <see cref="RelayStats"/>); optional.</param>
     public static async Task RunAsync(Socket app, Socket upstream, Action<long> onSent, Action<long> onReceived, CancellationToken ct,
-        int downstreamBuffer = 0)
+        int downstreamBuffer = 0, RelayStats? stats = null)
     {
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        var up = PumpAsync(app, upstream, onSent, cts.Token);
+        Action<int>? readUp = stats is null ? null : stats.Up;
+        Action<int>? readDown = stats is null ? null : stats.Down;
+        var up = PumpAsync(app, upstream, onSent, readUp, cts.Token);
         var down = downstreamBuffer > 0
-            ? ElasticPumpAsync(upstream, app, onReceived, downstreamBuffer, cts.Token)
-            : PumpAsync(upstream, app, onReceived, cts.Token);
+            ? ElasticPumpAsync(upstream, app, onReceived, readDown, downstreamBuffer, cts.Token)
+            : PumpAsync(upstream, app, onReceived, readDown, cts.Token);
 
         var first = await Task.WhenAny(up, down);
         if (!first.Result) cts.Cancel();
@@ -34,7 +37,7 @@ public static class Relay
     }
 
     /// <returns>true on clean EOF, false on error or cancellation.</returns>
-    private static async Task<bool> PumpAsync(Socket from, Socket to, Action<long> count, CancellationToken ct)
+    private static async Task<bool> PumpAsync(Socket from, Socket to, Action<long> count, Action<int>? onRead, CancellationToken ct)
     {
         var buf = new byte[BufferSize];
         try
@@ -43,6 +46,7 @@ public static class Relay
             {
                 var n = await from.ReceiveAsync(buf, SocketFlags.None, ct);
                 if (n == 0) break;
+                onRead?.Invoke(n);
                 var off = 0;
                 while (off < n) off += await to.SendAsync(buf.AsMemory(off, n - off), SocketFlags.None, ct);
                 count(n);
@@ -57,7 +61,7 @@ public static class Relay
     }
 
     /// <summary>Reader drains <paramref name="from"/> into a bounded queue; writer feeds <paramref name="to"/> at its own pace.</summary>
-    private static async Task<bool> ElasticPumpAsync(Socket from, Socket to, Action<long> count, int capacity, CancellationToken ct)
+    private static async Task<bool> ElasticPumpAsync(Socket from, Socket to, Action<long> count, Action<int>? onRead, int capacity, CancellationToken ct)
     {
         var queue = Channel.CreateUnbounded<(byte[] Buffer, int Length)>(new UnboundedChannelOptions { SingleReader = true, SingleWriter = true });
         var queued = 0L;
@@ -82,6 +86,7 @@ public static class Relay
                         queue.Writer.TryComplete();
                         return true;
                     }
+                    onRead?.Invoke(n);
                     Interlocked.Add(ref queued, n);
                     queue.Writer.TryWrite((buf, n));
                 }

@@ -36,7 +36,8 @@ They follow the same model:
 
 ```
   WinDivert socket layer (sniff) ──CONNECT events──▶ _socketPids (local port, remote) → PID
-  WinDivert network layer  ── every outbound packet ──▶ NetworkLoop (own thread) → HandlePacket
+  WinDivert network layer, main handle ── new SYNs, relay port, fake range, UDP ──▶ NetworkLoop (own thread) → HandlePacket
+  WinDivert network layer, followers' handle ── later packets to redirected real addresses ──▶ NetworkLoop (own thread)
         ├─ UDP: DnsRedirector.TryAnswer → inject reply ;  else UdpNat.ProcessOutbound → drop or re-send
         └─ TCP: PacketReflector.ProcessOutbound
                ├─ first SYN of a new flow → Defer: copy queued ──▶ DecisionLoop (4 worker threads)
@@ -45,6 +46,12 @@ They follow the same model:
                └─ redirected flow → rewrite + reinject inbound to TransparentInbound ([::]:random)
 ```
 
+- **Narrow filters** (`CaptureFilter`): only packets Sluice may rewrite are captured; direct traffic and the tunnel
+  helpers' own connections never reach user mode. The two filters never match the same packet (followers exclude SYNs
+  and the relay port; fake addresses are never followed). `Decide` calls `Follow(remote)` for a redirected real address,
+  which reopens the followers' handle (alternating priorities 1 and 2, new handle first, old one shut down for
+  receiving, drained and closed by its own thread) before the SYN is sent on. `SweepLoop` calls `PruneFollowed`
+  (addresses with no redirected flow, added over a minute ago). Details: [STATUS.md](../STATUS.md#how-capture-works).
 - **Decisions off the packet thread** (`PacketReflector.DeferDecisions`): process lookup and rules can take
   milliseconds, so a new flow's first SYN is handed to one of 4 `DecisionLoop` threads and every other packet keeps
   moving. If a decision throws, the SYN goes out unchanged. A decision pending for more than 5 s is treated as lost.
@@ -65,7 +72,7 @@ They follow the same model:
   `EngineHost.AllowThroughFirewall` (a `netsh advfirewall` rule for this executable), only when the user presses it.
 - `WarnAboutConflicts` logs when another traffic redirector is running (it would capture connections before WinDivert).
 - `SweepLoop` also saves fake IPs, expires idle reflector flows (10 min) and UDP flows (60 s), and logs counters at Debug.
-- Stopping (`DisposeAsync`) shuts both handles, joins the threads, stops the relay and `UdpNat`, saves fake IPs, removes
+- Stopping (`DisposeAsync`) shuts all handles, joins the threads, stops the relay and `UdpNat`, saves fake IPs, removes
   `HostResolver`, and flushes the OS DNS cache if fakes were handed out.
 
 ## Linux: `LinuxCapture`

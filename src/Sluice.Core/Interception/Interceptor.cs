@@ -19,6 +19,8 @@ namespace Sluice.Core.Interception;
 ///    Sluice's own PID is excluded in the filter, so its upstream sockets are never touched.
 ///  - Network layer: on each new flow's SYN, asks the rule engine; non-direct flows are
 ///    reflected to the <see cref="TransparentInbound"/> relay (see <see cref="PacketReflector"/>).
+///    Only packets that may need rewriting are captured (<see cref="CaptureFilter"/>): a main handle for SYNs, the relay's
+///    packets and the fake-address range, and a followers' handle for redirected flows to real addresses.
 /// </summary>
 public sealed class Interceptor : ITrafficCapture
 {
@@ -29,6 +31,17 @@ public sealed class Interceptor : ITrafficCapture
     private readonly CancellationTokenSource _cts = new();
     private IntPtr _net = IntPtr.Zero, _sock = IntPtr.Zero;
     private Thread? _netThread, _sockThread;
+
+    // Later packets of redirected flows to real (non-fake) addresses come on a second handle whose filter lists those
+    // addresses (CaptureFilter.Followers). It is reopened when the list changes: the new handle opens first, then the
+    // old one is shut down for receiving, drains what it already queued and closes itself.
+    private readonly object _followGate = new();
+    private readonly Dictionary<IPAddress, DateTime> _followed = new();   // address → when it was added
+    private IntPtr _follow = IntPtr.Zero;
+    private string? _followFilter;
+    private short _followPriority = 1;
+    private long _followReopens;
+    private readonly List<Thread> _followThreads = [];
     private Task? _sweeper;
     private TransparentInbound? _relay;
     private PacketReflector? _reflector;
@@ -124,15 +137,10 @@ public sealed class Interceptor : ITrafficCapture
             WinDivertNative.Layer.Socket, WinDivertNative.OpenFlags.Sniff | WinDivertNative.OpenFlags.RecvOnly);
         UdpMode = _engine.Profile.Options.Udp;
         var captureUdp = UdpMode != UdpMode.Bypass;
-        _net = OpenOrThrow(captureUdp
-                ? "outbound and !loopback and (tcp or udp)"
-                : "outbound and !loopback and (tcp or (udp and udp.DstPort == 53))",
-            WinDivertNative.Layer.Network, WinDivertNative.OpenFlags.None);
-        // Default queue is 4096 packets / 4 MB: a burst beyond that while Sluice is busy is dropped silently,
-        // and TCP then retransmits and halves its window. Use WinDivert's maximum instead.
-        if (!WinDivertNative.SetParam(_net, WinDivertNative.Param.QueueLength, WinDivertNative.QueueLengthMax) |
-            !WinDivertNative.SetParam(_net, WinDivertNative.Param.QueueSize, WinDivertNative.QueueSizeMax))
-            _engine.Tracker.Write(LogLevel.Error, $"Could not enlarge the WinDivert queue ({new Win32Exception(Marshal.GetLastWin32Error()).Message})");
+        // Only packets Sluice may rewrite (see CaptureFilter): direct traffic and the tunnel helpers' own connections
+        // stay in the kernel.
+        _net = OpenOrThrow(CaptureFilter.Main(port, captureUdp), WinDivertNative.Layer.Network, WinDivertNative.OpenFlags.None);
+        EnlargeQueue(_net);
         if (captureUdp) _udp = new UdpNat(_engine, _fakeIps, InjectInbound);
 
         var policy = CurrentPolicy();
@@ -143,7 +151,8 @@ public sealed class Interceptor : ITrafficCapture
         }
 
         _sockThread = new Thread(SocketLoop) { IsBackground = true, Name = "Sluice WinDivert socket" };
-        _netThread = new Thread(NetworkLoop) { IsBackground = true, Name = "Sluice WinDivert network" };
+        var main = _net;
+        _netThread = new Thread(() => NetworkLoop(main, follower: false)) { IsBackground = true, Name = "Sluice WinDivert network" };
         _deciders = Enumerable.Range(0, DecisionWorkers)
             .Select(i => new Thread(DecisionLoop) { IsBackground = true, Name = $"Sluice connection decisions {i}" })
             .ToArray();
@@ -182,6 +191,95 @@ public sealed class Interceptor : ITrafficCapture
                     $"Another traffic redirector is running ({string.Join(", ", running)}). Connections it captures will bypass Sluice; quit it for Sluice to work.");
         }
         catch { /* best effort */ }
+    }
+
+    /// <summary>
+    /// Default queue is 4096 packets / 4 MB: a burst beyond that while Sluice is busy is dropped silently, and TCP then
+    /// retransmits and halves its window. Use WinDivert's maximum instead.
+    /// </summary>
+    private void EnlargeQueue(IntPtr h)
+    {
+        if (!WinDivertNative.SetParam(h, WinDivertNative.Param.QueueLength, WinDivertNative.QueueLengthMax) |
+            !WinDivertNative.SetParam(h, WinDivertNative.Param.QueueSize, WinDivertNative.QueueSizeMax))
+            _engine.Tracker.Write(LogLevel.Error, $"Could not enlarge the WinDivert queue ({new Win32Exception(Marshal.GetLastWin32Error()).Message})");
+    }
+
+    /// <summary>
+    /// Makes sure the later packets of a flow redirected to <paramref name="remote"/> are captured. Called on a decision
+    /// thread before the flow's SYN is sent on, so the app's next packet is already caught.
+    /// </summary>
+    private void Follow(IPAddress remote)
+    {
+        if (remote.IsIPv4MappedToIPv6) remote = remote.MapToIPv4();
+        lock (_followGate)
+        {
+            if (_followed.ContainsKey(remote) || _cts.IsCancellationRequested) return;
+            _followed[remote] = DateTime.UtcNow;
+            ReopenFollowers();
+        }
+    }
+
+    /// <summary>Stops following addresses with no redirected flow left (and added over a minute ago).</summary>
+    private void PruneFollowed()
+    {
+        if (_reflector is null) return;
+        var live = _reflector.RedirectedRemotes();
+        var cutoff = DateTime.UtcNow - TimeSpan.FromMinutes(1);
+        lock (_followGate)
+        {
+            var gone = _followed.Where(kv => kv.Value < cutoff && !live.Contains(kv.Key)).Select(kv => kv.Key).ToList();
+            if (gone.Count == 0 || _cts.IsCancellationRequested) return;
+            foreach (var a in gone) _followed.Remove(a);
+            ReopenFollowers();
+        }
+    }
+
+    /// <summary>Opens a follower handle for the current address list and retires the previous one. Caller holds _followGate.</summary>
+    private void ReopenFollowers()
+    {
+        var port = (ushort)_relay!.LocalEndPoint.Port;
+        var filter = CaptureFilter.Followers(port, _followed.Keys);
+        if (filter is not null && filter != CaptureFilter.FollowersBroad(port) &&
+            WinDivertNative.CheckFilter(filter, WinDivertNative.Layer.Network) is { } why)
+        {
+            _engine.Tracker.Write(LogLevel.Verbose, $"Capture filter for {_followed.Count} addresses rejected ({why}); capturing all later packets instead");
+            filter = CaptureFilter.FollowersBroad(port);
+        }
+        if (filter == _followFilter) return;
+
+        var next = IntPtr.Zero;
+        if (filter is not null)
+        {
+            // Alternate priorities: while both are open, a packet the higher one passes on unchanged reaches the other,
+            // which passes it again (rewritten packets become inbound and no longer match).
+            _followPriority = (short)(_followPriority == 1 ? 2 : 1);
+            next = WinDivertNative.Open(filter, WinDivertNative.Layer.Network, _followPriority, WinDivertNative.OpenFlags.None);
+            if (next == WinDivertNative.InvalidHandle)
+            {
+                _engine.Tracker.Write(LogLevel.Error, $"Could not update the capture filter ({new Win32Exception(Marshal.GetLastWin32Error()).Message}); some redirected connections may fail");
+                return;
+            }
+            EnlargeQueue(next);
+            var h = next;
+            var t = new Thread(() => NetworkLoop(h, follower: true)) { IsBackground = true, Name = "Sluice WinDivert followers" };
+            lock (_followThreads)
+            {
+                _followThreads.RemoveAll(x => !x.IsAlive);
+                _followThreads.Add(t);
+            }
+            t.Start();
+        }
+
+        var old = _follow;
+        _follow = next;
+        _followFilter = filter;
+        Interlocked.Increment(ref _followReopens);
+        // The old handle's thread reads what is still queued, then gets ERROR_NO_DATA and closes the handle.
+        if (old != IntPtr.Zero) WinDivertNative.ShutdownHandle(old, WinDivertNative.Shutdown.Recv);
+        if (_engine.Tracker.Level >= LogLevel.Verbose)
+            _engine.Tracker.Write(LogLevel.Verbose, filter == CaptureFilter.FollowersBroad(port)
+                ? $"Capturing all later TCP packets ({_followed.Count} redirected addresses)"
+                : $"Capturing later packets for {_followed.Count} redirected address(es)");
     }
 
     private static IntPtr OpenOrThrow(string filter, WinDivertNative.Layer layer, WinDivertNative.OpenFlags flags)
@@ -255,6 +353,8 @@ public sealed class Interceptor : ITrafficCapture
         var match = _engine.Classify(new InboundRequest(host, remote.Port, pid, path));
         var redirect = fake || match.Action.Type != RuleActionType.Direct || _engine.Profile.Options.HandleDirectConnections;
         if (redirect) Interlocked.Increment(ref _redirectedFlows);
+        // Fake addresses are always captured; a real one must be added to the followers' filter before the SYN goes on.
+        if (redirect && !fake) Follow(remote.Address);
         var level = _engine.Tracker.Level;
         if (level >= LogLevel.Debug)
             _engine.Tracker.Write(LogLevel.Debug, $"SYN {local} -> {host}:{remote.Port} pid {pid} ({Path.GetFileName(path) ?? "?"}) rule {match.Rule.Name} => {(redirect ? "redirect" : "pass")}");
@@ -329,31 +429,39 @@ public sealed class Interceptor : ITrafficCapture
         }
     }
 
-    private void NetworkLoop()
+    /// <param name="follower">A followers' handle: this thread owns it and closes it once it has been shut down and drained.</param>
+    private void NetworkLoop(IntPtr handle, bool follower)
     {
         var buf = new byte[MaxPacket];
         var addr = new WinDivertNative.Address();
-        while (!_cts.IsCancellationRequested)
+        try
         {
-            if (!WinDivertNative.Recv(_net, buf, (uint)buf.Length, out var len, ref addr))
+            while (true)
             {
-                if (_cts.IsCancellationRequested) break;
-                var err = Marshal.GetLastWin32Error();
-                if (Interlocked.Increment(ref _recvErrors) <= 5)
-                    _engine.Tracker.Write(LogLevel.Error, $"WinDivertRecv (network) failed: {new Win32Exception(err).Message} ({err})");
-                if (err == 6 /* invalid handle */) break;
-                continue;
-            }
+                if (!WinDivertNative.Recv(handle, buf, (uint)buf.Length, out var len, ref addr))
+                {
+                    var err = Marshal.GetLastWin32Error();
+                    // ERROR_NO_DATA: shut down and drained (a replaced followers' handle, or stopping).
+                    if (_cts.IsCancellationRequested || err is 232 or 6 /* invalid handle */) break;
+                    if (Interlocked.Increment(ref _recvErrors) <= 5)
+                        _engine.Tracker.Write(LogLevel.Error, $"WinDivertRecv (network) failed: {new Win32Exception(err).Message} ({err})");
+                    continue;
+                }
 
-            // WinDivert stamps each packet with the performance counter (the Stopwatch clock) when it captured it.
-            var received = Stopwatch.GetTimestamp();
-            if (addr.Timestamp > 0) _queueWait.Add(received - addr.Timestamp);
-            HandlePacket(buf, len, ref addr);
-            _handling.Add(Stopwatch.GetTimestamp() - received);
+                // WinDivert stamps each packet with the performance counter (the Stopwatch clock) when it captured it.
+                var received = Stopwatch.GetTimestamp();
+                if (addr.Timestamp > 0) _queueWait.Add(received - addr.Timestamp);
+                HandlePacket(handle, buf, len, ref addr);
+                _handling.Add(Stopwatch.GetTimestamp() - received);
+            }
+        }
+        finally
+        {
+            if (follower) WinDivertNative.Close(handle);
         }
     }
 
-    private void HandlePacket(byte[] buf, uint len, ref WinDivertNative.Address addr)
+    private void HandlePacket(IntPtr handle, byte[] buf, uint len, ref WinDivertNative.Address addr)
     {
         if (DiagnosticPackets > 0 && Interlocked.Decrement(ref DiagnosticPackets) >= 0)
             _engine.Tracker.Write(LogLevel.Debug,
@@ -371,7 +479,7 @@ public sealed class Interceptor : ITrafficCapture
                 var raddr = addr;
                 raddr.SetOutbound(false);
                 WinDivertNative.CalcChecksums(reply, (uint)reply.Length, ref raddr, 0);
-                WinDivertNative.Send(_net, reply, (uint)reply.Length, out _, ref raddr);
+                WinDivertNative.Send(handle, reply, (uint)reply.Length, out _, ref raddr);
                 Interlocked.Increment(ref _dnsAnswered);
                 return;
             }
@@ -386,7 +494,7 @@ public sealed class Interceptor : ITrafficCapture
                     _engine.Tracker.Write(LogLevel.Error, $"UDP handling failed, passing through: {ex.Message}");
                 }
             }
-            WinDivertNative.Send(_net, buf, len, out _, ref addr);
+            WinDivertNative.Send(handle, buf, len, out _, ref addr);
             return;
         }
 
@@ -414,7 +522,7 @@ public sealed class Interceptor : ITrafficCapture
             _engine.Tracker.Write(LogLevel.Error, $"Packet handling failed, passing through: {ex.Message}");
         }
 
-        WinDivertNative.Send(_net, buf, len, out _, ref addr);
+        WinDivertNative.Send(handle, buf, len, out _, ref addr);
     }
 
     /// <summary>Injects a reply datagram as if it had arrived on the interface the app's packet left by.</summary>
@@ -442,6 +550,7 @@ public sealed class Interceptor : ITrafficCapture
                 LogTimings();
                 _udp?.Sweep(TimeSpan.FromSeconds(60));
                 _reflector?.Sweep(TimeSpan.FromMinutes(10));
+                PruneFollowed();
                 CheckRelayReachable();
                 var cutoff = DateTime.UtcNow - TimeSpan.FromMinutes(1);
                 foreach (var (k, v) in _socketPids)
@@ -465,7 +574,7 @@ public sealed class Interceptor : ITrafficCapture
     private string TimingSummary() =>
         $"queue wait {_queueWait.Total} ({_queueWait.Slow:N0} over 1 ms); handling {_handling.Total} ({_handling.Slow:N0} over 0.5 ms); " +
         $"new connections {_decisions.Total} ({_decisions.Slow:N0} over 5 ms); owner from socket event {Interlocked.Read(ref _ownerFromSniff):N0}, " +
-        $"from TCP table {Interlocked.Read(ref _ownerFromTable):N0}";
+        $"from TCP table {Interlocked.Read(ref _ownerFromTable):N0}; follower filter updates {Interlocked.Read(ref _followReopens):N0}";
 
     private void CheckRelayReachable()
     {
@@ -486,10 +595,19 @@ public sealed class Interceptor : ITrafficCapture
         _cts.Cancel();
         foreach (var h in new[] { _net, _sock })
             if (h != IntPtr.Zero) WinDivertNative.ShutdownHandle(h, WinDivertNative.Shutdown.Both);
+        lock (_followGate)
+        {
+            // Its thread closes it once Recv fails.
+            if (_follow != IntPtr.Zero) WinDivertNative.ShutdownHandle(_follow, WinDivertNative.Shutdown.Both);
+            _follow = IntPtr.Zero;
+        }
         _netThread?.Join(2000);
         _sockThread?.Join(2000);
         _deferred.CompleteAdding();
         foreach (var t in _deciders) t.Join(2000);
+        Thread[] followers;
+        lock (_followThreads) followers = [.. _followThreads];
+        foreach (var t in followers) t.Join(2000);
         foreach (var h in new[] { _net, _sock })
             if (h != IntPtr.Zero) WinDivertNative.Close(h);
         _net = _sock = IntPtr.Zero;

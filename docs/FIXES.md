@@ -127,7 +127,7 @@ owner runs the browser speed test on the same hand-picked server in both modes.
 3. **Per-packet path, measured.** Over 105,008 packets Sluice holds a packet 0.04 ms on average (max 16 ms); a
    new-connection decision takes 0.38 ms on average (max 20 ms); the owner always came from the socket event, never the
    TCP table. WinDivert's own delivery delay is 7 ms on average, 7–18 ms on average (66 ms max) in bursts of 3,000–4,000
-   packets/s, mostly sing-box's own tunnel traffic, which the filter still catches. Not limiting at ~2 Mbps; may matter
+   packets/s, mostly sing-box's own tunnel traffic, which the filter then still caught (no longer, see below). Not limiting at ~2 Mbps; may matter
    on faster tunnels.
 4. Minor: app↔relay traffic is hairpinned through the adapter path, not true loopback. With UDP mode `bypass` on a
    network where direct UDP is blocked, Chrome's QUIC attempts fail before it falls back to TCP.
@@ -145,10 +145,30 @@ wait up to 3 ms for the sniffed owner before the table scan; log strings built o
 SOCKS run. Open a page that times parallel `fetch()` downloads from a speed-test server's `/download` endpoint. Run
 captured and through SOCKS back to back, same server; compare with `curl` and `curl --socks5-hostname 127.0.0.1:1080`.
 
+**Narrowed capture filter** (`perf/narrow-capture-filter`, 2026-11-17): before it, every outbound TCP packet on the PC
+went through Sluice. Counted with a passive sniff handle during a 10 MB download (~1.2 MB/s): 54% relay→app data
+(MTU-sized), 27% app ACKs, **19% the tunnel helper's own packets to the SSH server**; through the SOCKS listener 97% of
+what Sluice handled was the helper's. Now only packets Sluice may rewrite are captured
+([STATUS.md](STATUS.md#how-capture-works)): captured download 10,600 packets handled (all rewritten), SOCKS download
+282. WinDivert queue wait during downloads 0.5–0.8 ms on average (max 6.7 ms), was 7–18 ms in bursts. Speeds (bytes/s,
+same server, back to back): curl 6 × 700 KB capture 1.25 M / 1.58 M vs SOCKS 1.10 M / 1.36 M; headless Chrome
+4 × 1 MB 1.51 M vs 1.48 M and 6 × 700 KB 1.53 M vs 1.46 M (averages of 3); single 5 MB, 5 rounds: curl 1.42 M vs
+1.24 M, Chrome 1.33 M vs 1.49 M. Equal within the tunnel's noise. Plain-IP redirects (followers' handle): 5 MB at
+1.9 MB/s, and a 10 MB download completed intact while the filter was reopened 4 times.
+100 MB (10 × 10 MB on one connection; the test server ends any response after ~20 s), each build started fresh, back
+to back: before: capture 1.51 / 1.46 MB/s, SOCKS 1.55 / 1.19, Sluice CPU per 100 MB 11.9–12.7 s captured; after:
+capture 1.82 / 1.51, SOCKS 1.48 / 1.56, CPU 2.9 s captured and 1.1–1.3 s through SOCKS. Not yet explained: the same
+build used 7.5–9.1 s per 100 MB after running 38 minutes (with `--log-file`, so at Debug level); worth checking whether
+something grows with uptime.
+
+**Speed-test pitfall:** run the two modes within seconds of each other on the same server, and make sure every test
+browser has exited (a runner whose cleanup failed left headless Chrome instances running and spread the runs over
+minutes, which looked like a 2–3× gap).
+
 **Later** (possible improvements, for faster tunnels):
-- Keep the tunnel helpers' own traffic out of the WinDivert filter (e.g. exclude the tunnel servers' address:port and
-  reopen the handle when they change).
 - Batch with `WinDivertRecvEx`/`SendEx`.
+- App↔relay packets are MTU-sized (adapter path, no LSO on Wi-Fi): routing the fake range through loopback could cut
+  their number ~45× (needs a route while capture runs; experiment).
 - **Own WFP connect-redirect driver** (like Proxifier): no per-packet work at all, but needs driver signing and reverses
   the 2026-11-10 WinDivert decision. Not needed for now; the owner's decision.
 

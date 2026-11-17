@@ -131,6 +131,15 @@ public sealed class PacketReflector : IRedirectTable
         return false;
     }
 
+    /// <summary>Remote addresses of the redirected flows still in the table (to keep their later packets captured).</summary>
+    public HashSet<IPAddress> RedirectedRemotes()
+    {
+        var set = new HashSet<IPAddress>();
+        foreach (var (_, f) in _flows)
+            if (f.Redirect) set.Add(f.Original.Address);
+        return set;
+    }
+
     /// <summary>Drop flows idle for longer than <paramref name="idle"/>.</summary>
     public int Sweep(TimeSpan idle)
     {

@@ -15,8 +15,10 @@ Plan of record, in order of reading: `docs/STATUS.md` → `docs/REQUIRED.md` →
 Next, as the owner last discussed:
 1. **Windows capture speed (2026-11-17):** docs/FIXES.md §8. Fixed (`perf/capture-throughput`, merged): the
    main cause was the health check restarting a busy tunnel (§9). Chromium and curl now match the SOCKS listener
-   through capture on the same server. Pending: the owner's own browser speed test on one hand-picked server in both
-   modes. Secure DNS handling (§10) and the WFP driver are the owner's decisions.
+   through capture on the same server. Narrowed capture filter done (`perf/narrow-capture-filter`): only packets
+   Sluice may rewrite reach user mode. Next for faster tunnels: WinDivertRecvEx/SendEx batching. Pending: the owner's
+   own browser speed test on one hand-picked server in both modes. Secure DNS handling (§10) and the WFP driver are the
+   owner's decisions.
 2. Publishing the repository on GitHub with releases for Linux and Windows (the owner has plans for `scripts/` and
    `packaging/`; discuss before changing them).
 3. Bug fixing, from docs/FIXES.md (the owner's choice, 2026-11-14). Done: stale fake addresses after a restart. Next

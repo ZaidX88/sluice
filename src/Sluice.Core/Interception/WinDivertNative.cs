@@ -87,6 +87,15 @@ internal static class WinDivertNative
     [DllImport(Dll, EntryPoint = "WinDivertHelperCalcChecksums")]
     public static extern bool CalcChecksums(byte[] packet, uint packetLen, ref Address addr, ulong flags);
 
+    [DllImport(Dll, EntryPoint = "WinDivertHelperCompileFilter", CharSet = CharSet.Ansi)]
+    private static extern bool CompileFilter(string filter, Layer layer, IntPtr obj, uint objLen, out IntPtr errorStr, out uint errorPos);
+
+    /// <summary>Null if <paramref name="filter"/> is valid for <paramref name="layer"/>, else WinDivert's reason.</summary>
+    public static string? CheckFilter(string filter, Layer layer) =>
+        CompileFilter(filter, layer, IntPtr.Zero, 0, out var err, out var pos)
+            ? null
+            : $"{Marshal.PtrToStringAnsi(err) ?? "invalid filter"} (at {pos})";
+
     [DllImport(Dll, EntryPoint = "WinDivertHelperFormatIPv6Address", CharSet = CharSet.Ansi)]
     private static extern bool FormatIPv6(ref Ipv6Words addr, StringBuilder buffer, uint bufLen);
 

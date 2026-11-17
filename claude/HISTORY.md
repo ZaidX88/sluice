@@ -45,3 +45,6 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
 - sing-box configs moved out of the temp folder (2026-11-17): emptying the temp folder while Sluice ran made every
   later tunnel start fail ("Could not find a part of the path …"). They now go to a per-user app folder that is
   recreated before each start (`HelperConfigFolder`).
+- Narrowed Windows capture filter (2026-11-17): only packets Sluice may rewrite reach user mode (`CaptureFilter`):
+  new SYNs, the relay's packets, the fake-address range, and a reopened "followers" handle for redirected real
+  addresses. Direct traffic and the tunnel helpers' own connections stay in the kernel (docs/FIXES.md §8).

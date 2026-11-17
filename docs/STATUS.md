@@ -56,10 +56,20 @@ finds the owning process (iphlpapi), asks `RoutingEngine.Classify`, and reflects
 `TransparentInbound` relay (`PacketReflector`). UDP/53 queries are answered with fake addresses by `DnsRedirector`; other
 UDP of tunneled apps goes through `UdpNat`.
 
-- **Every outbound TCP packet** on the PC passes through one user-mode thread (`Interceptor.NetworkLoop`), not only the
-  first one: WinDivert can't redirect a whole connection, so each packet of a handled flow is rewritten. The tunnels'
-  own traffic is caught too (the network layer has no process ID). This is the main cost of capture compared with the
-  SOCKS listener; see [FIXES.md](FIXES.md).
+- **Only packets Sluice may rewrite** reach user mode (`CaptureFilter`). WinDivert can't redirect a whole connection,
+  so each packet of a handled flow is rewritten, but nothing else is captured:
+  - the **main handle** takes every new connection's first SYN (to decide it), the relay's packets back to apps, all
+    TCP to the fake-address range 198.18.0.0/15 (those flows are always redirected), and UDP as the UDP mode needs;
+  - a **followers' handle** takes the later packets of redirected connections to *real* addresses (a rule matched an
+    app or an IP, not a faked name). Its filter lists those addresses; `Interceptor.Follow` adds one and reopens the
+    handle **before** that connection's SYN is sent on, and `PruneFollowed` drops addresses with no redirected flow left.
+    The new handle opens first; the old one is shut down for receiving, drains its queue and closes itself. Over
+    `CaptureFilter.MaxFollowed` (150) addresses, or if WinDivert rejects the list, it captures all later TCP packets.
+  - So direct apps' traffic and the tunnel helpers' own connections to their servers stay in the kernel. Measured
+    (10 MB download): Sluice handled 10,600 packets instead of 13,164 when captured, and 282 instead of 2,376 when the
+    download went through the SOCKS listener ([FIXES.md §8](FIXES.md)).
+- Every handled packet still makes one round trip through one user-mode thread (`Interceptor.NetworkLoop`); app↔relay
+  packets are MTU-sized because they go through the adapter path. Both are what batching or a WFP driver would improve.
 - **New flows are decided off the packet thread.** `PacketReflector.DeferDecisions` hands a new flow's first SYN back as
   `Defer`; one of 4 worker threads (`Interceptor.DecisionLoop`) decides it (`CompleteDeferred`) and sends it on. A
   retransmitted SYN meanwhile is dropped (`Drop`). So a slow process lookup delays only that connection, not every packet.

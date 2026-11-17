@@ -3,7 +3,7 @@
 | Document | For |
 |---|---|
 | [QUICKSTART.md](QUICKSTART.md) | Using Sluice: install, add a tunnel, rules, capture (both OSes) |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | How Windows and Linux share one app: modules, per-OS builds, `IPlatformServices` |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | How Sluice is built: the life of a connection, the DNS path, and one page per part in [architecture/](architecture/) (platform split, engine, tunnels, capture, profiles, desktop app, build and tests, threading and security) |
 | [STATUS.md](STATUS.md) | What works, project layout, how capture works |
 | [REQUIRED.md](REQUIRED.md) | Must-do work, in order |
 | [FIXES.md](FIXES.md) | Known bugs, with causes and what "fixed" means |

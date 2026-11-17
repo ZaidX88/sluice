@@ -1,0 +1,76 @@
+# Command line, tests, build and packaging
+
+Part of the [architecture reference](../ARCHITECTURE.md). How to build and run step by step is in
+[windows/BUILD.md](../windows/BUILD.md) and [linux/BUILD.md](../linux/BUILD.md); this page explains how the pieces are
+put together.
+
+## `Sluice.Cli`
+
+`src/Sluice.Cli/Program.cs` (top-level statements, `net10.0`, references `Sluice.Core` and `Sluice.Platform.Linux`) is
+the headless front end. Commands:
+
+| Command | What it does |
+|---|---|
+| `Sluice.Cli [profile] [--socks ADDR] [--intercept] [--udp MODE] [--log LEVEL] [--log-file DIR] [--duration N]` | Runs the engine: `ConnectionTracker` printing to the console, optional `FileLog`, `RoutingEngine`, a `Socks5Inbound`, and with `--intercept` a capture. Ctrl+C (or `--duration`) disconnects everything, stops capture and prints `Statistics` per application and target |
+| `Sluice.Cli check <profile or share link>` | `TunnelChecker` on each tunnel (or one link) |
+| `Sluice.Cli import <profile.sluice> <link / file / --subscription URL>` | `Subscriptions.ImportLinks` / `AddSubscription` + `UpdateAsync`, then saves |
+| `Sluice.Cli update <profile.sluice>` | refreshes every subscription |
+
+Unlike the desktop app, the CLI is **not multi-targeted** yet: it picks its capture with a run-time branch
+(`OperatingSystem.IsLinux()` → `LinuxPlatform.CreateCapture`, otherwise `new Interceptor(engine)`). Moving it onto the
+platform modules is in [REQUIRED.md §1](../REQUIRED.md#1-move-windows-only-code-out-of-core).
+
+## Tests: `tests/Sluice.Tests`
+
+xUnit, `net10.0`, referencing `Sluice.Core` and `Sluice.Platform.Linux` (so the Linux parsing code is tested on Windows
+too). Run with `dotnet test tests/Sluice.Tests`.
+
+| Kind | Files | Needs |
+|---|---|---|
+| Pure logic | `RuleEngineTests`, `DnsTests`, `PacketReflectorTests`, `PasswordEncryptionTests`, `PpxSerializerTests`, `SluiceProfileTests`, `ShareLinkTests`, `TunnelTransportTests`, `SingBoxConfigTests` (in `SingBoxTests.cs`), most of `LinuxCaptureTests` (nft script, netlink messages, `/proc` parsing) | nothing |
+| Loopback end to end | `EngineTests`, `ProxyTests`, `RelayTests`, `UdpTests`, `HappyEyeballsTests`, `CheckerAndStatsTests`, `StaleFakeAddressTests` | local test servers from `TestServers.cs` (`EchoServer`, `Socks5TestServer`, `Socks4TestServer`, `HttpConnectTestServer`) |
+| Live sing-box | `LiveSingBoxTests` (in `SingBoxTests.cs`), parts of `SshSingBoxTests` | `sing-box.exe` next to the tests (the Windows build puts it there; the tests look for that name, so elsewhere they pass trivially): a throwaway sing-box **server** on 127.0.0.1 for every protocol, Sluice's client side through `TunnelBackends`. REALITY also needs `SLUICE_TEST_INTERNET=1` |
+| Live SSH | `LiveSshTests` | opt-in: `SLUICE_LIVE_SSH_PORT`, `_USER`, `_KEY` for an sshd on 127.0.0.1; otherwise they pass trivially |
+| Linux only | `LinuxCaptureTests.Socket_owner_is_found_through_proc` | returns early elsewhere |
+
+Real capture is tested outside xUnit: `scripts/linux/capture-livetest.sh` (runs `Sluice.Cli --intercept` as root with
+a profile from `scripts/linux/make-test-profile.cs` and `scripts/linux/test-socks5.py` as a stand-in tunnel, then checks
+that curl is tunneled, wget blocked, DNS faked and the nft table gone after stop), and by hand on Windows
+(`Sluice.Cli --intercept`). Tests that misbehave on a developer machine (a running capture, timing under load)
+are listed in [FIXES.md §7](../FIXES.md#7-tests-that-depend-on-the-developer-machine).
+
+## Build-time dependencies: `build/Dependencies.targets`
+
+No third-party binaries are committed. `Sluice.Core.csproj` imports `build/Dependencies.targets`, so every project that
+references Core gets them next to its output:
+
+```
+first build ─▶ SluiceFetchDependencies (before AssignTargetPaths)
+                 ├─ sing-box 1.14.4 for the target OS (zip / tar.gz)   ─┐ DownloadFile → GetFileHash (SHA-256)
+                 └─ WinDivert 2.2.2-A (Windows only)                     ─┘ mismatch → delete + build error
+                 extracted into .deps/ (git-ignored), reused by later builds (offline)
+every build ─▶ copy sing-box(.exe), WinDivert.dll, WinDivert64.sys and their licences to the output
+```
+
+The OS comes from the runtime identifier (`-r win-x64` / `linux-x64`), otherwise from the build machine.
+`-p:SluiceFetchDependencies=false` turns fetching off (offline builds, the Linux release package); Sluice still builds,
+and capture on Windows or encrypted tunnels then report their helper as missing. `scripts/get-sing-box.ps1` /
+`scripts/get-sing-box.sh` fetch sing-box by hand.
+
+Other dependencies are NuGet packages: Avalonia 12 (desktop), SSH.NET (Core), xUnit (tests).
+
+## Packaging and releases
+
+**Release packaging lives on version branches (`release/vX.Y.Z`), never on `main`;** `main` holds code and docs only,
+and release branches are not merged back (working rule; see `claude/memory/working-rules.md`). The owner has plans for
+`scripts/` and `packaging/`: discuss before changing them.
+
+What exists on `main` today:
+
+- **Linux:** `scripts/package-linux.sh` stages a framework-dependent publish of `Sluice.Desktop` (`-f net10.0`) and
+  `Sluice.Cli` into `sluice-linux-x64.tar.gz`, drops Windows-only files and sing-box, and adds
+  `packaging/linux/install.sh` / `uninstall.sh` / `sluice.desktop` / `README.txt`. `install.sh` installs .NET 10,
+  nftables, libcap and desktop libraries with the system's package manager, downloads the pinned sing-box (or uses an
+  archive next to it), and grants the capture capabilities with `setcap`. User guide: [linux/INSTALL.md](../linux/INSTALL.md).
+- **Windows:** no package yet ([REQUIRED.md §4](../REQUIRED.md#4-windows-release-package)).
+- Remaining release work and CI: [REQUIRED.md §5–6](../REQUIRED.md#5-linux-release-remaining).

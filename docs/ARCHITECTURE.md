@@ -1,133 +1,155 @@
-# Architecture: how Windows and Linux share one app
+# Architecture
 
-Sluice is one codebase on one branch. Shared logic lives in one place; everything that differs between operating
-systems sits in a small per-OS module behind one interface. Each OS gets its own build, and which OS module goes into
-a build is decided **when compiling**, not while running.
+How Sluice is built, read from the code. Start here for the big picture; each part has its own page in
+[architecture/](architecture/). For what works today see [STATUS.md](STATUS.md); for what is planned,
+[REQUIRED.md](REQUIRED.md), [FIXES.md](FIXES.md) and [FEATURES.md](FEATURES.md).
 
-For what each part does in detail (capture internals, the sing-box helper, the project list) see
-[STATUS.md](STATUS.md); for the remaining clean-up see [REQUIRED.md §1](REQUIRED.md#1-move-windows-only-code-out-of-core).
+| Page | Covers |
+|---|---|
+| This page | The modules, the life of one connection, the DNS path |
+| [architecture/platforms.md](architecture/platforms.md) | How Windows and Linux share one app: two builds, `IPlatformServices`, `#if WINDOWS` |
+| [architecture/engine.md](architecture/engine.md) | `Sluice.Core` engine: routing and rules, inbound listeners, connection tracking, relay, DNS and fake IPs, UDP, happy eyeballs |
+| [architecture/tunnels.md](architecture/tunnels.md) | Tunnel types, chains, SSH, the sing-box helper, share links and subscriptions, tunnel lifecycle |
+| [architecture/capture.md](architecture/capture.md) | Capture on Windows (WinDivert) and Linux (nftables + NFQUEUE) |
+| [architecture/profiles.md](architecture/profiles.md) | `.sluice` profiles, Proxifier `.ppx` import/export, password encryption, app settings |
+| [architecture/desktop.md](architecture/desktop.md) | The Avalonia app: `App`, `EngineHost`, view models, tray, single instance, notifications, banners |
+| [architecture/build-and-test.md](architecture/build-and-test.md) | `Sluice.Cli`, the tests, the build-time dependency fetch, packaging |
+| [architecture/cross-cutting.md](architecture/cross-cutting.md) | Threading, errors and logging, security, known debt |
+
+All paths below are relative to `src/` unless they start with another top-level folder.
 
 ## Modules
 
 ```
-Sluice.Core               shared: routing engine, rules, tunnels (SSH, sing-box), DNS, profiles, .ppx import,
-                          and the interfaces the OS modules implement (IPlatformServices, ITrafficCapture, IProcessLookup)
-Sluice.Platform.Windows   Windows only: toast notifications, Start Menu shortcut, creates the WinDivert capture
-Sluice.Platform.Linux     Linux only: notify-send, /proc process lookup, nftables + NFQUEUE capture, DNS server
-Sluice.Desktop            the Avalonia UI, the same for both
-Sluice.Cli                command-line engine
+ front ends     Sluice.Desktop (Avalonia: App, EngineHost, view models)     Sluice.Cli (run / check / import / update)
+                     │ one of the two, chosen at compile time                  │ run-time OS check
+                     ▼                                                         ▼
+ OS modules     Sluice.Platform.Windows                 Sluice.Platform.Linux
+                  WindowsPlatform                         LinuxPlatform, LinuxProcessLookup
+                  StartMenuShortcut (toasts)              Capture/: LinuxCapture, NftRules, NfQueue, LinuxDnsServer
+                     │  both implement IPlatformServices and use Core
+                     ▼
+ shared         Sluice.Core
+                  Engine/        RoutingEngine, ConnectionTracker, Relay, Statistics, FileLog
+                  Rules/         RuleEngine
+                  Inbound/       InboundListener, Socks5Inbound, TransparentInbound
+                  Proxy/         TunnelConnector, ProxyHandshake, HappyEyeballs, Socks5UdpAssociation
+                  Tunnels/       TunnelBackends, SingBoxConfig, SingBoxSession, SshSingBoxSession, SshSession,
+                                 TunnelTransport, ShareLinks, Subscriptions
+                  Dns/           DnsResolver, DnsPolicy, FakeIpPool, DnsMessage
+                  Interception/  ITrafficCapture, Interceptor + WinDivertNative (Windows), PacketReflector,
+                                 DnsRedirector, UdpNat
+                  Profiles/      Profile, SluiceProfileSerializer, PpxSerializer, ProxifierPasswordCodec
+                  Platform/      IPlatformServices, ProcessLookup
+                  Checker/       TunnelChecker
+
+ outside the process: sing-box helpers (one per encrypted tunnel), the WinDivert driver, the nft command
 ```
 
-Rules for new code:
+`Sluice.Core` has no UI and is shared by every build. The platform modules implement `IPlatformServices`; the desktop
+app picks one at compile time ([platforms.md](architecture/platforms.md)). Some Windows-only code still sits in Core
+(`Interceptor`, `WinDivertNative`, the iphlpapi part of `ProcessLookup`, `Dpapi`, the job object in `SingBoxSession`);
+see [REQUIRED.md §1](REQUIRED.md#1-move-windows-only-code-out-of-core). The old WPF app (`Sluice.App`) is still in the
+repository until it is retired ([REQUIRED.md §3](REQUIRED.md#3-retire-the-wpf-app)); nothing here describes it.
 
-- UI-free logic goes in `Sluice.Core`; UI in `Sluice.Desktop`.
-- Anything OS-specific goes in a platform module, reached through `IPlatformServices` (or a narrower interface it
-  hands out). The UI and the engine never ask "am I on Windows?".
+## The life of one connection
 
-## 1. One project, two builds
-
-`src/Sluice.Desktop/Sluice.Desktop.csproj` lists two target frameworks:
-
-```xml
-<TargetFrameworks>net10.0-windows10.0.19041.0;net10.0</TargetFrameworks>
-```
-
-- **`net10.0-windows10.0.19041.0`**: .NET 10 on Windows, with Windows-only APIs (toast notifications). The Windows build.
-- **`net10.0`**: plain .NET 10. Used for the Linux build.
-
-`dotnet build` compiles the project once per target. Pick one with `-f`, e.g.
-`dotnet build src/Sluice.Desktop -f net10.0`.
-
-## 2. Each build references one OS module
-
-```xml
-<ItemGroup Condition="$(TargetFramework.Contains('-windows'))">
-  <ProjectReference Include="..\Sluice.Platform.Windows\Sluice.Platform.Windows.csproj" />
-</ItemGroup>
-<ItemGroup Condition="!$(TargetFramework.Contains('-windows'))">
-  <ProjectReference Include="..\Sluice.Platform.Linux\Sluice.Platform.Linux.csproj" />
-</ItemGroup>
-```
-
-The condition is evaluated per build: the Windows build references only `Sluice.Platform.Windows`, the Linux build
-only `Sluice.Platform.Linux`. The other module is not part of that build at all.
-
-## 3. `#if WINDOWS` creates the right class
-
-For every `-windows` target the .NET SDK defines the compiler symbol `WINDOWS`. `src/Sluice.Desktop/Services/Platform.cs`:
-
-```csharp
-public static IPlatformServices Current { get; } =
-#if WINDOWS
-    new Sluice.Platform.Windows.WindowsPlatform();
-#else
-    new Sluice.Platform.Linux.LinuxPlatform();
-#endif
-```
-
-`#if` is resolved before compiling: the branch that does not apply is thrown away, so each build only ever sees one
-line. This is required, not just tidy: the Linux build doesn't reference the Windows module, so `WindowsPlatform`
-does not exist there, and a run-time `if (OperatingSystem.IsWindows())` would not compile.
+An application on the machine opens a TCP connection. It never knows Sluice exists.
 
 ```
-                     ┌─ Windows build ─ WINDOWS defined ─ Platform.Windows ─ WindowsPlatform
-Sluice.Desktop ──────┤
-(UI + Core, shared)  └─ Linux build ─── no WINDOWS ────── Platform.Linux ─── LinuxPlatform
+ app ──connect(host or IP, port)──▶ OS network stack
+                                      │
+          ┌───────────────────────────┴─────────────────────────────┐
+          │ capture (first packet of each new flow)                 │   or: the app uses Sluice's
+          │  Windows: WinDivert → Interceptor → PacketReflector     │   local SOCKS5 server directly
+          │  Linux:   nftables queue → NfQueue → LinuxCapture       │   (Socks5Inbound, port 1080)
+          └───────────────────────────┬─────────────────────────────┘               │
+                                      │ owning PID (iphlpapi / /proc)               │
+                                      ▼                                             │
+                   RoutingEngine.Classify(InboundRequest)                           │
+                   = RuleEngine.Match: first enabled rule that matches              │
+                     application + target + port; "Default" last                    │
+                                      │                                             │
+              Direct and not handled  │   anything else (or a fake IP)              │
+            ◀── packet passes, never ─┤                                             │
+                touched again         ▼                                             │
+                   connection steered to the local relay                            │
+                   (TransparentInbound on a random port)                            │
+                                      │  IRedirectTable gives back the original     │
+                                      │  destination, PID and (for fake IPs) the    │
+                                      │  hostname                                   │
+                                      ▼                                             ▼
+                         RoutingEngine.HandleAsync(socket, InboundRequest, IInboundReply)
+                           ├─ stale fake IP? reset at once
+                           ├─ Classify again → ConnectionTracker.Begin (shows in Connections)
+                           ├─ lease the route's encrypted tunnels (TunnelBackends.Lease)
+                           ├─ TunnelConnector.ConnectAsync(action)
+                           │     Block   → ConnectionBlockedException
+                           │     Direct  → resolve (DnsResolver) → HappyEyeballs → remote
+                           │     Tunnel  → ProxyHandshake through one hop
+                           │     Chain   → simple (hop by hop) / redundancy / load balancing
+                           │     encrypted first hop → its local SOCKS5 endpoint
+                           │       (sing-box helper or SSH.NET forward, run by TunnelBackends)
+                           ├─ reply.SuccessAsync (SOCKS5 answer, or nothing for captured flows)
+                           └─ Relay.RunAsync: bytes both ways until both sides close
+                                      │
+                                      ▼
+                     ConnectionTracker.End → Statistics, log, Connections pane
 ```
 
-## 4. The interface: `IPlatformServices`
+Key points:
 
-`src/Sluice.Core/Platform/IPlatformServices.cs` lists everything that differs between operating systems. Both
-classes implement it; the rest of the app only sees `OsPlatform.Current`, typed as the interface.
+- **The decision is made once, on the first packet.** Direct connections that need no handling are never seen again
+  by Sluice; only connections that are blocked, tunneled, or aimed at a fake IP go through the relay (all of them
+  with the profile option `HandleDirectConnections`).
+- **Sluice's own traffic is never captured:** on Windows the WinDivert filters exclude Sluice's PID; on Linux nftables
+  skips sockets of Sluice's private group. sing-box helpers are recognised too (`TunnelBackends.IsHelperProcess`) and
+  always go direct, as do programs that host a tunnel of the profile on this machine (loop prevention).
+- **Encrypted tunnels look like SOCKS5 to the engine.** `TunnelBackends` runs one session per tunnel and exposes it on
+  `127.0.0.1:<port>`; `TunnelConnector` swaps the tunnel for that endpoint and speaks plain SOCKS5 to it.
+- UDP takes a different path: per-flow decisions in `UdpNat` (Windows) or a drop/pass verdict (Linux). See
+  [engine.md](architecture/engine.md#udp).
 
-| Member | `WindowsPlatform` | `LinuxPlatform` |
-|---|---|---|
-| `Name` | `"Windows"` | `"Linux"` |
-| `OnAppStart()` | `StartMenuShortcut.Ensure()`: registers the app ID "Sluice" and a Start Menu shortcut carrying it, so notifications show Sluice's name and icon | Points Core's process lookup ("which app owns this connection") at `/proc` (`LinuxProcessLookup`) |
-| `Notify(title, message, isError)` | A Windows toast under the app ID "Sluice"; errors use the "urgent" scenario | `notify-send --app-name=Sluice …` (freedesktop notifications); errors use "critical" urgency |
-| `CaptureUnavailableReason` | Always `null`: WinDivert ships with Sluice | "install nftables" when `nft` is missing |
-| `HasCaptureRights` | Running as administrator? | Root, **or** `CAP_NET_ADMIN` + `CAP_SETGID` in the effective set (read from `/proc/self/status`) |
-| `CaptureRightsHint` | "…needs administrator rights." | "…needs root, or these capabilities…" with the exact `setcap` command |
-| `CanRestartElevated` | `true`: relaunch through UAC | `false`: a desktop app can't relaunch itself as root |
-| `CreateCapture(engine)` | `new Interceptor(engine)`: WinDivert | `new LinuxCapture(engine, …)`: nftables + NFQUEUE |
+## The DNS path
 
-`CreateCapture` is the big one. Both captures do the same job (catch each new connection, ask the routing engine for
-Direct / Block / tunnel, hand the connection over) with entirely different OS mechanisms. Their internals are in
-[STATUS.md](STATUS.md#how-capture-works).
+Rules can name hosts (`*.example.com`), but a captured packet only carries an IP address. Sluice keeps names intact
+with **fake IPs**: when the profile resolves names through tunnels (`ResolveOptions.ViaProxy` or leak prevention), DNS
+queries for such names are answered locally with a placeholder address from 198.18.0.0/15, and the name is remembered.
 
-## 5. Where the shared app calls it
+```
+ app: "where is example.com?" (UDP/53)
+        │  captured: Windows → Interceptor sees the packet; Linux → nftables redirects it to LinuxDnsServer
+        ▼
+ DnsRedirector.TryAnswerQuery ── DnsPolicy.ShouldFake(name)?
+        │ yes                                   │ no
+        ▼                                       ▼
+ A     → FakeIpPool.GetOrAdd(name) = 198.18.x.y     Windows: the query passes to the real DNS server
+ AAAA, HTTPS, SVCB → empty answer                 Linux:   LinuxDnsServer forwards it to the upstreams
+ other types → empty answer only with BlockNonATypes          and relays the answer
+        │
+        ▼
+ app connects to 198.18.x.y:443 ── capture: fake IP → always handled
+        │
+        ▼
+ FakeIpPool.TryGetHost(198.18.x.y) = "example.com" → InboundRequest.Host = "example.com"
+        │
+        ▼
+ rules match the name; a tunnel receives the name (the tunnel server resolves it);
+ a Direct route resolves it with Sluice's own DnsResolver
+```
 
-None of these callers knows which class it is talking to.
+- **`DnsResolver`** is Sluice's own stub resolver. It talks UDP to the system's real DNS servers from one fixed local
+  port, which `DnsRedirector` recognises (`ownResolverPort`) and never fakes, so Sluice itself always gets real answers,
+  bypassing the OS cache that holds fake ones. While capture runs it is installed as `RoutingEngine.HostResolver`, which
+  also feeds `TunnelConnector` and `TunnelBackends.Resolver` (tunnel server names).
+- **Fake IPs outlive Sluice in apps' caches**, so `FakeIpPool` is saved to `fake-dns.json` in the settings folder
+  every few seconds (5 s on Windows, 10 s on Linux) and on stop, and restored on the next start. A fake IP that is
+  still unknown (an app's cache from before a reset) is reset at once (`RoutingEngine.HandleAsync`), so the app looks
+  the name up again.
+- `.localhost`, `.local`, `.arpa`, `localhost` and IP literals are never faked; the profile's exclusion list is left
+  alone too, or with `OnlyFromListMode` it is the only list faked (`DnsPolicy`). DNS over TCP to a real server is
+  never tunneled (`Interceptor.Decide`, `LinuxCapture.DecideTcp`).
+- The OS DNS cache is flushed when capture starts (on Windows only with faking on) and when it stops with fakes
+  handed out: `DnsFlushResolverCache` on Windows, `resolvectl flush-caches` on Linux.
 
-| When | Where | Calls |
-|---|---|---|
-| App starts | `Sluice.Desktop/App.axaml.cs` | `OnAppStart()` |
-| Tunnel connects or drops; app minimised to tray | `App.axaml.cs`, `Services/AppTray.cs` | `Notify(...)` |
-| Start capture | `Services/EngineHost.cs` | `HasCaptureRights`, `CaptureRightsHint`, `CreateCapture(Engine)` |
-| Banner when rights are missing | `ViewModels/MainViewModel.cs` | `CaptureRightsHint`; shows "Restart as administrator" only if `CanRestartElevated` |
-| Capture impossible on this system | `Services/EngineHost.cs` | `CaptureUnavailableReason` |
-
-Example, pressing **Start capture**:
-
-- **Windows:** `HasCaptureRights` checks for administrator. Missing: the banner offers "Restart as administrator".
-  Otherwise `CreateCapture` returns `Interceptor`, which opens WinDivert.
-- **Linux:** `HasCaptureRights` checks for root or the capabilities. Missing: the banner shows the `setcap` hint, no
-  restart button. Otherwise `CreateCapture` returns `LinuxCapture`, which installs the nftables rules and reads NFQUEUE.
-
-The button, the banner and the rules engine are the same code on both; only the object created at start-up differs.
-
-## Adding an OS difference or a new OS
-
-- **A new difference** (e.g. tying helper processes to Sluice's lifetime): add a member to `IPlatformServices` (or a
-  narrower interface it returns), implement it in both classes, and call it through `OsPlatform.Current`.
-- **A new OS** (e.g. macOS): a new module with `MacPlatform : IPlatformServices`, a target framework and project
-  reference for it in `Sluice.Desktop.csproj`, and one more branch in `Platform.cs`. Nothing else changes.
-
-## Not finished yet
-
-- **Windows capture code still lives in `Sluice.Core`** (`Interceptor`, `WinDivertNative`, iphlpapi process lookup,
-  DPAPI, the Job object), guarded by `OperatingSystem.IsWindows()` checks. Core is built once for both, so this code is
-  also compiled into the Linux build; it is never called there (`LinuxPlatform.CreateCapture` uses nftables), but it
-  should move to `Sluice.Platform.Windows`. The plan is in [REQUIRED.md §1](REQUIRED.md#1-move-windows-only-code-out-of-core).
-- **`Sluice.Cli` is not multi-targeted yet**: it picks its capture with a run-time `OperatingSystem.IsLinux()` branch
-  instead of the platform module (same section of REQUIRED.md).
+Details: [engine.md](architecture/engine.md#dns-and-fake-ips) and [capture.md](architecture/capture.md).

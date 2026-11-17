@@ -48,7 +48,7 @@ lower case (`"socks5"`, `"vless"`). It stores every tunnel type including `Setti
 ## Proxifier `.ppx`: `PpxSerializer.cs`
 
 Proxifier 4 profiles (`ProxifierProfile version="102"`) are **import and export only**, kept byte-compatible
-(a settled decision, [DECISIONS.md](../../claude/DECISIONS.md)).
+(a settled decision, [DECISIONS.md](../DECISIONS.md)).
 
 - **Import:** the desktop app converts an opened `.ppx` into a new `.sluice` file in the profiles folder and works on
   that copy (`EngineHost.LoadProfile`); the original is never written back, because autosaving into `.ppx` would lose

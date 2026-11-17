@@ -20,6 +20,8 @@ output into WSL and run `dotnet Sluice.Desktop.dll`; it opens as a normal window
 
 ## Release package
 
+The packaging files (`scripts/package-linux.sh`, `packaging/linux/`) live on the `release/linux` branch, not on `main`.
+
 `sluice-linux-x64.tar.gz` holds only the app (framework-dependent, ~13 MB); `install.sh` installs everything else.
 
 ```bash
@@ -56,8 +58,8 @@ Package layout and installer: `packaging/linux/` (`install.sh`, `uninstall.sh`, 
 
   ```bash
   dotnet build src/Sluice.Cli -o out/cli
-  dotnet run scripts/linux/make-test-profile.cs -- linux-test.sluice
-  sudo scripts/linux/capture-livetest.sh out/cli linux-test.sluice [upstream-dns]
+  dotnet run scripts/linux/make-test-profile.cs -- local/linux-test.sluice
+  sudo scripts/linux/capture-livetest.sh out/cli local/linux-test.sluice [upstream-dns]
   ```
 
   Expected: curl goes through the test SOCKS5 server (including `example.com:80` by name), wget is blocked, python goes
@@ -66,5 +68,8 @@ Package layout and installer: `packaging/linux/` (`install.sh`, `uninstall.sh`, 
 - **Protocol end-to-end without internet:** start sing-box *servers* for each protocol on 127.0.0.1 (the live tests in
   `tests/Sluice.Tests/SingBoxTests.cs` show the configs) and run `Sluice.Cli check "<share link>" --target 127.0.0.1:<web port>`
   against a local `python3 -m http.server`. This covers Hysteria2 and TUIC over UDP too.
+- **Real tunnel:** the tests above use local servers only. To check real-world capture, use a tunnel of your own and keep
+  its profile in `local/` (ignored by git); never commit server addresses or credentials. Checklist:
+  [WORK.md](WORK.md).
 - **Before handing out a package:** install it fresh, then start capture **as a normal user** and confirm routing decisions
   in the log, besides the protocol checks.

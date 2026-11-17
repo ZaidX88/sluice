@@ -47,7 +47,7 @@ How the modules fit together: [ARCHITECTURE.md](ARCHITECTURE.md); how each build
 | `src/Sluice.App` | net10.0-windows | The old WPF app, kept until the Avalonia app is checked against it ([REQUIRED.md](REQUIRED.md#3-retire-the-wpf-app)). |
 | `tests/Sluice.Tests` | net10.0 | xUnit, 265 tests; references Core and the Linux module. |
 | `build/Dependencies.targets` | — | Fetches WinDivert and sing-box on the first build (pinned, SHA-256 checked) into `.deps/`. |
-| `packaging/linux`, `scripts/` | — | Linux release package and installer; live-test helpers. |
+| `scripts/` | — | Live-test helpers (`scripts/linux/`), sing-box download scripts. Release packaging is on `release/linux` / `release/windows`. |
 
 ## How capture works
 

@@ -50,3 +50,9 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   addresses. Direct traffic and the tunnel helpers' own connections stay in the kernel (docs/FIXES.md §8).
 - Relay counters (2026-11-17): reads per direction, read size and Sluice's CPU per MB, logged every 5 s at Verbose
   ("Relay (5 s)"), to explain CPU spikes (`RelayStats`).
+
+**2026-11-18: published**
+- Repository published on GitHub. Work split into areas (Linux, Windows, UI, Core) for parallel contributors
+  (`AGENTS.md`, `docs/CONTRIBUTING.md`, `docs/linux/WORK.md`); release packaging moved to `release/linux` and
+  `release/windows`, agent notes to `agent-notes`. A real server address in a test was replaced by a documentation
+  address throughout the history.

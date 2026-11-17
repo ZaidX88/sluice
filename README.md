@@ -23,7 +23,7 @@ Windows and Linux, and how every part works: [docs/ARCHITECTURE.md](docs/ARCHITE
 
 - **Use it:** [docs/QUICKSTART.md](docs/QUICKSTART.md)
 - **Linux:** install a release with [docs/linux/INSTALL.md](docs/linux/INSTALL.md) (`sudo ./install.sh` adds .NET,
-  nftables and the rest); build from source with [docs/linux/BUILD.md](docs/linux/BUILD.md).
+  nftables and the rest; packages are built from the `release/linux` branch); build from source with [docs/linux/BUILD.md](docs/linux/BUILD.md).
 - **Windows:** build and run from source with [docs/windows/BUILD.md](docs/windows/BUILD.md) (a release package is planned).
 
 ## Building
@@ -52,15 +52,15 @@ src/Sluice.Cli               command line
 src/Sluice.App               the old WPF app (being retired)
 tests/Sluice.Tests           xUnit tests, including live tests against local sing-box servers
 build/                       build-time dependency fetching
-packaging/, scripts/         Linux release package and installer, test helpers
-docs/                        user guides, status, plans
-claude/                      notes for continuing the work with an AI agent
+scripts/                     live-test helpers, sing-box download scripts
+docs/                        user guides, status, plans, contributing
+AGENTS.md, CLAUDE.md         rules for AI coding agents
 ```
 
 ## Contributing and continuing the work
 
-[CONTINUING.md](CONTINUING.md) explains how to pick the project up, by hand or with an AI coding agent. The plan of record
-is in [docs/REQUIRED.md](docs/REQUIRED.md), [docs/FIXES.md](docs/FIXES.md) and [docs/FEATURES.md](docs/FEATURES.md).
+Work is split into areas (Linux, Windows, UI) so people can work in parallel through forks and pull requests:
+[docs/CONTRIBUTING.md](docs/CONTRIBUTING.md). AI coding agents follow [AGENTS.md](AGENTS.md). The plan of record is in [docs/REQUIRED.md](docs/REQUIRED.md), [docs/FIXES.md](docs/FIXES.md) and [docs/FEATURES.md](docs/FEATURES.md).
 
 ## Third-party software
 

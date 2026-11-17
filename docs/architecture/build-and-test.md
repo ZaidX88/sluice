@@ -61,16 +61,17 @@ Other dependencies are NuGet packages: Avalonia 12 (desktop), SSH.NET (Core), xU
 
 ## Packaging and releases
 
-**Release packaging lives on version branches (`release/vX.Y.Z`), never on `main`;** `main` holds code and docs only,
-and release branches are not merged back (working rule; see `claude/memory/working-rules.md`). The owner has plans for
-`scripts/` and `packaging/`: discuss before changing them.
+**Release packaging lives on its own branches, `release/linux` and `release/windows`, never on `main`;** `main` holds
+code, tests and docs only, and release branches are not merged back. They are kept up to date by merging `main` into
+them. The owner has plans for `scripts/` and packaging: discuss before changing them.
 
-What exists on `main` today:
+What the release branches hold:
 
-- **Linux:** `scripts/package-linux.sh` stages a framework-dependent publish of `Sluice.Desktop` (`-f net10.0`) and
+- **Linux** (`release/linux`): `scripts/package-linux.sh` stages a framework-dependent publish of `Sluice.Desktop` (`-f net10.0`) and
   `Sluice.Cli` into `sluice-linux-x64.tar.gz`, drops Windows-only files and sing-box, and adds
   `packaging/linux/install.sh` / `uninstall.sh` / `sluice.desktop` / `README.txt`. `install.sh` installs .NET 10,
   nftables, libcap and desktop libraries with the system's package manager, downloads the pinned sing-box (or uses an
   archive next to it), and grants the capture capabilities with `setcap`. User guide: [linux/INSTALL.md](../linux/INSTALL.md).
-- **Windows:** no package yet ([REQUIRED.md §4](../REQUIRED.md#4-windows-release-package)).
+- **Windows** (`release/windows`): an Inno Setup installer (`packaging/windows/`), not yet reviewed for release
+  ([REQUIRED.md §4](../REQUIRED.md#4-windows-release-package)).
 - Remaining release work and CI: [REQUIRED.md §5–6](../REQUIRED.md#5-linux-release-remaining).

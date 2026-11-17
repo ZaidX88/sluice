@@ -499,3 +499,6 @@ lib/
 # Local material that must never be committed
 promo/
 release-linux/
+
+# Contributors: profiles, share links and logs of real tunnels (never commit these)
+local/

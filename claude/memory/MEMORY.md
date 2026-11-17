@@ -1,4 +1,0 @@
-- [Project](project.md) — Sluice: C#/.NET 10, Avalonia UI, WinDivert (Windows) + nftables/NFQUEUE (Linux), sing-box helper; terminology and module structure
-- [Status](status.md) — where the work stands (2026-11-14) and what comes next; the plan lives in docs/
-- [Working rules](working-rules.md) — commit/merge only when asked, ask before downloads, never drive the owner's desktop, verify visually and live
-- [Environment](environment.md) — pitfalls: a running Sluice capture affects builds/tests, slow-tunnel NuGet restores, CRLF, WSL networking

@@ -83,7 +83,8 @@ internal sealed class SingBoxSession : IBackendSession
 
         var port = FreeLoopbackPort();
         var json = _buildConfig is not null ? _buildConfig(port, ip) : SingBoxConfig.Build(_tunnel, port, ip);
-        var configPath = Path.Combine(ConfigDir.Value, $"{_tunnel.Id}-{Guid.NewGuid():N}.json");
+        var configDir = HelperConfigFolder.Ensure(HelperConfigFolder.Default);
+        var configPath = Path.Combine(configDir, $"{_tunnel.Id}-{Guid.NewGuid():N}.json");
         await WritePrivateAsync(configPath, json, ct);
 
         var errors = new List<string>();
@@ -96,7 +97,7 @@ internal sealed class SingBoxSession : IBackendSession
                 CreateNoWindow = true,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
-                WorkingDirectory = ConfigDir.Value,
+                WorkingDirectory = configDir,
             };
             var p = new Process { StartInfo = psi, EnableRaisingEvents = true };
             void OnLine(string? line)
@@ -144,18 +145,6 @@ internal sealed class SingBoxSession : IBackendSession
             try { File.Delete(configPath); } catch { /* best effort */ }
         }
     }
-
-    /// <summary>
-    /// A private folder per Sluice process for the configs (they hold tunnel passwords and keys). A fixed name under a
-    /// shared /tmp would let another local user read them or pre-create the folder, and would lock out the second user
-    /// to run Sluice; CreateTempSubdirectory makes a fresh owner-only (0700) folder.
-    /// </summary>
-    private static readonly Lazy<string> ConfigDir = new(() =>
-    {
-        var dir = Directory.CreateTempSubdirectory("sluice-sing-box-").FullName;
-        AppDomain.CurrentDomain.ProcessExit += (_, _) => { try { Directory.Delete(dir, recursive: true); } catch { /* best effort */ } };
-        return dir;
-    });
 
     private static async Task WritePrivateAsync(string path, string text, CancellationToken ct)
     {

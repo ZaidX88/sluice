@@ -85,8 +85,11 @@ Decision record: sing-box (GPL-3.0) runs as a **separate process, one per tunnel
 - **`Tunnels/SingBoxSession.cs`** starts one helper:
   1. resolves the server with Sluice's resolver (sing-box would ask the OS, whose cache may hold fake answers) and
      passes one address, IPv4 preferred;
-  2. writes the config to a **private folder** (`Directory.CreateTempSubdirectory("sluice-sing-box-")`, owner-only
-     0700 on Linux, files 0600) because it holds passwords and keys; the folder is deleted at exit;
+  2. writes the config to a **private per-user folder** (`HelperConfigFolder`: `%LOCALAPPDATA%\Sluice\helpers` on
+     Windows, `$XDG_RUNTIME_DIR/sluice` or `~/.local/state/sluice/helpers` on Linux; owner-only 0700, files 0600)
+     because it holds passwords and keys. Not the temp folder: users empty it, and a folder deleted under a running
+     Sluice broke every later tunnel start. The folder is recreated before each start, the config is deleted once
+     sing-box listens, and leftovers older than 10 minutes (from a crash) are removed;
   3. runs `sing-box run -c <config> --disable-color`, records the PID in `SingBoxSession.RunningHelpers` before
      anything else (its own traffic must never be captured), and on Windows assigns it to a kill-on-close **job
      object** so it dies with Sluice even after a crash;

@@ -102,4 +102,5 @@ it would reset every connection through it.
 
 **sing-box helper** (`src/Sluice.Core/Tunnels/`): `SingBoxConfig` turns a tunnel into a sing-box config,
 `SingBoxSession` starts one helper per tunnel with a local SOCKS5 inbound. Configs hold secrets, so they are written to a
-private (0700) temp folder per process and deleted once sing-box has read them.
+private per-user folder (`HelperConfigFolder`, not the temp folder, which users empty) and deleted once sing-box has
+read them.

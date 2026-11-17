@@ -42,3 +42,6 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
 - Windows capture speed (2026-11-17): connection decisions moved off the packet thread to 4 workers, WinDivert queue
   at its maximum, timing counters; the health check no longer restarts a tunnel that is carrying data. Captured
   traffic now matches the SOCKS listener on the same server (docs/FIXES.md §8, §9).
+- sing-box configs moved out of the temp folder (2026-11-17): emptying the temp folder while Sluice ran made every
+  later tunnel start fail ("Could not find a part of the path …"). They now go to a per-user app folder that is
+  recreated before each start (`HelperConfigFolder`).

@@ -45,6 +45,7 @@ public sealed class LinuxCapture : ITrafficCapture
     private bool _rulesApplied, _udpTunnelWarned;
     private readonly DnsPolicyCache _policies;
     private Task? _policyWatch;
+    private PosixSignalRegistration[]? _exitSignals;
     private long _redirected, _passed, _udpDropped;
 
     public LinuxCapture(RoutingEngine engine, IProcessLookup lookup)
@@ -140,6 +141,8 @@ public sealed class LinuxCapture : ITrafficCapture
         UdpMode = _engine.Profile.Options.Udp;
         NftRules.Apply(new NftRules.Settings(QueueNumber, RedirectMark, gid, _relay.Port, dnsPort, QueueUdp: UdpMode != UdpMode.Bypass));
         _rulesApplied = true;
+        _exitSignals = [.. new[] { PosixSignal.SIGTERM, PosixSignal.SIGINT, PosixSignal.SIGHUP }
+            .Select(s => PosixSignalRegistration.Create(s, OnExitSignal))];
 
         _thread = new Thread(QueueLoop) { IsBackground = true, Name = "Sluice NFQUEUE" };
         _thread.Start();
@@ -357,9 +360,27 @@ public sealed class LinuxCapture : ITrafficCapture
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException) { /* no systemd-resolved */ }
     }
 
+    /// <summary>
+    /// The app is being stopped by a signal (kill, systemctl, logout, Ctrl+C) while capturing. The nftables table
+    /// outlives the process: left behind, it keeps sending DNS to Sluice's dead DNS port, and name resolution stops
+    /// for every app until someone runs <c>nft delete table inet sluice</c>. Remove it, and drop placeholder answers from
+    /// systemd-resolved's cache. The signal then ends the process as usual (not cancelled).
+    /// </summary>
+    private void OnExitSignal(PosixSignalContext context)
+    {
+        if (!_rulesApplied) return;
+        _engine.Tracker.Write(LogLevel.Normal, $"{context.Signal} received while capturing: removing the nftables rules before exit");
+        NftRules.Remove();
+        _rulesApplied = false;
+        FlushResolverCache();
+    }
+
     private void Cleanup()
     {
         _cts.Cancel();
+        if (_exitSignals is not null)
+            foreach (var r in _exitSignals) r.Dispose();
+        _exitSignals = null;
         if (_rulesApplied) NftRules.Remove();     // first: no new packets are queued or redirected
         _rulesApplied = false;
         _queue?.Stop();

@@ -48,6 +48,11 @@ Take one at a time; each says what "done" means in the linked doc.
 | UDP through tunnels (TPROXY) | [REQUIRED §2](../REQUIRED.md#2-udp-through-tunnels-on-linux) | the design reuses `UdpNat`, which is in Core: **ask the owner** to split its WinDivert part out first; the nft/TPROXY/socket side is Linux work |
 | Installer paths on Ubuntu, Fedora, Arch; ARM64; `.deb` / AppImage | [REQUIRED §5](../REQUIRED.md#5-linux-release-remaining) | packaging lives on the owner's `release/linux` branch; ask for it before starting |
 
+**Stopping the app by a signal while capturing** (`kill`, logout, Ctrl+C), fixed on 2026-11-18: the nftables table used to
+stay behind and send DNS to Sluice's dead DNS port, so name resolution stopped for every app until
+`sudo nft delete table inet sluice`. Now SIGTERM, SIGINT and SIGHUP remove the table and flush systemd-resolved's cache
+before the process exits (`LinuxCapture.OnExitSignal`). SIGKILL and crashes still leave it behind.
+
 UI problems found on Linux (layout, fonts, tray, notifications shown by the app) belong to the UI area: report them in an
 issue with a screenshot instead of changing `src/Sluice.Desktop/`.
 

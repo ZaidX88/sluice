@@ -8,10 +8,15 @@ Needs the .NET 10 SDK and the libraries the UI uses (X11, ICE, SM, fontconfig: p
 build downloads the Linux sing-box into `.deps/`.
 
 ```bash
-dotnet build src/Sluice.Desktop -f net10.0
-dotnet run --project src/Sluice.Desktop -f net10.0
-dotnet run --project src/Sluice.Cli -- --help
+dotnet build src/Sluice.Desktop -f net10.0 -p:EnableWindowsTargeting=true
+dotnet run --project src/Sluice.Desktop -f net10.0 -p:EnableWindowsTargeting=true
+dotnet run --project src/Sluice.Cli -p:EnableWindowsTargeting=true -- --help
 ```
+
+`-p:EnableWindowsTargeting=true` is needed on Linux for now: restore also restores the Windows target of
+`Sluice.Desktop` ([FIXES §13](../FIXES.md#13-building-on-linux-needs-enablewindowstargeting--high-for-contributors),
+issue #1). Add it to `dotnet build` and `dotnet test` too. Build output under `out/` is not ignored by git yet
+(issue #6): don't commit it.
 
 Capture needs root, or the capabilities the installer grants (see below). For a quick test: `sudo dotnet <path>/Sluice.Cli.dll <profile> --intercept`.
 
@@ -53,7 +58,9 @@ Package layout and installer: `packaging/linux/` (`install.sh`, `uninstall.sh`, 
 
 ## Testing on Linux
 
-- **Unit tests** run on Linux too (`dotnet test tests/Sluice.Tests`); `Socket_owner_is_found_through_proc` runs only there.
+- **Unit tests** run on Linux too (`dotnet test tests/Sluice.Tests -p:EnableWindowsTargeting=true`);
+  `Socket_owner_is_found_through_proc` runs only there. 13 shared tests fail on Linux for now (Windows-only assumptions,
+  one relay test): see [CONTRIBUTING.md](../CONTRIBUTING.md#building-and-testing).
 - **Capture live test** (root; WSL works):
 
   ```bash

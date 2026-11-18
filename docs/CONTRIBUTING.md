@@ -49,6 +49,12 @@ Known environment-only failures ([FIXES.md §7](FIXES.md#7-tests-that-depend-on-
 - `HappyEyeballsTests.DeadFirstAddress_DoesNotDelayTheWorkingOne` fails while a Sluice capture runs on the same machine.
 - Live sing-box tests are timing-sensitive under load; if one fails in a full run, rerun it alone
   (`--filter FullyQualifiedName~LiveSingBoxTests`).
+- **On Linux**, until [issue #2](https://github.com/ZaidX88/sluice/issues/2) and
+  [issue #3](https://github.com/ZaidX88/sluice/issues/3) are fixed: 12 shared tests that assume Windows (DPAPI, `C:\`
+  paths, PowerShell, the engine's process-lookup test) and `RelayTests.SlowApp_DoesNotBlockUpstream_OnlyWithElasticBuffer`
+  fail. Every `Linux*Tests` test must still pass. List the failures you saw in the pull request.
+- **Building on Linux** needs `-p:EnableWindowsTargeting=true` on `dotnet build` and `dotnet test` until
+  [issue #1](https://github.com/ZaidX88/sluice/issues/1) is fixed.
 
 ### Live testing with a real tunnel
 

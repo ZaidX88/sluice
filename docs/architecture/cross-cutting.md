@@ -20,7 +20,7 @@ Shared state follows a few patterns:
 - **Immutable snapshots swapped atomically:** `RoutingEngine._state` (profile + compiled rules + connector) is a
   `volatile` record replaced on `Reload`; a connection reads it once and keeps it. Captures take their `DnsPolicy` from a
   `DnsPolicyCache`, which rebuilds it when the name-resolution setting values change (the Settings page edits the profile
-  in place, so comparing the profile object is not enough, FIXES §11). Linux capture still has its own copy of that cache.
+  in place, so comparing the profile object is not enough, FIXES §11).
 - **Concurrent collections and `Interlocked` counters** for flow tables, sessions, connection lists and statistics;
   plain `lock`s for small structures (`FakeIpPool`, `Statistics`, `FileLog`).
 - **One start at a time per tunnel:** `TunnelBackends` holds a `SemaphoreSlim` per tunnel id around session start;

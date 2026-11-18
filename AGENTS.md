@@ -63,6 +63,8 @@ dotnet test  tests/Sluice.Tests                                  # all tests, in
 ```
 
 The first build downloads WinDivert and sing-box (pinned, SHA-256 checked) into `.deps/` (`build/Dependencies.targets`).
+On Linux, add `-p:EnableWindowsTargeting=true` to these commands until issue #1 is fixed; the Linux test failures to
+expect until then are listed in `docs/CONTRIBUTING.md`.
 
 ## 4. Conventions
 

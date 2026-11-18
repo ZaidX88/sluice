@@ -80,6 +80,19 @@ one short line per distinct error, repeats collapsed.
   fail, often at start-up with "the tunnel started but no test connection through it worked", while
   `--filter FullyQualifiedName~LiveSingBoxTests` passes on its own. Give their waits more headroom, or run the live class
   without parallelisation (`[Collection]` with `DisableParallelization`).
+- **On Linux, 13 of 276 tests fail** (real machine, Ubuntu 26.04; every Linux test passes). Fix in the tests (Core):
+  - 12 assume Windows ([issue #2](https://github.com/ZaidX88/sluice/issues/2)): 5 use DPAPI (`PasswordEncryptionTests`
+    `CurrentUser`/`Account` modes, `SluiceProfileTests…(CurrentUser)`), 5 match `C:\…\*.exe` application paths
+    (`RuleEngineTests.Applications` cases, `AllConditionsMustMatch`, a `UdpRoutingTests.ClassifyUdp` case),
+    `EngineTests.LoopPrevention_LocalProxyHostGoesDirect` starts `powershell.exe`, and
+    `EngineTests.ApplicationRule_MatchesThisTestProcess` gets PID 0 because the test never sets
+    `ProcessLookup.Backend` to the Linux `/proc` lookup (the app does in `LinuxPlatform.OnAppStart`). Skip the
+    Windows-only cases off Windows (or give them Linux paths) and set the backend in the engine test.
+  - `RelayTests.SlowApp_DoesNotBlockUpstream_OnlyWithElasticBuffer(8 MB, 4 MB, drained)` fails every run, also alone
+    ([issue #3](https://github.com/ZaidX88/sluice/issues/3)): the upstream isn't drained within 3 s although the elastic
+    buffer should take all 4 MB. Not reproduced yet (no Linux SDK on the owner's PC). It matters beyond the test: SSH
+    routes use this buffer on Linux too, so check first whether the relay or only the test misbehaves (count reads and
+    `queued` during the test; compare Linux socket buffer autotuning).
 
 ## 8. Windows capture seemed slower than the SOCKS listener — fixed
 
@@ -202,3 +215,66 @@ through the tunnel as ordinary HTTPS.
 
 **Options** (the owner's choice, not decided): document that browsers' Secure DNS should be turned off while capturing;
 or have Sluice block or redirect well-known DoH endpoints so browsers fall back to the system resolver.
+
+## 11. DNS settings changed while capture runs are ignored until capture restarts — medium
+
+**Seen** (Linux, real machine; [issue #5](https://github.com/ZaidX88/sluice/issues/5)): turning on "Resolve hostnames
+through the tunnel" (or leak prevention, the local-names list, "block non-A queries") while capture runs has no effect:
+the switch shows on, but DNS answers stay real until capture is stopped and started again.
+
+**Why** (confirmed in the code): both captures cache the `DnsPolicy` and rebuild it only when the engine's profile is a
+different object (`ReferenceEquals` in `Interceptor.CurrentPolicy` and `LinuxCapture.CurrentPolicy`). The Settings page
+edits `Profile.Options` in place and `EngineHost.CommitProfileEdit` → `RoutingEngine.Reload(Profile)` passes the same
+object, so the old policy stays. `NeedsRestartFor` doesn't cover DNS settings either.
+
+**Fix:** build the policy from the option values (or compare them) instead of the profile reference, and flush the
+system resolver cache when the policy changes (Windows `DnsFlushResolverCache`, Linux `resolvectl flush-caches`). The
+Linux copy is Linux work; the Windows copy is issue #5.
+
+**Fixed when:** switching "Resolve hostnames through the tunnel" on during capture makes the next lookup return a
+198.18.x address, and switching it off returns real addresses, on both OSes, without restarting capture.
+
+## 12. IPv6 destinations fail through a tunnel whose server has no IPv6 — medium
+
+**Seen** ([issue #4](https://github.com/ZaidX88/sluice/issues/4)): with capture on and an SSH tunnel through sing-box,
+connections to IPv6 addresses fail ("ssh: rejected: connect failed", then "SOCKS5: general SOCKS server failure") when
+the SSH server has no IPv6. Seen for apps that resolved names before capture started (so they hold real IPv6 addresses,
+not 198.18.x placeholders) and with fake DNS off. With "Resolve hostnames through the tunnel" on, new lookups get IPv4
+placeholders and work.
+
+**Why:** a bare IPv6 destination can only be opened by the tunnel server as IPv6; Sluice has no hostname to retry over
+IPv4, and the app's own fallback (Happy Eyeballs) costs a round trip through the tunnel per attempt.
+
+**Options:** reset such connections quickly so the app falls back at once; remember per tunnel that IPv6 targets fail
+and refuse them immediately for a while; at least document it as a limit of tunnels without IPv6. Either way, flushing
+the system DNS cache when capture starts (already done on Windows) reduces how often apps hold real addresses.
+
+**Fixed when:** with an IPv4-only tunnel, an app holding an IPv6 address for a dual-stack site reaches it over IPv4
+without a visible delay, or the limit is documented in QUICKSTART.
+
+## 13. Building on Linux needs `EnableWindowsTargeting` — high (for contributors)
+
+**Seen** ([issue #1](https://github.com/ZaidX88/sluice/issues/1)): on Linux, `dotnet build src/Sluice.Desktop -f net10.0`,
+`dotnet build src/Sluice.Cli` and `dotnet test tests/Sluice.Tests` fail at restore with NETSDK1100.
+
+**Why:** `-f net10.0` limits the build, not the restore. `Sluice.Desktop` targets `net10.0-windows10.0.19041.0;net10.0`,
+and restore also restores the Windows target and its reference to `Sluice.Platform.Windows`.
+
+**Workaround:** add `-p:EnableWindowsTargeting=true` to each command (documented in [linux/BUILD.md](linux/BUILD.md)).
+
+**Fix:** set `<EnableWindowsTargeting>true</EnableWindowsTargeting>` in a shared `Directory.Build.props` (it only allows
+restoring Windows targets; it doesn't change what gets built). Also add `out/` to `.gitignore`: the docs build into
+`out/` and it shows up as untracked ([issue #6](https://github.com/ZaidX88/sluice/issues/6)).
+
+**Fixed when:** the commands in `AGENTS.md`, `CONTRIBUTING.md` and `linux/BUILD.md` work as written on Linux.
+
+## 14. No log file unless "file log" is turned on — low (UI)
+
+**Seen** ([issue #7](https://github.com/ZaidX88/sluice/issues/7)): `AppSettings.FileLogEnabled` defaults to `false`, so a
+new install writes no log. After a problem there is nothing to attach to a report. On Linux it matters more: the
+`setcap` app is not dumpable, so the log is the only outside view of what capture decided.
+
+**Options:** turn the file log on by default at Verbose (daily files are small; capture writes a timing line every 5 s
+at Verbose, so check the daily size first), or always keep the last few thousand lines in a rolling file.
+
+**Fixed when:** a fresh install has a log of the last session to attach to a report.

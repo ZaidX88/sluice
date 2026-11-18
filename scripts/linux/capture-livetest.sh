@@ -8,8 +8,9 @@
 # The optional upstream-dns (e.g. 8.8.8.8) is given to Sluice only, through a private mount namespace; use it when the
 # machine's resolver is unusable (WSL behind a Windows Sluice that fakes DNS answers).
 #
-# Expected: curl -> through the test SOCKS5 server (socks.log shows CONNECTs, including "example.com:80" by name),
-# wget -> blocked, python -> direct, getent -> 198.18.x.x, the nftables table gone after stop.
+# Expected: the relay listens on 127.0.0.1 and [::1] only; curl -> through the test SOCKS5 server (socks.log shows
+# CONNECTs, including "example.com:80" by name, and the IPv6 address when the machine has IPv6), wget -> blocked,
+# python -> direct, getent -> 198.18.x.x, the nftables table gone after stop.
 set -u
 CLI=$(realpath "$1"); PROFILE=$(realpath "$2"); DNS=${3:-}
 HERE=$(dirname "$(realpath "$0")")
@@ -29,10 +30,19 @@ fi
 sleep 5
 
 echo "== nft ruleset"; nft list table inet sluice 2>&1 | sed 's/^/   /'
+RELAY=$(nft list table inet sluice 2>/dev/null | sed -n 's/.*l4proto tcp redirect to :\([0-9]*\).*/\1/p')
+echo "== relay listeners on port ${RELAY:-?} (expect 127.0.0.1 and [::1] only)"
+ss -ltnH "sport = :${RELAY:-0}" | awk '{print "   " $4}'
 echo "== curl http://1.1.1.1 (rule: via socks)"
 sudo -u "$U" curl -sS -m 10 -o /dev/null -w "   http %{http_code} in %{time_total}s\n" http://1.1.1.1/
 echo "== curl https://1.1.1.1 (rule: via socks)"
 sudo -u "$U" curl -sS -m 10 -o /dev/null -w "   http %{http_code} in %{time_total}s\n" https://1.1.1.1/
+echo "== curl -6 http://[2606:4700:4700::1111] (rule: via socks; relay on ::1)"
+if ip -6 route get 2606:4700:4700::1111 >/dev/null 2>&1; then
+  sudo -u "$U" curl -6 -sS -m 10 -o /dev/null -w "   http %{http_code} in %{time_total}s\n" "http://[2606:4700:4700::1111]/"
+else
+  echo "   skipped (no IPv6 route)"
+fi
 echo "== wget http://1.1.1.1 (rule: blocked)"
 sudo -u "$U" wget -q -T 5 -t 1 -O /dev/null http://1.1.1.1/ && echo "   wget SUCCEEDED (bad)" || echo "   wget failed (expected)"
 echo "== python urllib (rule: Default = direct)"

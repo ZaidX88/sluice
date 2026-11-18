@@ -39,7 +39,6 @@ Take one at a time; each says what "done" means in the linked doc.
 
 | Item | Where | Notes |
 |---|---|---|
-| Relay listens on `[::]`; bind 127.0.0.1 and ::1 instead | [FIXES §6](../FIXES.md#6-linux-capture-limitations) | small, good first task |
 | IPv6 extension headers not parsed; such first packets pass uncaptured | FIXES §6 | `PacketInfo.TryParse` |
 | DNS not captured without a non-loopback upstream (dnsmasq without systemd-resolved) | FIXES §6 | test on a distribution without systemd-resolved |
 | `/proc/*/fd` scan cost on busy machines | FIXES §6 | `NETLINK_SOCK_DIAG` + inode cache |

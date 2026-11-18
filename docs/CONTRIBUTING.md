@@ -14,8 +14,37 @@ agent. Areas don't overlap, so pull requests don't conflict. The rules for agent
 | **Core** | everything else (`src/Sluice.Core/` shared engine, `src/Sluice.Cli/`, shared tests and docs, build files) | the repository owner |
 
 A change outside your area, even a small one, is not made in your pull request: open an issue that says what is needed
-and why, and the area's owner makes it. Shared docs (`docs/STATUS.md`, `FIXES.md`, `REQUIRED.md`, `docs/architecture/`)
-are the owner's: put your findings in your area's docs and in the pull request, and the owner carries them over.
+and why, and the area's owner makes it (see [Issues](#issues) for problems that need changes in several areas). Shared
+docs (`docs/STATUS.md`, `FIXES.md`, `REQUIRED.md`, `docs/architecture/`) are the owner's: put your findings in your
+area's docs and in the pull request, and the owner carries them over.
+
+## Issues
+
+Every problem or request is a GitHub issue. Title starts with the area (`[Linux] …`, `[Windows] …`, `[UI] …`, `[Core] …`).
+Describe what you saw, how to reproduce it, the evidence (commands, output, log lines; no real server addresses), and
+what "fixed" would look like.
+
+**One area:** one issue, fixed by one pull request from that area's owner.
+
+**Several areas** (for example a bug with a Linux part and a Core part): one **parent issue** and one **sub-issue per
+area**, so each part has its own owner and pull request and nobody edits another area's files.
+
+1. **The finder opens the parent issue**: the problem once, the evidence, and a proposed split under a "Parts" heading
+   (`Core: …`, `Linux: …`). No title prefix, or name both areas.
+2. **The owner decides the split** and creates the sub-issues, one per area, each with its own area prefix. The owner
+   knows the shared design: a split can often keep a platform part free of Core changes (for example by adding a shared
+   helper the platform code just calls). If you can create and link sub-issues yourself, do so; the owner may still
+   change the split.
+3. **Write down the order.** Usually the shared part (Core) lands first. Its sub-issue names the interface the others
+   will use (class, method, event), so they can plan or start before it is merged. A part that has to wait says
+   "Blocked by #N".
+4. **One sub-issue, one pull request, one owner.** The pull request says `Fixes #<sub-issue>`, which closes that
+   sub-issue when it is merged. Each sub-issue is assigned to its owner.
+5. **Close the parent by hand** when every sub-issue is closed (it doesn't close by itself), with a short note on what
+   changed overall. The owner then updates the shared docs if no pull request did.
+
+Don't split a problem that only one area has to change. Example of a split: #11 (DNS settings ignored during capture)
+with #5 for the Windows part and #12 for the Linux part.
 
 ## Workflow
 
@@ -30,8 +59,9 @@ are the owner's: put your findings in your area's docs and in the pull request, 
    - you checked the change for real (live capture run, or `--screenshot` images in light and dark for UI);
    - you updated your area's docs.
 6. Open the pull request against the owner's `main`. Title starts with the area (`[Linux] Bind the relay to loopback`).
-   Description: what changed and why, the doc item it addresses (e.g. "FIXES §6"), how you tested it with the commands
-   and their output, and anything that needs a change in another area.
+   Description: what changed and why, the issue it fixes (`Fixes #N`, so the issue closes on merge) or the doc item it
+   addresses (e.g. "FIXES §6"), how you tested it with the commands and their output, and anything that needs a change
+   in another area (with the issue you opened for it).
 
 ## Building and testing
 

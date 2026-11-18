@@ -102,8 +102,6 @@ Known environment-only failures ([FIXES.md §7](FIXES.md#7-tests-that-depend-on-
 - **On Linux**, `RelayTests.SlowApp_DoesNotBlockUpstream_OnlyWithElasticBuffer` fails until
   [issue #3](https://github.com/ZaidX88/sluice/issues/3) is fixed. Every Linux test must still pass. List the
   failures you saw in the pull request.
-- **Building the apps on Linux** needs `-p:EnableWindowsTargeting=true` on `dotnet build` until
-  [issue #1](https://github.com/ZaidX88/sluice/issues/1) is fixed. `dotnet test Sluice.Linux.slnf` doesn't need it.
 
 ### Live testing with a real tunnel
 

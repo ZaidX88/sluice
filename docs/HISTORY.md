@@ -56,3 +56,7 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   (`AGENTS.md`, `docs/CONTRIBUTING.md`, `docs/linux/WORK.md`); release packaging moved to `release/linux` and
   `release/windows`, agent notes to `agent-notes`. A real server address in a test was replaced by a documentation
   address throughout the history.
+- DNS settings changed during capture take effect at once (2026-11-18, issues #5, #12): the policy follows the setting
+  values (`DnsPolicyCache`) instead of the profile object, and the system DNS cache is flushed on a change. Linux part by
+  a contributor (PR #13).
+- Linux capture relay bound to 127.0.0.1 and ::1 instead of every interface (2026-11-18, PR #14, contributor).

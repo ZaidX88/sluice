@@ -59,8 +59,6 @@ one short line per distinct error, repeats collapsed.
   TPROXY for UDP would solve it (the original destination comes with each datagram).
 - `LinuxProcessLookup` scans `/proc/*/fd` on a miss. Fast in tests (20 parallel connections in ~0.15 s); on machines with
   tens of thousands of fds consider `NETLINK_SOCK_DIAG` + a background inode→pid cache.
-- The relay listens on `[::]:random` (reachable from the LAN; unknown clients are closed). Bind 127.0.0.1 and ::1 instead,
-  like the DNS server.
 - Running the GUI as root breaks notifications (no session bus) and Wayland may refuse it. The installer's `setcap` avoids
   that; long-term a privileged service (see [FEATURES.md](FEATURES.md)).
 
@@ -216,7 +214,7 @@ through the tunnel as ordinary HTTPS.
 **Options** (the owner's choice, not decided): document that browsers' Secure DNS should be turned off while capturing;
 or have Sluice block or redirect well-known DoH endpoints so browsers fall back to the system resolver.
 
-## 11. DNS settings changed while capture runs are ignored until capture restarts — medium
+## 11. DNS settings changed while capture runs are ignored until capture restarts — fixed
 
 **Seen** (Linux, real machine; [issue #5](https://github.com/ZaidX88/sluice/issues/5)): turning on "Resolve hostnames
 through the tunnel" (or leak prevention, the local-names list, "block non-A queries") while capture runs has no effect:
@@ -227,12 +225,23 @@ different object (`ReferenceEquals` in `Interceptor.CurrentPolicy` and `LinuxCap
 edits `Profile.Options` in place and `EngineHost.CommitProfileEdit` → `RoutingEngine.Reload(Profile)` passes the same
 object, so the old policy stays. `NeedsRestartFor` doesn't cover DNS settings either.
 
-**Fix:** build the policy from the option values (or compare them) instead of the profile reference, and flush the
-system resolver cache when the policy changes (Windows `DnsFlushResolverCache`, Linux `resolvectl flush-caches`). The
-Linux copy is Linux work; the Windows copy is issue #5.
+**Fix, Windows** (issue #5): `Dns/DnsPolicyCache` rebuilds the policy when the setting *values*
+change (`DnsPolicyCache.Settings`: via-tunnel, leak prevention, only-from-list, block non-A, exclusion list) and raises
+`Changed`. `Interceptor` uses it for every DNS query and also checks it every 5 s in `SweepLoop`, because apps holding
+cached answers may not ask again; on a change it logs "Name resolution through tunnels is now ON/OFF" and flushes the
+Windows DNS cache (off the packet thread). Tests: `DnsPolicyCacheTests`. Checked live: with capture running, switching
+the setting off gave real addresses for names cached as fake a moment before; switching it on gave 198.18.x addresses
+again within 5 s, and pages loaded through them.
+
+**Fix, Linux** (PR #13, issue #12): `LinuxCapture` builds the policy from the setting values with its own
+`Sluice.Platform.Linux.Capture.DnsPolicyCache` (written before the Core one was available), checks it once a second, logs
+"DNS settings changed: name resolution through tunnels is ON/OFF" and runs `resolvectl flush-caches`. Checked live on
+Ubuntu 26.04: lookups switched between real and 198.18.x addresses within a second, without a capture restart.
+Follow-up (Linux work): use the Core `DnsPolicyCache` instead of the Linux copy, and align the log wording with Windows.
 
 **Fixed when:** switching "Resolve hostnames through the tunnel" on during capture makes the next lookup return a
-198.18.x address, and switching it off returns real addresses, on both OSes, without restarting capture.
+198.18.x address, and switching it off returns real addresses, on both OSes, without restarting capture. Passes on
+both.
 
 ## 12. IPv6 destinations fail through a tunnel whose server has no IPv6 — medium
 

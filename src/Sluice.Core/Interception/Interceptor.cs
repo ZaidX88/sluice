@@ -58,7 +58,7 @@ public sealed class Interceptor : ITrafficCapture
     private readonly FakeIpPool _fakeIps = new();
     private DnsResolver? _resolver;
     private DnsRedirector? _dns;
-    private (Profile Profile, DnsPolicy Policy)? _policy;
+    private readonly DnsPolicyCache _policies;
     private UdpNat? _udp;
 
     /// <summary>Log the headers of this many packets at Debug level (troubleshooting).</summary>
@@ -79,7 +79,12 @@ public sealed class Interceptor : ITrafficCapture
     public LatencyStats PacketHandling => _handling;
     public LatencyStats Decisions => _decisions;
 
-    public Interceptor(RoutingEngine engine) => _engine = engine;
+    public Interceptor(RoutingEngine engine)
+    {
+        _engine = engine;
+        _policies = new DnsPolicyCache(() => _engine.Profile);
+        _policies.Changed += OnDnsPolicyChanged;
+    }
 
     public long PacketsReflected => Interlocked.Read(ref _reflected);
     public long PacketsPassed => Interlocked.Read(ref _passed);
@@ -309,14 +314,22 @@ public sealed class Interceptor : ITrafficCapture
         return h;
     }
 
-    private DnsPolicy CurrentPolicy()
+    private DnsPolicy CurrentPolicy() => _policies.Current;
+
+    /// <summary>
+    /// A name-resolution setting changed while capturing (noticed on the next DNS query or within 5 s by the sweep).
+    /// The Windows DNS cache still holds answers made under the old settings: real addresses that should now be faked,
+    /// or fake ones that should now be real. Flush it so apps ask again.
+    /// </summary>
+    private void OnDnsPolicyChanged(DnsPolicy now, DnsPolicy before)
     {
-        var profile = _engine.Profile;
-        var cached = _policy;
-        if (cached is { } c && ReferenceEquals(c.Profile, profile)) return c.Policy;
-        var p = new DnsPolicy(profile.Options.Resolve, profile.Options.LeakPreventionMode);
-        _policy = (profile, p);
-        return p;
+        if (_cts.IsCancellationRequested) return;
+        _engine.Tracker.Write(LogLevel.Normal, now.Enabled == before.Enabled
+            ? "Name resolution settings changed; applied to new lookups"
+            : now.Enabled
+                ? "Name resolution through tunnels is now ON (fake IPs from 198.18.0.0/15)"
+                : "Name resolution through tunnels is now OFF");
+        _ = Task.Run(FlushOsDnsCache);   // not on the packet thread: the DNS client service can take a while
     }
 
     /// <summary>Called on the SYN of every new outbound flow.</summary>
@@ -551,6 +564,7 @@ public sealed class Interceptor : ITrafficCapture
                 _udp?.Sweep(TimeSpan.FromSeconds(60));
                 _reflector?.Sweep(TimeSpan.FromMinutes(10));
                 PruneFollowed();
+                _ = CurrentPolicy();   // apply changed DNS settings even when no app is looking names up (FIXES §11)
                 CheckRelayReachable();
                 var cutoff = DateTime.UtcNow - TimeSpan.FromMinutes(1);
                 foreach (var (k, v) in _socketPids)

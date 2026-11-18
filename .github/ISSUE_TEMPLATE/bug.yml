@@ -1,0 +1,42 @@
+name: Bug
+description: Something doesn't work as it should
+title: "[Area] "
+labels: [bug, triage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Title starts with the area: `[Linux]`, `[Windows]`, `[UI]` or `[Core]`. A problem that needs changes in several
+        areas gets a parent issue with a "Parts" list (docs/CONTRIBUTING.md → Issues). Never paste real server
+        addresses, credentials, share links or profiles; use `example.com`, `192.0.2.x`.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options: [Linux, Windows, UI, Core, Several (parent issue)]
+    validations:
+      required: true
+  - type: textarea
+    id: seen
+    attributes:
+      label: Seen
+      description: What happened, on which OS and version, and how to reproduce it. Commands, output, log lines.
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why
+      description: The cause, if known (file and method), or "not known yet".
+  - type: textarea
+    id: todo
+    attributes:
+      label: To do
+      description: What to change, or what to investigate first.
+  - type: textarea
+    id: done
+    attributes:
+      label: Fixed when
+      description: A check anyone can run that shows it is fixed.
+    validations:
+      required: true

@@ -2,7 +2,8 @@
 
 How Sluice is built, read from the code. Start here for the big picture; each part has its own page in
 [architecture/](architecture/). For what works today see [STATUS.md](STATUS.md); for what is planned,
-[REQUIRED.md](REQUIRED.md), [FIXES.md](FIXES.md) and [FEATURES.md](FEATURES.md).
+[REQUIRED.md](REQUIRED.md) and each area's `FIXES.md` and `FEATURES.md`
+([README.md](README.md)).
 
 | Page | Covers |
 |---|---|

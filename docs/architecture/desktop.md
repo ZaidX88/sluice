@@ -100,4 +100,4 @@ visible page (`PageViewModel.Refresh`) and updates rates and status. `TunnelsVie
   - neutral notices (`ShowInfo`), e.g. "imported from Proxifier".
 
 Checking UI changes: `Sluice.Desktop --screenshot <dir> [--theme dark]`, light and dark (see
-[windows/BUILD.md](../windows/BUILD.md)). Known UI gaps: [FIXES.md §3 and §5](../FIXES.md#5-avalonia-ui-gaps-small).
+[windows/BUILD.md](../windows/BUILD.md)). Known UI gaps: [ui/FIXES.md §1 and §2](../ui/FIXES.md).

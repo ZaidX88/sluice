@@ -61,7 +61,7 @@ AGENTS.md, CLAUDE.md         rules for AI coding agents
 ## Contributing and continuing the work
 
 Work is split into areas (Linux, Windows, UI) so people can work in parallel through forks and pull requests:
-[docs/CONTRIBUTING.md](docs/CONTRIBUTING.md). AI coding agents follow [AGENTS.md](AGENTS.md). The plan of record is in [docs/REQUIRED.md](docs/REQUIRED.md), [docs/FIXES.md](docs/FIXES.md) and [docs/FEATURES.md](docs/FEATURES.md).
+[docs/CONTRIBUTING.md](docs/CONTRIBUTING.md). AI coding agents follow [AGENTS.md](AGENTS.md). The plan of record is in [docs/REQUIRED.md](docs/REQUIRED.md), each area's `FIXES.md` and `FEATURES.md` ([docs/README.md](docs/README.md)) and the GitHub issues.
 
 ## Third-party software
 

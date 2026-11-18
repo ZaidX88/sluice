@@ -7,15 +7,16 @@ forks and pull requests. These rules keep their changes from colliding. Read all
 ## 1. Work in one area only
 
 Every task belongs to exactly one area. The person you work for names it at the start ("Area: Linux"). If they didn't,
-**ask before editing anything**. You may change only the files of that area:
+**ask before editing anything**. You may change only the files of that area, plus the shared docs (below):
 
 | Area | You may change | Owner of everything else |
 |---|---|---|
 | **Linux** | `src/Sluice.Platform.Linux/**`, `scripts/linux/**`, `docs/linux/**`, `tests/Sluice.Tests.Linux/**` | repository owner |
 | **Windows** | `src/Sluice.Platform.Windows/**`, `docs/windows/**`, the Windows-only files still in Core (`src/Sluice.Core/Interception/Interceptor.cs`, `WinDivertNative.cs`, `UdpNat.cs`, `CaptureFilter.cs`, `src/Sluice.Core/Platform/ProcessLookup.cs`, `src/Sluice.Core/Profiles/Dpapi.cs`), `scripts/*.ps1`, `tests/Sluice.Tests.Windows/**` | repository owner |
-| **UI** | `src/Sluice.Desktop/**` (and the legacy `src/Sluice.App/**`), `docs/architecture/desktop.md` | repository owner |
+| **UI** | `src/Sluice.Desktop/**` (and the legacy `src/Sluice.App/**`), `docs/ui/**`, `docs/architecture/desktop.md` | repository owner |
 | **Core** (owner only) | everything else: `src/Sluice.Core/**` (shared engine), `src/Sluice.Cli/**`, the shared tests `tests/Sluice.Tests/**` and `tests/Sluice.Tests.Support/**`, `build/**`,
-`Sluice.slnx`, `Sluice.*.slnf`, shared docs (`docs/*.md`, `docs/architecture/**`), `README.md`, `AGENTS.md`, `CLAUDE.md`, `.gitignore`, `.gitattributes` | — |
+`Sluice.slnx`, `Sluice.*.slnf`, `docs/core/**`, `.github/**`, `README.md`, `AGENTS.md`, `CLAUDE.md`, `.gitignore`, `.gitattributes` | — |
+| **Shared docs** (every area) | `docs/*.md` (`STATUS.md`, `REQUIRED.md`, `ARCHITECTURE.md`, `HISTORY.md`, `QUICKSTART.md`, …) and `docs/architecture/**`, for what your change affects | — |
 
 - **Strict.** If the task needs a change outside your area, even one line in shared code or the UI, **stop**. Don't make
   it. Tell the person what is needed, where and why, so the area's owner can make it (a GitHub issue is the usual way).
@@ -24,12 +25,15 @@ Every task belongs to exactly one area. The person you work for names it at the 
   during Linux work goes to whoever works on the UI area.
 - **A problem that needs changes in several areas** gets one parent issue and one sub-issue per area
   (`docs/CONTRIBUTING.md` → Issues). Offer the person a draft: the parent with the evidence and a "Parts" list
-  (`Core: …`, `Linux: …`), saying which part must land first and what interface the other parts will use. The owner
-  decides the final split. Then fix only your area's sub-issue; its pull request says `Fixes #<sub-issue>`. Ask the
+  (`Core: …`, `Linux: …`), saying which part must land first and what interface the other parts will use. Only the
+  owner splits it into sub-issues, when triaging. Then fix only your area's sub-issue; its pull request says `Fixes #<sub-issue>`. Ask the
   person before creating, commenting on or closing issues. Don't start a sub-issue that is **blocked by** an open issue
   without asking: its pull request can't be merged until the blocker is closed (the required "Blocked issues" check).
-- Shared docs belong to the owner. Record your findings and progress in your area's docs (Linux: `docs/linux/`) and in
-  the pull request description; the owner carries them into `docs/STATUS.md`, `FIXES.md` and `REQUIRED.md`.
+- **Docs:** every area has its own `docs/<area>/FIXES.md` (known bugs) and `FEATURES.md` (ideas, performance work);
+  Core's are in `docs/core/`. The shared docs (`docs/*.md`, `docs/architecture/**`) may be changed by every area in the
+  pull request whose change they describe: `STATUS.md`, `REQUIRED.md`, the architecture pages, a `HISTORY.md` line.
+  Changes to the rules (`docs/CONTRIBUTING.md`, `AGENTS.md`) and to settled decisions (`docs/DECISIONS.md`) need the
+  owner's agreement first.
 - Don't reformat, rename or "tidy" files you weren't asked to change.
 
 ## 2. No private data in the repository
@@ -50,10 +54,18 @@ path, and report results in the pull request without the address.
 
 ## 3. How to work
 
-**Order for every fix, feature or required item** (`docs/CONTRIBUTING.md` → From idea to merge): first a **docs pull
-request** that writes the item down (owner: `docs/FIXES.md`, `FEATURES.md` or `REQUIRED.md`; Linux: `docs/linux/WORK.md`),
-then, once it is merged, the **issue**, then the **code pull request** with `Fixes #<issue>`. Don't write code for an
-item that has no merged doc entry and no issue: offer the person a draft of the doc entry first.
+**Order for every fix, feature or required item** (`docs/CONTRIBUTING.md` → From idea to merge): an **issue**, the
+owner's **triage** (and split, if it needs several areas), the person **claims** it, then **one pull request** with
+the code, the tests and the doc updates, saying `Fixes #<issue>`. Don't write code for an item that has no issue:
+offer the person a draft of the issue (the template's fields) and ask before creating it.
+
+**Work only on an issue that is labelled `ready` or `in progress` and assigned to the person you work for.** Never on
+a `triage` issue or a parent issue. To claim a `ready` issue, the person comments "I'll take this" and the owner
+assigns them; draft that comment and ask before posting it. Questions about the plan or the split go in the issue (the
+parent, for a split), not in the pull request. An assigned issue left without activity for 14 days is unassigned and
+goes back to `ready`.
+Only a **decision** gets a docs pull request before the code: changing `docs/DECISIONS.md`, a new interface several
+areas will use, or an architecture change. Trivial changes (typos, wording) need no issue.
 
 **Before starting any issue, check that it isn't blocked:**
 
@@ -62,10 +74,10 @@ gh api repos/ZaidX88/sluice/issues/<N>/dependencies/blocked_by --jq '.[] | selec
 ```
 
 Any output means it is blocked by an open issue: stop and tell the person which one; don't start without their
-agreement. Also check it is in your area and not assigned to someone else.
+agreement. Also check it is in your area and assigned to the person (`gh issue view <N> --json assignees,labels`).
 
-1. Read `docs/CONTRIBUTING.md` (workflow, areas, testing), then `docs/STATUS.md`, then the item you were given in
-   `docs/REQUIRED.md`, `docs/FIXES.md` or `docs/FEATURES.md`. Linux: also `docs/linux/WORK.md`. Settled decisions are in
+1. Read `docs/CONTRIBUTING.md` (workflow, areas, testing), then `docs/STATUS.md`, then the issue you were given and the
+   doc entry it links (`docs/REQUIRED.md`, or your area's `FIXES.md` / `FEATURES.md`). Linux: also `docs/linux/WORK.md`. Settled decisions are in
    `docs/DECISIONS.md`; don't reverse one without the owner's agreement. How everything works: `docs/ARCHITECTURE.md`.
 2. One branch per task in your fork, named for the area: `linux/<topic>`, `windows/<topic>`, `ui/<topic>`.
 3. Build and run **your area's tests** (commands below): Linux runs `Sluice.Linux.slnf` on Linux, Windows runs

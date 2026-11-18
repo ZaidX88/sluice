@@ -4,7 +4,7 @@ using Sluice.Core.Profiles;
 namespace Sluice.Tests;
 
 /// <summary>
-/// Name-resolution settings changed while capture runs take effect (FIXES §11, issue #5): the Settings page edits the
+/// Name-resolution settings changed while capture runs take effect (docs/core/FIXES.md §5, issue #5): the Settings page edits the
 /// profile in place, so the cached policy must follow the setting values, not the profile object.
 /// </summary>
 public class DnsPolicyCacheTests

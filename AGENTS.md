@@ -26,7 +26,8 @@ Every task belongs to exactly one area. The person you work for names it at the 
   (`docs/CONTRIBUTING.md` → Issues). Offer the person a draft: the parent with the evidence and a "Parts" list
   (`Core: …`, `Linux: …`), saying which part must land first and what interface the other parts will use. The owner
   decides the final split. Then fix only your area's sub-issue; its pull request says `Fixes #<sub-issue>`. Ask the
-  person before creating, commenting on or closing issues.
+  person before creating, commenting on or closing issues. Don't start a sub-issue that is **blocked by** an open issue
+  without asking: its pull request can't be merged until the blocker is closed (the required "Blocked issues" check).
 - Shared docs belong to the owner. Record your findings and progress in your area's docs (Linux: `docs/linux/`) and in
   the pull request description; the owner carries them into `docs/STATUS.md`, `FIXES.md` and `REQUIRED.md`.
 - Don't reformat, rename or "tidy" files you weren't asked to change.
@@ -85,5 +86,5 @@ On Linux, add `-p:EnableWindowsTargeting=true` to the `dotnet build` commands un
   `IPlatformServices`; the UI is one Avalonia app for both OSes with the same design.
 - Outbound connections are **tunnels**, never "proxies", in UI text and code.
 - `*.sh` and anything handed to Linux tools must have LF line endings (`.gitattributes` handles `*.sh`).
-- `main` holds code, tests and docs only. Release packaging lives on `release/linux` and `release/windows`, agent notes on
+- `main` holds code, tests and docs only (plus repository checks in `.github/workflows/`). Release packaging lives on `release/linux` and `release/windows`, agent notes on
   `agent-notes`; none of them is merged into `main`.

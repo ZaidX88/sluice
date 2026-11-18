@@ -62,3 +62,5 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
 - Linux capture relay bound to 127.0.0.1 and ::1 instead of every interface (2026-11-18, PR #14, contributor).
 - Tests split by platform (2026-11-18, issue #18): shared tests run on both OSes; `tests/Sluice.Tests.Linux` and
   `tests/Sluice.Tests.Windows` belong to their areas; each area runs `Sluice.Linux.slnf` or `Sluice.Windows.slnf`.
+- Issue dependencies enforced (2026-11-18): the "Blocked issues" check fails a PR while an issue it fixes is blocked by
+  an open issue; a branch rule on `main` requires it.

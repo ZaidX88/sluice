@@ -36,8 +36,13 @@ area**, so each part has its own owner and pull request and nobody edits another
    helper the platform code just calls). If you can create and link sub-issues yourself, do so; the owner may still
    change the split.
 3. **Write down the order.** Usually the shared part (Core) lands first. Its sub-issue names the interface the others
-   will use (class, method, event), so they can plan or start before it is merged. A part that has to wait says
-   "Blocked by #N".
+   will use (class, method, event), so they can plan or start before it is merged. A part that has to wait is marked
+   on GitHub: open its issue → **Relationships → Mark as blocked by** → the issue it waits for.
+   **This is enforced at merge time:** a pull request that fixes a blocked issue gets a failing **Blocked issues**
+   check, and `main` requires that check, so it can be reviewed but not merged until the blocker is closed. The check
+   re-runs by itself when an issue is closed or reopened, and when the pull request's description changes. If you link
+   the issue only in the PR's sidebar, re-run it from **Actions → Blocked issues → Run workflow**
+   (`.github/workflows/blocked-issues.yml`).
 4. **One sub-issue, one pull request, one owner.** The pull request says `Fixes #<sub-issue>`, which closes that
    sub-issue when it is merged. Each sub-issue is assigned to its owner.
 5. **Close the parent by hand** when every sub-issue is closed (it doesn't close by itself), with a short note on what

@@ -35,8 +35,13 @@ internal sealed class Ipv6Fallback
         if (!IsTunnelRoute(via) || !IsIpv6Target(target)) return false;
         if (state == ConnectionState.Failed)
         {
-            var isNew = !IsMarked(via);
-            _failing[via] = _now();
+            // One step, so that failures arriving together (an app opening several connections at once) report "new"
+            // only once. When the add loses a race, AddOrUpdate retries with the update, which resets isNew.
+            var now = _now();
+            var isNew = false;
+            _failing.AddOrUpdate(via,
+                _ => { isNew = true; return now; },
+                (_, since) => { isNew = now - since >= Hold; return now; });   // an expired mark counts as new
             return isNew;
         }
         if (state == ConnectionState.Closed && error is null && bytesReceived > 0)

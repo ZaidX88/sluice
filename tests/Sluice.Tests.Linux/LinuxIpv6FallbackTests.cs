@@ -61,6 +61,41 @@ public class LinuxIpv6FallbackTests
     }
 
     [Fact]
+    public void Failures_arriving_together_report_new_once()
+    {
+        // An app opening several IPv6 connections at once: their failures are observed on different threads at the
+        // same moment, and the route must be reported (logged) as newly failing only once.
+        const int threads = 16;
+        for (var round = 0; round < 200; round++)
+        {
+            var f = New();
+            var news = 0;
+            using var start = new Barrier(threads);
+            var workers = Enumerable.Range(0, threads).Select(i => new Thread(() =>
+            {
+                start.SignalAndWait();
+                if (f.Observe($"[2001:db8::{i + 1:x}]:443", Ssh, ConnectionState.Failed, "x", 0)) Interlocked.Increment(ref news);
+            })).ToList();
+            workers.ForEach(t => t.Start());
+            workers.ForEach(t => t.Join());
+            Assert.Equal(1, news);
+        }
+    }
+
+    [Fact]
+    public void A_failure_after_the_mark_expired_is_new_again()
+    {
+        var f = New();
+        Assert.True(f.Observe("[2001:db8::10]:443", Ssh, ConnectionState.Failed, "x", 0));
+        _now += TimeSpan.FromMinutes(1);
+        Assert.False(f.Observe("[2001:db8::10]:443", Ssh, ConnectionState.Failed, "x", 0));   // still marked: no new log line
+
+        _now += Ipv6Fallback.Hold;            // ten minutes after the last failure: expired
+        Assert.True(f.Observe("[2001:db8::10]:443", Ssh, ConnectionState.Failed, "x", 0));
+        Assert.True(f.ShouldRefuse(V6, Ssh));
+    }
+
+    [Fact]
     public void A_working_ipv6_connection_clears_the_mark()
     {
         var f = New();

@@ -77,8 +77,8 @@ dotnet test  Sluice.Windows.slnf                                 # Windows area,
 The UI area runs both on the OSes it can (at least the one it develops on).
 
 The first build downloads WinDivert and sing-box (pinned, SHA-256 checked) into `.deps/` (`build/Dependencies.targets`).
-On Linux, add `-p:EnableWindowsTargeting=true` to the `dotnet build` commands until issue #1 is fixed
-(`Sluice.Linux.slnf` doesn't need it); the Linux test failures to expect are listed in `docs/CONTRIBUTING.md`.
+The commands work as written on Linux (`Directory.Build.props` allows restoring the Windows target there); the Linux
+test failures to expect are listed in `docs/CONTRIBUTING.md`.
 
 ## 4. Conventions
 

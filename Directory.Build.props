@@ -1,0 +1,9 @@
+<Project>
+  <!-- Settings for every project in the repository. -->
+  <PropertyGroup>
+    <!-- Sluice.Desktop also targets Windows (net10.0-windows…), and restore restores every target framework even when a
+         build asks for one (-f net10.0). Without this, building on Linux or macOS fails with NETSDK1100 (issue #1). It only
+         allows restoring Windows targets; it doesn't build Windows code on other systems. -->
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+  </PropertyGroup>
+</Project>

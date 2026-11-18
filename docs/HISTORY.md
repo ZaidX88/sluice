@@ -64,3 +64,5 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   `tests/Sluice.Tests.Windows` belong to their areas; each area runs `Sluice.Linux.slnf` or `Sluice.Windows.slnf`.
 - Linux builds without extra flags (2026-11-18, issues #1, #6): `Directory.Build.props` sets `EnableWindowsTargeting`;
   `out/` is ignored by git.
+- Issue dependencies enforced (2026-11-18): the "Blocked issues" check fails a PR while an issue it fixes is blocked by
+  an open issue; a branch rule on `main` requires it.

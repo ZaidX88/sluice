@@ -1,0 +1,67 @@
+# Blocks merging a pull request while an issue it fixes is "blocked by" an open issue (see docs/CONTRIBUTING.md → Issues).
+#
+# For each pull request it posts the commit status "Blocked issues" on the head commit: failure while any issue in the
+# PR's "Fixes #N" list (GitHub's closing references) has an open blocker, success otherwise. The branch rule on main
+# requires that status, so a blocked part can be reviewed but not merged.
+#
+# pull_request_target runs in this repository's context so the status can be posted for pull requests from forks too.
+# It only reads metadata through the API: it never checks out or runs the pull request's code.
+name: Blocked issues
+
+on:
+  pull_request_target:
+    types: [opened, edited, reopened, synchronize, ready_for_review]
+  issues:
+    types: [closed, reopened]   # a blocker was closed (or reopened): re-check every open pull request
+  workflow_dispatch:            # re-check by hand, e.g. after linking an issue in the PR's sidebar
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+  statuses: write
+
+concurrency:
+  group: blocked-issues-${{ github.event.pull_request.number || 'all' }}
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the issues each pull request fixes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          owner="${REPO%/*}"; name="${REPO#*/}"
+          if [ -n "${PR:-}" ]; then
+            prs="$PR"
+          else
+            prs=$(gh pr list --repo "$REPO" --state open --limit 200 --json number --jq '.[].number')
+          fi
+          for pr in $prs; do
+            sha=$(gh pr view "$pr" --repo "$REPO" --json headRefOid --jq .headRefOid)
+            issues=$(gh api graphql \
+              -f query='query($o:String!,$n:String!,$p:Int!){repository(owner:$o,name:$n){pullRequest(number:$p){closingIssuesReferences(first:50){nodes{number}}}}}' \
+              -f o="$owner" -f n="$name" -F p="$pr" \
+              --jq '.data.repository.pullRequest.closingIssuesReferences.nodes[].number')
+            blocked=""
+            for issue in $issues; do
+              open=$(gh api --paginate "repos/$REPO/issues/$issue/dependencies/blocked_by" \
+                --jq '.[] | select(.state == "open") | "#\(.number)"' | paste -sd, -)
+              if [ -n "$open" ]; then blocked="$blocked #$issue waits for $open;"; fi
+            done
+            if [ -n "$blocked" ]; then
+              state=failure; desc="Blocked:${blocked%;}"
+            elif [ -n "$issues" ]; then
+              state=success; desc="No open blockers for: $(echo $issues | sed 's/\([0-9]*\)/#\1/g')"
+            else
+              state=success; desc="No linked issues"
+            fi
+            desc="${desc:0:139}"
+            gh api -X POST "repos/$REPO/statuses/$sha" -f state="$state" -f context="Blocked issues" -f description="$desc" > /dev/null
+            echo "PR #$pr ($sha): $state, $desc"
+          done

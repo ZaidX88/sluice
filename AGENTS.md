@@ -21,6 +21,11 @@ Every task belongs to exactly one area. The person you work for names it at the 
   Then finish what you can inside your area.
 - **Linux work is Linux code only**: no UI changes, no `Sluice.Core` changes, no Windows changes. A UI change found
   during Linux work goes to whoever works on the UI area.
+- **A problem that needs changes in several areas** gets one parent issue and one sub-issue per area
+  (`docs/CONTRIBUTING.md` → Issues). Offer the person a draft: the parent with the evidence and a "Parts" list
+  (`Core: …`, `Linux: …`), saying which part must land first and what interface the other parts will use. The owner
+  decides the final split. Then fix only your area's sub-issue; its pull request says `Fixes #<sub-issue>`. Ask the
+  person before creating, commenting on or closing issues.
 - Shared docs belong to the owner. Record your findings and progress in your area's docs (Linux: `docs/linux/`) and in
   the pull request description; the owner carries them into `docs/STATUS.md`, `FIXES.md` and `REQUIRED.md`.
 - Don't reformat, rename or "tidy" files you weren't asked to change.

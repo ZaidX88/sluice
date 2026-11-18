@@ -8,10 +8,10 @@ agent. Areas don't overlap, so pull requests don't conflict. The rules for agent
 
 | Area | Files | Typical work |
 |---|---|---|
-| **Linux** | `src/Sluice.Platform.Linux/`, `scripts/linux/`, `docs/linux/`, `tests/Sluice.Tests/Linux*Tests.cs` | capture (nftables, NFQUEUE), DNS, process lookup, notifications, testing on real distributions: [linux/WORK.md](linux/WORK.md) |
-| **Windows** | `src/Sluice.Platform.Windows/`, `docs/windows/`, the Windows-only files still in Core (listed in `AGENTS.md`), `scripts/*.ps1`, their tests | WinDivert capture, Windows integration |
+| **Linux** | `src/Sluice.Platform.Linux/`, `scripts/linux/`, `docs/linux/`, `tests/Sluice.Tests.Linux/` | capture (nftables, NFQUEUE), DNS, process lookup, notifications, testing on real distributions: [linux/WORK.md](linux/WORK.md) |
+| **Windows** | `src/Sluice.Platform.Windows/`, `docs/windows/`, the Windows-only files still in Core (listed in `AGENTS.md`), `scripts/*.ps1`, `tests/Sluice.Tests.Windows/` | WinDivert capture, Windows integration |
 | **UI** | `src/Sluice.Desktop/` (legacy `src/Sluice.App/`), `docs/architecture/desktop.md` | the Avalonia app on both OSes |
-| **Core** | everything else (`src/Sluice.Core/` shared engine, `src/Sluice.Cli/`, shared tests and docs, build files) | the repository owner |
+| **Core** | everything else (`src/Sluice.Core/` shared engine, `src/Sluice.Cli/`, shared tests `tests/Sluice.Tests/` and `tests/Sluice.Tests.Support/`, shared docs, build files) | the repository owner |
 
 A change outside your area, even a small one, is not made in your pull request: open an issue that says what is needed
 and why, and the area's owner makes it (see [Issues](#issues) for problems that need changes in several areas). Shared
@@ -55,7 +55,8 @@ with #5 for the Windows part and #12 for the Linux part.
    `git pull upstream main`).
 4. One branch per task: `linux/<topic>`, `windows/<topic>`, `ui/<topic>`.
 5. Before opening a pull request:
-   - `dotnet test tests/Sluice.Tests` passes (see the known environment-only failures below);
+   - your area's tests pass: `dotnet test Sluice.Linux.slnf` on Linux or `dotnet test Sluice.Windows.slnf` on
+     Windows (see the known environment-only failures below);
    - you checked the change for real (live capture run, or `--screenshot` images in light and dark for UI);
    - you updated your area's docs.
 6. Open the pull request against the owner's `main`. Title starts with the area (`[Linux] Bind the relay to loopback`).
@@ -69,8 +70,27 @@ with #5 for the Windows part and #12 for the Linux part.
 dotnet build src/Sluice.Desktop -f net10.0                       # Linux app (builds on Windows too)
 dotnet build src/Sluice.Desktop -f net10.0-windows10.0.19041.0   # Windows app
 dotnet build src/Sluice.Cli
-dotnet test  tests/Sluice.Tests                                  # unit tests + live tests on local sing-box servers
+dotnet test  Sluice.Linux.slnf                                   # on Linux: shared + Linux tests
+dotnet test  Sluice.Windows.slnf                                 # on Windows: shared + Windows tests
 ```
+
+### Tests
+
+| Project | Owner | Runs on | Holds |
+|---|---|---|---|
+| `tests/Sluice.Tests` | owner | Windows and Linux | everything that doesn't depend on the OS (engine, rules, DNS, share links, tunnels, live sing-box tests) |
+| `tests/Sluice.Tests.Linux` | Linux area | Linux | `Sluice.Platform.Linux` and the Linux versions of OS-dependent tests |
+| `tests/Sluice.Tests.Windows` | Windows area | Windows only | WinDivert capture, DPAPI, the Windows versions of OS-dependent tests |
+| `tests/Sluice.Tests.Support` | owner | (library) | shared helpers: loopback test servers, `[WindowsFact]` / `[LinuxFact]` |
+
+- Each area runs its filter on its own OS: `Sluice.Linux.slnf` = shared + Linux, `Sluice.Windows.slnf` = shared +
+  Windows. The shared tests are not copied; they run in both filters.
+- **New tests go in your area's project.** A behaviour that differs per OS (application paths, process lookup, system
+  calls) gets one test in each platform project, written by that area. For example, application rules are tested with
+  `C:\…\app.exe` in the Windows project and with `/usr/bin/app` in the Linux one.
+- A test that only works on one OS but has to sit in a project that also runs elsewhere uses `[WindowsFact]` /
+  `[LinuxFact]` (and the `Theory` versions), which skip themselves on the other OS.
+- Shared tests are the owner's. If one fails on your OS, open an issue rather than changing or skipping it.
 
 Platform guides: [linux/BUILD.md](linux/BUILD.md), [windows/BUILD.md](windows/BUILD.md). How everything works:
 [ARCHITECTURE.md](ARCHITECTURE.md).
@@ -79,12 +99,11 @@ Known environment-only failures ([FIXES.md §7](FIXES.md#7-tests-that-depend-on-
 - `HappyEyeballsTests.DeadFirstAddress_DoesNotDelayTheWorkingOne` fails while a Sluice capture runs on the same machine.
 - Live sing-box tests are timing-sensitive under load; if one fails in a full run, rerun it alone
   (`--filter FullyQualifiedName~LiveSingBoxTests`).
-- **On Linux**, until [issue #2](https://github.com/ZaidX88/sluice/issues/2) and
-  [issue #3](https://github.com/ZaidX88/sluice/issues/3) are fixed: 12 shared tests that assume Windows (DPAPI, `C:\`
-  paths, PowerShell, the engine's process-lookup test) and `RelayTests.SlowApp_DoesNotBlockUpstream_OnlyWithElasticBuffer`
-  fail. Every `Linux*Tests` test must still pass. List the failures you saw in the pull request.
-- **Building on Linux** needs `-p:EnableWindowsTargeting=true` on `dotnet build` and `dotnet test` until
-  [issue #1](https://github.com/ZaidX88/sluice/issues/1) is fixed.
+- **On Linux**, `RelayTests.SlowApp_DoesNotBlockUpstream_OnlyWithElasticBuffer` fails until
+  [issue #3](https://github.com/ZaidX88/sluice/issues/3) is fixed. Every Linux test must still pass. List the
+  failures you saw in the pull request.
+- **Building the apps on Linux** needs `-p:EnableWindowsTargeting=true` on `dotnet build` until
+  [issue #1](https://github.com/ZaidX88/sluice/issues/1) is fixed. `dotnet test Sluice.Linux.slnf` doesn't need it.
 
 ### Live testing with a real tunnel
 

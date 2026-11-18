@@ -45,7 +45,7 @@ How the modules fit together: [ARCHITECTURE.md](ARCHITECTURE.md); how each build
 | `src/Sluice.Desktop` | net10.0-windows…; net10.0 | The Avalonia app. `#if WINDOWS` in `Services/Platform.cs` picks the platform module. |
 | `src/Sluice.Cli` | net10.0 | Headless engine; `--intercept` uses WinDivert on Windows and `LinuxPlatform` on Linux. |
 | `src/Sluice.App` | net10.0-windows | The old WPF app, kept until the Avalonia app is checked against it ([REQUIRED.md](REQUIRED.md#3-retire-the-wpf-app)). |
-| `tests/Sluice.Tests` | net10.0 | xUnit, 265 tests; references Core and the Linux module. |
+| `tests/Sluice.Tests` (+ `.Linux`, `.Windows`, `.Support`) | net10.0 (Windows tests: net10.0-windows) | xUnit: shared tests plus one project per platform; run with `Sluice.Linux.slnf` / `Sluice.Windows.slnf`. |
 | `build/Dependencies.targets` | — | Fetches WinDivert and sing-box on the first build (pinned, SHA-256 checked) into `.deps/`. |
 | `scripts/` | — | Live-test helpers (`scripts/linux/`), sing-box download scripts. Release packaging is on `release/linux` / `release/windows`. |
 

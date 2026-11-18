@@ -78,7 +78,9 @@ one short line per distinct error, repeats collapsed.
   fail, often at start-up with "the tunnel started but no test connection through it worked", while
   `--filter FullyQualifiedName~LiveSingBoxTests` passes on its own. Give their waits more headroom, or run the live class
   without parallelisation (`[Collection]` with `DisableParallelization`).
-- **On Linux, 13 of 276 tests fail** (real machine, Ubuntu 26.04; every Linux test passes). Fix in the tests (Core):
+- **On Linux, 13 of 276 tests failed** (real machine, Ubuntu 26.04; every Linux test passed). The 12 Windows-specific
+  ones moved to `tests/Sluice.Tests.Windows` when the tests were split by platform (issue #18); Linux versions are
+  Linux work ([linux/WORK.md](linux/WORK.md)). What was found:
   - 12 assume Windows ([issue #2](https://github.com/ZaidX88/sluice/issues/2)): 5 use DPAPI (`PasswordEncryptionTests`
     `CurrentUser`/`Account` modes, `SluiceProfileTests…(CurrentUser)`), 5 match `C:\…\*.exe` application paths
     (`RuleEngineTests.Applications` cases, `AllConditionsMustMatch`, a `UdpRoutingTests.ClassifyUdp` case),

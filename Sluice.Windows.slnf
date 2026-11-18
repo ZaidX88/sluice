@@ -1,0 +1,12 @@
+{
+  "solution": {
+    "path": "Sluice.slnx",
+    "projects": [
+      "src/Sluice.Core/Sluice.Core.csproj",
+      "src/Sluice.Platform.Windows/Sluice.Platform.Windows.csproj",
+      "tests/Sluice.Tests/Sluice.Tests.csproj",
+      "tests/Sluice.Tests.Support/Sluice.Tests.Support.csproj",
+      "tests/Sluice.Tests.Windows/Sluice.Tests.Windows.csproj"
+    ]
+  }
+}

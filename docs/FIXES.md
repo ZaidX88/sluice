@@ -262,7 +262,7 @@ the system DNS cache when capture starts (already done on Windows) reduces how o
 **Fixed when:** with an IPv4-only tunnel, an app holding an IPv6 address for a dual-stack site reaches it over IPv4
 without a visible delay, or the limit is documented in QUICKSTART.
 
-## 13. Building on Linux needs `EnableWindowsTargeting` — high (for contributors)
+## 13. Building on Linux needed `EnableWindowsTargeting` — fixed
 
 **Seen** ([issue #1](https://github.com/ZaidX88/sluice/issues/1)): on Linux, `dotnet build src/Sluice.Desktop -f net10.0`,
 `dotnet build src/Sluice.Cli` and `dotnet test tests/Sluice.Tests` fail at restore with NETSDK1100.
@@ -270,13 +270,13 @@ without a visible delay, or the limit is documented in QUICKSTART.
 **Why:** `-f net10.0` limits the build, not the restore. `Sluice.Desktop` targets `net10.0-windows10.0.19041.0;net10.0`,
 and restore also restores the Windows target and its reference to `Sluice.Platform.Windows`.
 
-**Workaround:** add `-p:EnableWindowsTargeting=true` to each command (documented in [linux/BUILD.md](linux/BUILD.md)).
+**Fix:** `Directory.Build.props` at the repository root sets `<EnableWindowsTargeting>true</EnableWindowsTargeting>`
+for every project. It only allows restoring Windows targets; it doesn't change what gets built. The test filter
+`Sluice.Linux.slnf` (issue #18) never needed it. `out/`, where the docs put build output, is now in `.gitignore`
+([issue #6](https://github.com/ZaidX88/sluice/issues/6)).
 
-**Fix:** set `<EnableWindowsTargeting>true</EnableWindowsTargeting>` in a shared `Directory.Build.props` (it only allows
-restoring Windows targets; it doesn't change what gets built). Also add `out/` to `.gitignore`: the docs build into
-`out/` and it shows up as untracked ([issue #6](https://github.com/ZaidX88/sluice/issues/6)).
-
-**Fixed when:** the commands in `AGENTS.md`, `CONTRIBUTING.md` and `linux/BUILD.md` work as written on Linux.
+**Fixed when:** the commands in `AGENTS.md`, `CONTRIBUTING.md` and `linux/BUILD.md` work as written on Linux. Builds on
+Windows unchanged; still to be confirmed on a Linux machine.
 
 ## 14. No log file unless "file log" is turned on — low (UI)
 

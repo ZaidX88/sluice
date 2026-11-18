@@ -233,11 +233,10 @@ Windows DNS cache (off the packet thread). Tests: `DnsPolicyCacheTests`. Checked
 the setting off gave real addresses for names cached as fake a moment before; switching it on gave 198.18.x addresses
 again within 5 s, and pages loaded through them.
 
-**Fix, Linux** (PR #13, issue #12): `LinuxCapture` builds the policy from the setting values with its own
-`Sluice.Platform.Linux.Capture.DnsPolicyCache` (written before the Core one was available), checks it once a second, logs
-"DNS settings changed: name resolution through tunnels is ON/OFF" and runs `resolvectl flush-caches`. Checked live on
-Ubuntu 26.04: lookups switched between real and 198.18.x addresses within a second, without a capture restart.
-Follow-up (Linux work): use the Core `DnsPolicyCache` instead of the Linux copy, and align the log wording with Windows.
+**Fix, Linux** (PR #13, issue #12): `LinuxCapture` uses the same Core `DnsPolicyCache`, checks it once a second (names
+in systemd-resolved's cache never reach Sluice), logs the same lines as Windows and runs `resolvectl flush-caches` on a
+change. Checked live on Ubuntu 26.04: lookups switched between real and 198.18.x addresses within a second, without a
+capture restart. (PR #13 first used a copy of the cache in the Linux module; it was replaced by the Core one.)
 
 **Fixed when:** switching "Resolve hostnames through the tunnel" on during capture makes the next lookup return a
 198.18.x address, and switching it off returns real addresses, on both OSes, without restarting capture. Passes on

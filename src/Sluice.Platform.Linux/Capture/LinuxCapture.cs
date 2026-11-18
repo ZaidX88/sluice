@@ -43,7 +43,7 @@ public sealed class LinuxCapture : ITrafficCapture
     private Task? _sweeper;
     private (uint Real, uint Effective)? _previousGid;
     private bool _rulesApplied, _udpTunnelWarned;
-    private readonly DnsPolicyCache _policies = new();
+    private readonly DnsPolicyCache _policies;
     private Task? _policyWatch;
     private long _redirected, _passed, _udpDropped;
 
@@ -51,6 +51,9 @@ public sealed class LinuxCapture : ITrafficCapture
     {
         _engine = engine;
         _lookup = lookup;
+        // Shared with the Windows capture (Sluice.Core.Dns): follows the setting values, not the profile object.
+        _policies = new DnsPolicyCache(() => _engine.Profile, Environment.MachineName);
+        _policies.Changed += OnPolicyChanged;
     }
 
     public UdpMode UdpMode { get; private set; }
@@ -156,29 +159,27 @@ public sealed class LinuxCapture : ITrafficCapture
             }})");
     }
 
-    private DnsPolicy CurrentPolicy()
-    {
-        var p = _policies.Get(_engine.Profile, out var changed);
-        if (changed) OnPolicyChanged(p);
-        return p;
-    }
+    private DnsPolicy CurrentPolicy() => _policies.Current;
 
     /// <summary>
     /// A DNS setting changed while capturing. systemd-resolved still holds answers given under the old policy (real
     /// addresses, or placeholders), and answers from its cache never reach Sluice: drop them so the next lookup
-    /// gets the new behaviour. Off the calling thread, which may be the DNS server's.
+    /// gets the new behaviour. Off the calling thread, which may be the DNS server's. Same log lines as Windows.
     /// </summary>
-    private void OnPolicyChanged(DnsPolicy p)
+    private void OnPolicyChanged(DnsPolicy now, DnsPolicy before)
     {
-        _engine.Tracker.Write(LogLevel.Normal, p.Enabled
-            ? "DNS settings changed: name resolution through tunnels is ON (fake IPs from 198.18.0.0/15)"
-            : "DNS settings changed: name resolution through tunnels is OFF");
+        if (_cts.IsCancellationRequested) return;
+        _engine.Tracker.Write(LogLevel.Normal, now.Enabled == before.Enabled
+            ? "Name resolution settings changed; applied to new lookups"
+            : now.Enabled
+                ? "Name resolution through tunnels is now ON (fake IPs from 198.18.0.0/15)"
+                : "Name resolution through tunnels is now OFF");
         _ = Task.Run(FlushResolverCache);
     }
 
     /// <summary>
     /// Picks up DNS setting changes within a second even when no query reaches Sluice (names already in
-    /// systemd-resolved's cache are answered there). The engine has no change event, and building the key is cheap.
+    /// systemd-resolved's cache are answered there). The engine has no change event, and comparing the settings is cheap.
     /// </summary>
     private async Task PolicyWatchLoop()
     {

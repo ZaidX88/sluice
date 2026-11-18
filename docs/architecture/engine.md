@@ -73,7 +73,7 @@ engine's loop guard, accepts, sets `NoDelay`, and runs each client on the thread
 | Listener | Who uses it | How it learns the destination |
 |---|---|---|
 | `Socks5Inbound` | apps configured with Sluice as a SOCKS5 proxy (desktop: `127.0.0.1:1080` by default, `AppSettings.SocksPort`; CLI `--socks`) | SOCKS5 CONNECT (no auth; IPv4, IPv6 or a name). PID from `InboundListener.IdentifyClient` (owner of the loopback socket). Answers through `IInboundReply` with SOCKS reply codes |
-| `TransparentInbound` | the capture relay, on `[::]:<random>` | `IRedirectTable.TryGetOriginal(client endpoint)` → `OriginalDestination(Destination, ProcessId, Hostname)`. No handshake (`NoHandshake` reply): a failure just closes the socket |
+| `TransparentInbound` | the capture relay: `[::]:<random>` on Windows; `127.0.0.1` and `[::1]` on one port on Linux (`LoopbackRelay`) | `IRedirectTable.TryGetOriginal(client endpoint)` → `OriginalDestination(Destination, ProcessId, Hostname)`. No handshake (`NoHandshake` reply): a failure just closes the socket |
 
 `IRedirectTable` is implemented by `PacketReflector` (Windows, wrapped by `Interceptor.LateBoundTable` to add the
 hostname of fake IPs) and by `LinuxCapture.FlowTable`.
@@ -115,12 +115,13 @@ hostname of fake IPs) and by `LinuxCapture.FlowTable`.
 
 ## DNS and fake IPs
 
-Files: `Dns/DnsResolver.cs`, `Dns/DnsPolicy.cs`, `Dns/FakeIpPool.cs`, `Dns/DnsMessage.cs`, `Interception/DnsRedirector.cs`.
+Files: `Dns/DnsResolver.cs`, `Dns/DnsPolicy.cs`, `Dns/DnsPolicyCache.cs`, `Dns/FakeIpPool.cs`, `Dns/DnsMessage.cs`, `Interception/DnsRedirector.cs`.
 The flow is drawn in [ARCHITECTURE.md](../ARCHITECTURE.md#the-dns-path).
 
 | Class | Role |
 |---|---|
 | `DnsPolicy` | Built from `ResolveOptions` + `LeakPreventionMode`. Faking is on with `ViaProxy` or leak prevention ("auto-detect" counts as local). `ShouldFake(name)` honours the exclusion list (`OnlyFromListMode` inverts it) and never fakes `localhost`, `.localhost`, `.local`, `.arpa` or IP literals. `BlockNonATypes` answers other record types with no data. |
+| `DnsPolicyCache` | The current `DnsPolicy` for a profile, rebuilt when the setting values change (`Settings` record), with a `Changed` event (new, old) so a capture can flush the system DNS cache. Used by the Windows capture on every query and every 5 s; Linux capture has an equivalent copy in its own module for now. |
 | `FakeIpPool` | Maps names ↔ 198.18.0.0/15 (131 070 usable addresses, round-robin, the oldest recycled when full). `IsFake(ip)` is a static range check. `Save`/`Load` write `fake-dns.json` atomically (temp file + rename) under `FakeIpPool.DefaultStatePath` (`<ApplicationData>/Sluice/`); a damaged file is ignored. |
 | `DnsRedirector` | Pure packet logic: `TryAnswer(ip packet)` (Windows) or `TryAnswerQuery(dns message)` (Linux server) returns a reply, or null to let the query go to a real resolver. Faked A → one fake address, TTL 5 s; AAAA / HTTPS / SVCB → no data (no IPv6 fakes, and those records can carry real address hints). Queries from `DnsResolver`'s own port are never touched. |
 | `DnsResolver` | Sluice's stub resolver: UDP from one fixed local port to the system's DNS servers (`SystemDnsServers()`: active non-loopback interfaces, IPv4 first; Linux capture passes `LinuxDnsServer.UpstreamServers` instead), A then AAAA, 60 s cache, 3 s timeout per server. Falls back to the OS resolver (filtering out fake answers) when no server is known. |

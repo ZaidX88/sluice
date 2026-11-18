@@ -18,8 +18,9 @@ dedicated threads are blocking packet loops:
 Shared state follows a few patterns:
 
 - **Immutable snapshots swapped atomically:** `RoutingEngine._state` (profile + compiled rules + connector) is a
-  `volatile` record replaced on `Reload`; a connection reads it once and keeps it. Captures cache a `DnsPolicy` per
-  profile object the same way.
+  `volatile` record replaced on `Reload`; a connection reads it once and keeps it. Captures take their `DnsPolicy` from a
+  `DnsPolicyCache`, which rebuilds it when the name-resolution setting values change (the Settings page edits the profile
+  in place, so comparing the profile object is not enough, FIXES §11). Linux capture still has its own copy of that cache.
 - **Concurrent collections and `Interlocked` counters** for flow tables, sessions, connection lists and statistics;
   plain `lock`s for small structures (`FakeIpPool`, `Statistics`, `FileLog`).
 - **One start at a time per tunnel:** `TunnelBackends` holds a `SemaphoreSlim` per tunnel id around session start;
@@ -85,9 +86,10 @@ headers (`Interceptor.DiagnosticPackets`). Helper output (sing-box) is logged li
 - **Own traffic and loops.** Sluice's sockets (by PID on Windows, by group on Linux) and its sing-box helpers are never
   captured; connections to Sluice's own listeners are refused; processes hosting a profile tunnel locally go direct.
 - **Listening sockets.** The local SOCKS5 server binds `127.0.0.1` without authentication, so any local process can use
-  it. The capture relay binds `[::]:<random>`: reachable from the network, but it closes clients it has no redirect
-  record for ([FIXES.md §6](../FIXES.md#6-linux-capture-limitations)). On Windows the relay needs an inbound firewall
-  allow rule because reflected connections arrive as incoming.
+  it. The capture relay binds `[::]:<random>` on Windows (reflected packets arrive addressed to the machine's own IP),
+  closing clients it has no redirect record for, and needs an inbound firewall allow rule because reflected connections
+  arrive as incoming. On Linux it binds only `127.0.0.1` and `[::1]` on one port (`LoopbackRelay`): nftables' redirect
+  of a local connection goes to loopback, so nothing on the network can reach it.
 - **Helper lifetime.** On Windows a kill-on-close job object ends helpers with Sluice; on Linux they are not tied to
   Sluice's lifetime yet ([REQUIRED.md §1](../REQUIRED.md#1-move-windows-only-code-out-of-core)).
 - **SSH host keys** are trusted on first use and pinned in the profile; a changed key fails the connection.

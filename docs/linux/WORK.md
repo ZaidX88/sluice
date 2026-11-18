@@ -51,6 +51,10 @@ Take one at a time; each says what "done" means in the linked doc.
 field, so a first packet with Hop-by-Hop, Destination Options, Routing, Fragment or AH headers before TCP/UDP passed
 uncaptured (nftables' `meta l4proto` looks past them, so such packets are queued). It now follows the chain
 (`SkipIpv6ExtensionHeaders`); ESP, "no next header", later fragments and broken chains still pass as before.
+**Stopping the app by a signal while capturing** (`kill`, logout, Ctrl+C), fixed on 2026-11-18: the nftables table used to
+stay behind and send DNS to Sluice's dead DNS port, so name resolution stopped for every app until
+`sudo nft delete table inet sluice`. Now SIGTERM, SIGINT and SIGHUP remove the table and flush systemd-resolved's cache
+before the process exits (`LinuxCapture.OnExitSignal`). SIGKILL and crashes still leave it behind.
 
 UI problems found on Linux (layout, fonts, tray, notifications shown by the app) belong to the UI area: report them in an
 issue with a screenshot instead of changing `src/Sluice.Desktop/`.

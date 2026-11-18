@@ -26,7 +26,8 @@ Every task belongs to exactly one area. The person you work for names it at the 
   (`docs/CONTRIBUTING.md` → Issues). Offer the person a draft: the parent with the evidence and a "Parts" list
   (`Core: …`, `Linux: …`), saying which part must land first and what interface the other parts will use. The owner
   decides the final split. Then fix only your area's sub-issue; its pull request says `Fixes #<sub-issue>`. Ask the
-  person before creating, commenting on or closing issues.
+  person before creating, commenting on or closing issues. Don't start a sub-issue that is **blocked by** an open issue
+  without asking: its pull request can't be merged until the blocker is closed (the required "Blocked issues" check).
 - Shared docs belong to the owner. Record your findings and progress in your area's docs (Linux: `docs/linux/`) and in
   the pull request description; the owner carries them into `docs/STATUS.md`, `FIXES.md` and `REQUIRED.md`.
 - Don't reformat, rename or "tidy" files you weren't asked to change.
@@ -48,6 +49,20 @@ and credentials **outside the repository** (or in `local/`, which git ignores), 
 path, and report results in the pull request without the address.
 
 ## 3. How to work
+
+**Order for every fix, feature or required item** (`docs/CONTRIBUTING.md` → From idea to merge): first a **docs pull
+request** that writes the item down (owner: `docs/FIXES.md`, `FEATURES.md` or `REQUIRED.md`; Linux: `docs/linux/WORK.md`),
+then, once it is merged, the **issue**, then the **code pull request** with `Fixes #<issue>`. Don't write code for an
+item that has no merged doc entry and no issue: offer the person a draft of the doc entry first.
+
+**Before starting any issue, check that it isn't blocked:**
+
+```bash
+gh api repos/ZaidX88/sluice/issues/<N>/dependencies/blocked_by --jq '.[] | select(.state=="open") | "#\(.number) \(.title)"'
+```
+
+Any output means it is blocked by an open issue: stop and tell the person which one; don't start without their
+agreement. Also check it is in your area and not assigned to someone else.
 
 1. Read `docs/CONTRIBUTING.md` (workflow, areas, testing), then `docs/STATUS.md`, then the item you were given in
    `docs/REQUIRED.md`, `docs/FIXES.md` or `docs/FEATURES.md`. Linux: also `docs/linux/WORK.md`. Settled decisions are in
@@ -76,8 +91,8 @@ dotnet test  Sluice.Windows.slnf                                 # Windows area,
 The UI area runs both on the OSes it can (at least the one it develops on).
 
 The first build downloads WinDivert and sing-box (pinned, SHA-256 checked) into `.deps/` (`build/Dependencies.targets`).
-On Linux, add `-p:EnableWindowsTargeting=true` to the `dotnet build` commands until issue #1 is fixed
-(`Sluice.Linux.slnf` doesn't need it); the Linux test failures to expect are listed in `docs/CONTRIBUTING.md`.
+The commands work as written on Linux (`Directory.Build.props` allows restoring the Windows target there); the Linux
+test failures to expect are listed in `docs/CONTRIBUTING.md`.
 
 ## 4. Conventions
 
@@ -85,5 +100,5 @@ On Linux, add `-p:EnableWindowsTargeting=true` to the `dotnet build` commands un
   `IPlatformServices`; the UI is one Avalonia app for both OSes with the same design.
 - Outbound connections are **tunnels**, never "proxies", in UI text and code.
 - `*.sh` and anything handed to Linux tools must have LF line endings (`.gitattributes` handles `*.sh`).
-- `main` holds code, tests and docs only. Release packaging lives on `release/linux` and `release/windows`, agent notes on
+- `main` holds code, tests and docs only (plus repository checks in `.github/workflows/`). Release packaging lives on `release/linux` and `release/windows`, agent notes on
   `agent-notes`; none of them is merged into `main`.

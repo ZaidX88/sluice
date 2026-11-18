@@ -18,9 +18,47 @@ and why, and the area's owner makes it (see [Issues](#issues) for problems that 
 docs (`docs/STATUS.md`, `FIXES.md`, `REQUIRED.md`, `docs/architecture/`) are the owner's: put your findings in your
 area's docs and in the pull request, and the owner carries them over.
 
+## From idea to merge
+
+Every fix, feature or required item goes through the same three steps, in this order. Nothing skips a step, however
+small.
+
+1. **Docs pull request first.** Write the item down and get that merged before anything else:
+   - the owner adds it to the shared list it belongs in: [FIXES.md](FIXES.md) (bug), [FEATURES.md](FEATURES.md) (new
+     feature) or [REQUIRED.md](REQUIRED.md) (required work);
+   - an area contributor adds it to their area's docs (Linux: [linux/WORK.md](linux/WORK.md)); the owner carries it into
+     the shared list.
+
+   The entry says what was seen or wanted, why, what to do, and when it counts as done (the format the lists already
+   use). The pull request changes docs only, has the area in its title (`[Docs] …`, or `[Linux] …` for area docs) and
+   no `Fixes` line.
+2. **Then the issue**, once the docs pull request is merged. It links the doc entry (for example "FIXES §9") and
+   follows [Issues](#issues): one area → one issue; several areas → a parent with one sub-issue per area. The code pull
+   request adds the issue number to the doc entry.
+3. **Then the code pull request**, which says `Fixes #<issue>` and updates the doc entry (marks it done or removes it,
+   and adds a line to [HISTORY.md](HISTORY.md) for the owner's changes).
+
+### Before you start an issue
+
+Check that it is free to work on, every time, before you write any code:
+
+- **Not blocked.** Open the issue → **Relationships**: if it is **blocked by** an issue that is still open, don't
+  start it; wait for the blocker or ask the owner. From the command line:
+
+  ```bash
+  gh api repos/ZaidX88/sluice/issues/<N>/dependencies/blocked_by --jq '.[] | select(.state=="open") | "#\(.number) \(.title)"'
+  ```
+
+  Empty output means nothing blocks it. A pull request for a blocked issue can't be merged anyway (the required
+  **Blocked issues** check, see [Issues](#issues) step 3), so work started early is likely to wait or need redoing.
+- **Yours.** It's in your area and assigned to you, or nobody else is assigned (then say in a comment that you are
+  taking it).
+- **Its parent's order.** For a sub-issue, read the parent's "Parts" list for what lands first and which interface to
+  use.
+
 ## Issues
 
-Every problem or request is a GitHub issue. Title starts with the area (`[Linux] …`, `[Windows] …`, `[UI] …`, `[Core] …`).
+Every problem or request is a GitHub issue, opened after its doc entry is merged ([From idea to merge](#from-idea-to-merge)). Title starts with the area (`[Linux] …`, `[Windows] …`, `[UI] …`, `[Core] …`).
 Describe what you saw, how to reproduce it, the evidence (commands, output, log lines; no real server addresses), and
 what "fixed" would look like.
 
@@ -36,8 +74,13 @@ area**, so each part has its own owner and pull request and nobody edits another
    helper the platform code just calls). If you can create and link sub-issues yourself, do so; the owner may still
    change the split.
 3. **Write down the order.** Usually the shared part (Core) lands first. Its sub-issue names the interface the others
-   will use (class, method, event), so they can plan or start before it is merged. A part that has to wait says
-   "Blocked by #N".
+   will use (class, method, event), so they can plan or start before it is merged. A part that has to wait is marked
+   on GitHub: open its issue → **Relationships → Mark as blocked by** → the issue it waits for.
+   **This is enforced at merge time:** a pull request that fixes a blocked issue gets a failing **Blocked issues**
+   check, and `main` requires that check, so it can be reviewed but not merged until the blocker is closed. The check
+   re-runs by itself when an issue is closed or reopened, and when the pull request's description changes. If you link
+   the issue only in the PR's sidebar, re-run it from **Actions → Blocked issues → Run workflow**
+   (`.github/workflows/blocked-issues.yml`).
 4. **One sub-issue, one pull request, one owner.** The pull request says `Fixes #<sub-issue>`, which closes that
    sub-issue when it is merged. Each sub-issue is assigned to its owner.
 5. **Close the parent by hand** when every sub-issue is closed (it doesn't close by itself), with a short note on what
@@ -53,13 +96,15 @@ with #5 for the Windows part and #12 for the Linux part.
    WinDivert and sing-box (pinned, SHA-256 checked) into `.deps/`.
 3. Keep your fork's `main` up to date with the owner's (`git remote add upstream <owner's repository>`,
    `git pull upstream main`).
-4. One branch per task: `linux/<topic>`, `windows/<topic>`, `ui/<topic>`.
-5. Before opening a pull request:
+4. Pick an issue that is free to work on ([Before you start an issue](#before-you-start-an-issue)); a new fix or
+   feature first gets its doc entry and issue ([From idea to merge](#from-idea-to-merge)).
+5. One branch per task: `linux/<topic>`, `windows/<topic>`, `ui/<topic>`.
+6. Before opening a pull request:
    - your area's tests pass: `dotnet test Sluice.Linux.slnf` on Linux or `dotnet test Sluice.Windows.slnf` on
      Windows (see the known environment-only failures below);
    - you checked the change for real (live capture run, or `--screenshot` images in light and dark for UI);
    - you updated your area's docs.
-6. Open the pull request against the owner's `main`. Title starts with the area (`[Linux] Bind the relay to loopback`).
+7. Open the pull request against the owner's `main`. Title starts with the area (`[Linux] Bind the relay to loopback`).
    Description: what changed and why, the issue it fixes (`Fixes #N`, so the issue closes on merge) or the doc item it
    addresses (e.g. "FIXES §6"), how you tested it with the commands and their output, and anything that needs a change
    in another area (with the issue you opened for it).
@@ -102,8 +147,6 @@ Known environment-only failures ([FIXES.md §7](FIXES.md#7-tests-that-depend-on-
 - **On Linux**, `RelayTests.SlowApp_DoesNotBlockUpstream_OnlyWithElasticBuffer` fails until
   [issue #3](https://github.com/ZaidX88/sluice/issues/3) is fixed. Every Linux test must still pass. List the
   failures you saw in the pull request.
-- **Building the apps on Linux** needs `-p:EnableWindowsTargeting=true` on `dotnet build` until
-  [issue #1](https://github.com/ZaidX88/sluice/issues/1) is fixed. `dotnet test Sluice.Linux.slnf` doesn't need it.
 
 ### Live testing with a real tunnel
 

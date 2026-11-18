@@ -34,7 +34,8 @@ Needs the [.NET 10 SDK](https://dotnet.microsoft.com/download).
 git clone <this repository> && cd sluice
 dotnet build src/Sluice.Desktop -f net10.0-windows10.0.19041.0   # Windows app
 dotnet build src/Sluice.Desktop -f net10.0                       # Linux app
-dotnet test  tests/Sluice.Tests
+dotnet test  Sluice.Windows.slnf                                # Windows: shared + Windows tests
+dotnet test  Sluice.Linux.slnf                                  # Linux: shared + Linux tests
 ```
 
 The first build downloads the two runtime helpers, pinned and checked against their SHA-256: **WinDivert 2.2.2-A**
@@ -50,7 +51,7 @@ src/Sluice.Platform.Linux    Linux-specific code (nftables/NFQUEUE capture, /pro
 src/Sluice.Desktop           the desktop app (Avalonia), Windows and Linux
 src/Sluice.Cli               command line
 src/Sluice.App               the old WPF app (being retired)
-tests/Sluice.Tests           xUnit tests, including live tests against local sing-box servers
+tests/Sluice.Tests*          xUnit tests: shared, .Linux, .Windows, .Support (helpers)
 build/                       build-time dependency fetching
 scripts/                     live-test helpers, sing-box download scripts
 docs/                        user guides, status, plans, contributing

@@ -1,5 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <!-- Shared tests (owner): everything that doesn't depend on the OS. Runs on Windows and on Linux, as part of
+       Sluice.Windows.slnf and Sluice.Linux.slnf. OS-specific tests go in Sluice.Tests.Windows / Sluice.Tests.Linux. -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -20,7 +22,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Sluice.Core\Sluice.Core.csproj" />
-    <ProjectReference Include="..\..\src\Sluice.Platform.Linux\Sluice.Platform.Linux.csproj" />
+    <ProjectReference Include="..\Sluice.Tests.Support\Sluice.Tests.Support.csproj" />
   </ItemGroup>
 
 </Project>

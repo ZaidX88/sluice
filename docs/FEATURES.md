@@ -57,8 +57,9 @@ OS-specific notes: [windows/BUILD.md](windows/BUILD.md), [linux/BUILD.md](linux/
 ## Testing
 
 ```bash
-dotnet test tests/Sluice.Tests                                         # all 265 tests, incl. live sing-box/SSH tests
-dotnet test tests/Sluice.Tests --filter "FullyQualifiedName!~Live"     # without the live ones
+dotnet test Sluice.Windows.slnf                                         # on Windows: shared + Windows tests, incl. live ones
+dotnet test Sluice.Linux.slnf                                           # on Linux: shared + Linux tests
+dotnet test Sluice.Windows.slnf --filter "FullyQualifiedName!~Live"     # without the live ones
 ```
 
 - **Live tests** start real sing-box servers on 127.0.0.1 for every protocol (TCP and UDP) and connect through Sluice;

@@ -30,7 +30,6 @@ public class SluiceProfileTests
     [Theory]
     [InlineData(PasswordEncryptionMode.Disabled)]
     [InlineData(PasswordEncryptionMode.Basic)]
-    [InlineData(PasswordEncryptionMode.CurrentUser)]
     [InlineData(PasswordEncryptionMode.MasterPassword)]
     public void RoundTrips_EverythingIncludingEncryptedTunnelSettings(PasswordEncryptionMode mode)
     {

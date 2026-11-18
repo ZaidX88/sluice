@@ -58,9 +58,9 @@ Package layout and installer: `packaging/linux/` (`install.sh`, `uninstall.sh`, 
 
 ## Testing on Linux
 
-- **Unit tests** run on Linux too (`dotnet test tests/Sluice.Tests -p:EnableWindowsTargeting=true`);
-  `Socket_owner_is_found_through_proc` runs only there. 13 shared tests fail on Linux for now (Windows-only assumptions,
-  one relay test): see [CONTRIBUTING.md](../CONTRIBUTING.md#building-and-testing).
+- **Tests:** `dotnet test Sluice.Linux.slnf` runs the shared and the Linux tests (no `EnableWindowsTargeting` needed).
+  `Socket_owner_is_found_through_proc` runs only on Linux. One shared relay test fails on Linux for now (issue #3).
+  New Linux tests go in `tests/Sluice.Tests.Linux` ([CONTRIBUTING.md → Tests](../CONTRIBUTING.md#tests)).
 - **Capture live test** (root; WSL works):
 
   ```bash

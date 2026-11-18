@@ -3,7 +3,7 @@
 What the **Linux area** needs, for whoever works on it on a real Linux machine (see
 [../CONTRIBUTING.md](../CONTRIBUTING.md) for the workflow and [../../AGENTS.md](../../AGENTS.md) for the rules). Linux
 work changes Linux files only: `src/Sluice.Platform.Linux/`, `scripts/linux/`, `docs/linux/`,
-`tests/Sluice.Tests/Linux*Tests.cs`. Anything else needed goes in an issue for the owner.
+`tests/Sluice.Tests.Linux/`. Anything else needed goes in an issue for the owner.
 
 ## Where it stands
 
@@ -16,7 +16,8 @@ distribution. How it works: [../STATUS.md](../STATUS.md#how-capture-works) and
 
 Report the results in a pull request that adds them to the "Results" section below.
 
-1. Build and run the tests ([BUILD.md](BUILD.md)): `dotnet test tests/Sluice.Tests`. All should pass;
+1. Build and run the tests ([BUILD.md](BUILD.md)): `dotnet test Sluice.Linux.slnf`. All should pass except the relay
+   test of issue #3;
    `Socket_owner_is_found_through_proc` runs only on Linux.
 2. Run the capture live test (needs root; it uses a local test SOCKS5 server, no internet tunnel):
 
@@ -39,6 +40,7 @@ Take one at a time; each says what "done" means in the linked doc.
 
 | Item | Where | Notes |
 |---|---|---|
+| Linux versions of the tests moved to the Windows project (issue #18): application rules with Linux paths (`WindowsRuleEngineTests`), UDP routing by app (`WindowsUdpRoutingTests`), loop prevention with a local tunnel host and the own-process rule with the `/proc` lookup (`WindowsEngineTests`) | `tests/Sluice.Tests.Linux` | write them as `Linux…Tests`; they may find real Linux bugs (full-path application rules) |
 | IPv6 extension headers not parsed; such first packets pass uncaptured | FIXES §6 | `PacketInfo.TryParse` |
 | DNS not captured without a non-loopback upstream (dnsmasq without systemd-resolved) | FIXES §6 | test on a distribution without systemd-resolved |
 | `/proc/*/fd` scan cost on busy machines | FIXES §6 | `NETLINK_SOCK_DIAG` + inode cache |

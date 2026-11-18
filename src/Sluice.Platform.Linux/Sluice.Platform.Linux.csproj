@@ -9,7 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <InternalsVisibleTo Include="Sluice.Tests" />
+    <InternalsVisibleTo Include="Sluice.Tests.Linux" />
   </ItemGroup>
 
   <ItemGroup>

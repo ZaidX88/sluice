@@ -20,15 +20,28 @@ Unlike the desktop app, the CLI is **not multi-targeted** yet: it picks its capt
 (`OperatingSystem.IsLinux()` → `LinuxPlatform.CreateCapture`, otherwise `new Interceptor(engine)`). Moving it onto the
 platform modules is in [REQUIRED.md §1](../REQUIRED.md#1-move-windows-only-code-out-of-core).
 
-## Tests: `tests/Sluice.Tests`
+## Tests
 
-xUnit, `net10.0`, referencing `Sluice.Core` and `Sluice.Platform.Linux` (so the Linux parsing code is tested on Windows
-too). Run with `dotnet test tests/Sluice.Tests`.
+xUnit 2.9, split by area ([CONTRIBUTING.md → Tests](../CONTRIBUTING.md#tests), issue #18):
+
+| Project | Target | References | Run by |
+|---|---|---|---|
+| `tests/Sluice.Tests` (shared) | `net10.0` | Core, Support | both filters |
+| `tests/Sluice.Tests.Linux` | `net10.0` | Core, `Sluice.Platform.Linux`, Support | `Sluice.Linux.slnf` |
+| `tests/Sluice.Tests.Windows` | `net10.0-windows10.0.19041.0` | Core, `Sluice.Platform.Windows`, Support | `Sluice.Windows.slnf` |
+| `tests/Sluice.Tests.Support` (library) | `net10.0` | Core | the three above |
+
+`dotnet test Sluice.Linux.slnf` (on Linux) and `dotnet test Sluice.Windows.slnf` (on Windows) build only Core, that
+OS's platform module and the tests, so the Linux filter needs no Windows targeting. Core and `Sluice.Platform.Linux`
+grant `InternalsVisibleTo` to the test projects that use their internals. `[WindowsFact]` / `[LinuxFact]` (Support)
+skip a test on the other OS.
+
+Kinds of tests (file names; the platform projects are marked):
 
 | Kind | Files | Needs |
 |---|---|---|
-| Pure logic | `RuleEngineTests`, `DnsTests`, `PacketReflectorTests`, `PasswordEncryptionTests`, `PpxSerializerTests`, `SluiceProfileTests`, `ShareLinkTests`, `TunnelTransportTests`, `SingBoxConfigTests` (in `SingBoxTests.cs`), most of `LinuxCaptureTests` (nft script, netlink messages, `/proc` parsing) | nothing |
-| Loopback end to end | `EngineTests`, `ProxyTests`, `RelayTests`, `UdpTests`, `HappyEyeballsTests`, `CheckerAndStatsTests`, `StaleFakeAddressTests` | local test servers from `TestServers.cs` (`EchoServer`, `Socks5TestServer`, `Socks4TestServer`, `HttpConnectTestServer`) |
+| Pure logic | `RuleEngineTests`, `DnsTests`, `PacketReflectorTests` (Windows), `CaptureFilterTests` (Windows), `PasswordEncryptionTests` (DPAPI mode: `WindowsPasswordEncryptionTests`), `PpxSerializerTests`, `SluiceProfileTests`, `ShareLinkTests`, `TunnelTransportTests`, `SingBoxConfigTests` (in `SingBoxTests.cs`), most of `LinuxCaptureTests` (Linux; nft script, netlink messages, `/proc` parsing) | nothing |
+| Loopback end to end | `EngineTests` (own-process and loop-prevention cases: `WindowsEngineTests`), `ProxyTests`, `RelayTests`, `UdpTests` (`UdpNatTests`: Windows), `LinuxRelayTests` (Linux), `HappyEyeballsTests`, `CheckerAndStatsTests`, `StaleFakeAddressTests` | local test servers from `Sluice.Tests.Support` (`EchoServer`, `Socks5TestServer`, `Socks4TestServer`, `HttpConnectTestServer`) |
 | Live sing-box | `LiveSingBoxTests` (in `SingBoxTests.cs`), parts of `SshSingBoxTests` | `sing-box.exe` next to the tests (the Windows build puts it there; the tests look for that name, so elsewhere they pass trivially): a throwaway sing-box **server** on 127.0.0.1 for every protocol, Sluice's client side through `TunnelBackends`. REALITY also needs `SLUICE_TEST_INTERNET=1` |
 | Live SSH | `LiveSshTests` | opt-in: `SLUICE_LIVE_SSH_PORT`, `_USER`, `_KEY` for an sshd on 127.0.0.1; otherwise they pass trivially |
 | Linux only | `LinuxCaptureTests.Socket_owner_is_found_through_proc` | returns early elsewhere |

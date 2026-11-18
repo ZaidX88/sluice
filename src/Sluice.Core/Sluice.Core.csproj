@@ -8,6 +8,9 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Sluice.Tests" />
+    <InternalsVisibleTo Include="Sluice.Tests.Linux" />
+    <InternalsVisibleTo Include="Sluice.Tests.Windows" />
+    <InternalsVisibleTo Include="Sluice.Tests.Support" />
   </ItemGroup>
 
   <!-- WinDivert and sing-box are fetched on the first build (pinned, SHA-256 checked); see build/Dependencies.targets. -->

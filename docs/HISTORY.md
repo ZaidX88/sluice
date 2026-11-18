@@ -60,3 +60,5 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   values (`DnsPolicyCache`) instead of the profile object, and the system DNS cache is flushed on a change. Linux part by
   a contributor (PR #13).
 - Linux capture relay bound to 127.0.0.1 and ::1 instead of every interface (2026-11-18, PR #14, contributor).
+- Tests split by platform (2026-11-18, issue #18): shared tests run on both OSes; `tests/Sluice.Tests.Linux` and
+  `tests/Sluice.Tests.Windows` belong to their areas; each area runs `Sluice.Linux.slnf` or `Sluice.Windows.slnf`.

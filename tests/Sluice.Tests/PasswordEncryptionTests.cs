@@ -7,7 +7,7 @@ namespace Sluice.Tests;
 public class PasswordEncryptionTests
 {
     public static TheoryData<PasswordEncryptionMode> AllModes =>
-        [PasswordEncryptionMode.Disabled, PasswordEncryptionMode.Basic, PasswordEncryptionMode.CurrentUser, PasswordEncryptionMode.MasterPassword];
+        [PasswordEncryptionMode.Disabled, PasswordEncryptionMode.Basic, PasswordEncryptionMode.MasterPassword];   // CurrentUser (DPAPI): Windows tests
 
     private static ProxifierPasswordCodec Codec(PasswordEncryptionMode m) =>
         new(m, m == PasswordEncryptionMode.MasterPassword ? "correct horse" : null);
@@ -63,13 +63,6 @@ public class PasswordEncryptionTests
         Assert.Equal((byte)(1 ^ 0 ^ 0), wrapped[1]);
     }
 
-    [Fact]
-    public void Account_Mode_IsDpapi_WithTypeByte1()
-    {
-        var stored = Convert.FromBase64String(Codec(PasswordEncryptionMode.CurrentUser).Encode("x"));
-        Assert.Equal(new byte[] { 0, 1 }, stored[..2]);
-        Assert.True(stored.Length > 50); // DPAPI blob
-    }
 
     [Fact]
     public void Master_WrongPassword_IsDetected()
@@ -89,7 +82,6 @@ public class PasswordEncryptionTests
         Assert.False(new ProxifierPasswordCodec(PasswordEncryptionMode.MasterPassword, "wrong").VerifyHash(right.Hash!));
         Assert.Null(Codec(PasswordEncryptionMode.Basic).Hash);
         Assert.Null(Codec(PasswordEncryptionMode.Disabled).Hash);
-        Assert.NotNull(Codec(PasswordEncryptionMode.CurrentUser).Hash);
     }
 
     [Fact]

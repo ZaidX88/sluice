@@ -24,6 +24,7 @@ open an issue).
 | 2026-11-14 | Docs split by purpose (`docs/STATUS`, `REQUIRED`, `FIXES`, `FEATURES`, `QUICKSTART`, `linux/`, `windows/`); agent notes in `claude/` | Owner's request, so anyone can continue |
 | 2026-11-18 | Published on GitHub; work split into **areas** (Linux, Windows, UI, Core) with forks and pull requests; an agent changes only its area's files (`AGENTS.md`); `main` holds code, tests and docs only; packaging on `release/linux` and `release/windows`, agent notes on `agent-notes`, none merged into `main` | Owner's request: platforms developed independently without conflicts |
 | 2026-11-18 | **Issue dependencies enforced at merge**: a PR fixing an issue that is "blocked by" an open issue fails the required "Blocked issues" check on `main` (`.github/workflows/blocked-issues.yml`); repository checks may live in `.github/` on `main` | Owner's request: parts of a cross-area fix must land in order |
+| 2026-11-18 | **Docs first, then issue, then code**: every fix, feature or required item gets a merged docs pull request (its entry in FIXES/FEATURES/REQUIRED or the area's docs), then an issue, then the code pull request with `Fixes #N`; an issue is checked for open blockers before work starts | Owner's request: the plan in the docs stays the source of truth and work starts only when it is free to |
 
 Considered, not decided: an own **WFP connect-redirect driver** for Windows capture (as Proxifier does) instead of
 per-packet WinDivert. Measurements show it isn't needed for now (docs/FIXES.md §8); it would reverse the 2026-11-10

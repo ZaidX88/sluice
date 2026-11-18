@@ -102,6 +102,19 @@ public class LinuxPacketInfoTests
     }
 
     [Fact]
+    public void A_routing_header_with_segments_left_is_not_a_flow()
+    {
+        // The IPv6 destination is only the next hop; the real one is in the Routing header. Capturing would send the
+        // connection to the wrong address, so it passes uncaptured as before. With no segments left, the header's
+        // destination is the final one, so it is read (One_extension_header_is_skipped).
+        var (type, body) = Options(Routing, units: 2);
+        body[2] = 4;                                                         // Segment Routing header (RFC 8754)
+        body[3] = 1;                                                         // one segment left
+        Assert.False(PacketInfo.TryParse(Packet(Tcp, (type, body)), out _));
+        Assert.False(PacketInfo.TryParse(Packet(Tcp, Options(HopByHop), (type, body)), out _));
+    }
+
+    [Fact]
     public void Encrypted_or_empty_payloads_are_not_flows()
     {
         Assert.False(PacketInfo.TryParse(Packet(Tcp, (Esp, new byte[8])), out _));

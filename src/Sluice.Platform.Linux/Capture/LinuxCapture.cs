@@ -430,7 +430,8 @@ internal static class PacketInfo
     /// Follows the IPv6 extension headers (RFC 8200 §4) to the upper-layer protocol: its number and where its header starts.
     /// nftables' <c>meta l4proto</c> looks past them too, so such packets do reach the queue (Hop-by-Hop or Destination
     /// Options set by an app, a Routing header, AH). False when the upper layer can't be read here: ESP (encrypted),
-    /// "no next header", a fragment other than the first (it carries no TCP/UDP header), or a truncated chain.
+    /// "no next header", a fragment other than the first (it carries no TCP/UDP header), a Routing header with segments
+    /// left (the header's destination isn't the real one), or a truncated chain.
     /// </summary>
     internal static bool SkipIpv6ExtensionHeaders(ReadOnlySpan<byte> p, out int protocol, out int offset)
     {
@@ -442,6 +443,9 @@ internal static class PacketInfo
             {
                 case HopByHop or Routing or DestinationOptions or Mobility or Hip or Shim6 or Experimental1 or Experimental2:
                     if (p.Length < offset + 8) return false;
+                    // A Routing header with segments left: the IPv6 destination is only the next hop, the real one is
+                    // inside the header. Redirecting would open the wrong address, so let it pass as before.
+                    if (protocol == Routing && p[offset + 3] != 0) return false;
                     protocol = p[offset];
                     offset += (p[offset + 1] + 1) * 8;            // length in 8-octet units, not counting the first 8
                     break;

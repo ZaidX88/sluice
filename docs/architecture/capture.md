@@ -60,7 +60,7 @@ They follow the same model:
 - **Timing counters** (`LatencyStats`): queue wait (WinDivert's capture timestamp to Sluice reading the packet),
   handling time per packet, decision time per new connection, and whether the owner came from the socket event or the
   TCP table. Logged every 5 s at Verbose and once as a summary when capture stops. Measurements and what limits speed:
-  [FIXES.md §8](../FIXES.md#8-windows-capture-seemed-slower-than-the-socks-listener--fixed).
+  [windows/FIXES.md §3](../windows/FIXES.md#3-windows-capture-seemed-slower-than-the-socks-listener--fixed).
 - Log strings for each connection are built only when the log level shows them.
 
 - `Decide` never redirects Sluice's own PID or DNS over TCP to a real server; always redirects fake IPs; skips
@@ -93,4 +93,5 @@ They follow the same model:
 - `RelayUnreachable` is never raised: no firewall stands between a local REDIRECT and a loopback relay.
 - The nft script is normalised to LF line endings (a CRLF checkout once broke capture), and chain names avoid nft
   keywords.
-- Known limits (IPv6 extension headers, `/proc` scan cost, relay bound to `[::]`, root GUIs): [FIXES.md §6](../FIXES.md#6-linux-capture-limitations).
+- Known limits (UDP of tunneled apps, DNS without a non-loopback upstream, `/proc` scan cost, root GUIs):
+  [linux/FIXES.md §1](../linux/FIXES.md#1-linux-capture-limitations).

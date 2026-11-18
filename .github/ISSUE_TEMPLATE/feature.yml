@@ -1,0 +1,37 @@
+name: Feature
+description: An idea or an improvement (including performance work)
+title: "[Area] "
+labels: [enhancement, triage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Title starts with the area: `[Linux]`, `[Windows]`, `[UI]` or `[Core]`. A feature that needs several areas gets
+        a parent issue with a "Parts" list; a new interface several areas will use is agreed in a docs pull request
+        first (docs/CONTRIBUTING.md → From idea to merge).
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options: [Linux, Windows, UI, Core, Several (parent issue)]
+    validations:
+      required: true
+  - type: textarea
+    id: want
+    attributes:
+      label: What and why
+      description: What it should do and who it helps.
+    validations:
+      required: true
+  - type: textarea
+    id: todo
+    attributes:
+      label: To do
+      description: How it could be built (files, classes, settings). Name any other area it needs.
+  - type: textarea
+    id: done
+    attributes:
+      label: Done when
+      description: How to check it works.
+    validations:
+      required: true

@@ -10,33 +10,79 @@ agent. Areas don't overlap, so pull requests don't conflict. The rules for agent
 |---|---|---|
 | **Linux** | `src/Sluice.Platform.Linux/`, `scripts/linux/`, `docs/linux/`, `tests/Sluice.Tests.Linux/` | capture (nftables, NFQUEUE), DNS, process lookup, notifications, testing on real distributions: [linux/WORK.md](linux/WORK.md) |
 | **Windows** | `src/Sluice.Platform.Windows/`, `docs/windows/`, the Windows-only files still in Core (listed in `AGENTS.md`), `scripts/*.ps1`, `tests/Sluice.Tests.Windows/` | WinDivert capture, Windows integration |
-| **UI** | `src/Sluice.Desktop/` (legacy `src/Sluice.App/`), `docs/architecture/desktop.md` | the Avalonia app on both OSes |
-| **Core** | everything else (`src/Sluice.Core/` shared engine, `src/Sluice.Cli/`, shared tests `tests/Sluice.Tests/` and `tests/Sluice.Tests.Support/`, shared docs, build files) | the repository owner |
+| **UI** | `src/Sluice.Desktop/` (legacy `src/Sluice.App/`), `docs/ui/`, `docs/architecture/desktop.md` | the Avalonia app on both OSes |
+| **Core** | everything else (`src/Sluice.Core/` shared engine, `src/Sluice.Cli/`, shared tests `tests/Sluice.Tests/` and `tests/Sluice.Tests.Support/`, `docs/core/`, `.github/`, build files) | the repository owner |
+| **Shared docs** | `docs/*.md` (`STATUS.md`, `REQUIRED.md`, `ARCHITECTURE.md`, `HISTORY.md`, …) and `docs/architecture/` | every area, in the pull request whose change they describe |
 
 A change outside your area, even a small one, is not made in your pull request: open an issue that says what is needed
-and why, and the area's owner makes it (see [Issues](#issues) for problems that need changes in several areas). Shared
-docs (`docs/STATUS.md`, `FIXES.md`, `REQUIRED.md`, `docs/architecture/`) are the owner's: put your findings in your
-area's docs and in the pull request, and the owner carries them over.
+and why, and the area's owner makes it (see [Issues](#issues) for problems that need changes in several areas).
+
+### Docs
+
+| Docs | What | Who changes them |
+|---|---|---|
+| `docs/<area>/FIXES.md` | the area's known bugs and limits: what was seen, why, what to do, when it counts as fixed | that area |
+| `docs/<area>/FEATURES.md` | the area's ideas not built yet, and its performance work | that area |
+| `docs/linux/WORK.md`, `docs/<area>/BUILD.md` | how to work on, build and test the area | that area |
+| `docs/REQUIRED.md` | must-do work for everyone, in order | every area |
+| `docs/STATUS.md`, `ARCHITECTURE.md`, `architecture/`, `HISTORY.md`, `QUICKSTART.md` | how Sluice stands and works, what was built | every area |
+| `docs/CONTRIBUTING.md`, `docs/DECISIONS.md`, `AGENTS.md` | the rules and settled decisions | every area, **with the owner's agreement first** |
+
+`<area>` is `core`, `linux`, `windows` or `ui`. Every area keeps the shared docs true for its own changes: a pull
+request that changes how something works updates `STATUS.md` or the architecture page in the same pull request.
 
 ## From idea to merge
 
-Every fix, feature or required item goes through the same three steps, in this order. Nothing skips a step, however
-small.
+Every fix, feature or required item: **an issue, triaged by the owner, then one pull request.**
 
-1. **Docs pull request first.** Write the item down and get that merged before anything else:
-   - the owner adds it to the shared list it belongs in: [FIXES.md](FIXES.md) (bug), [FEATURES.md](FEATURES.md) (new
-     feature) or [REQUIRED.md](REQUIRED.md) (required work);
-   - an area contributor adds it to their area's docs (Linux: [linux/WORK.md](linux/WORK.md)); the owner carries it into
-     the shared list.
+1. **Open the issue** with the template (**New issue** → Bug, Feature or Required work), so it says what was seen or
+   wanted, why, what to do, and when it counts as done. Title starts with the area. If it needs several areas, propose
+   the split under a "Parts" heading; don't create sub-issues yourself. The template adds the **`triage`** label.
+2. **The owner triages it**, with a comment: confirms the area and that it is worth doing, and if it needs several
+   areas, **splits it**: the issue becomes the parent, the owner creates one sub-issue per area and marks which parts
+   are blocked by which ([Issues](#issues)). Then the owner replaces `triage` with **`ready`** on each issue that can
+   be worked on. A parent issue never gets `ready`; only its sub-issues do.
+3. **Claim it.** Comment "I'll take this" on a `ready` issue in your area. The owner assigns you (in this repository
+   contributors can't assign themselves) and the label becomes **`in progress`**. Don't start before you are assigned.
+4. **Work on it** after the checks in [Before you start an issue](#before-you-start-an-issue). Opening a **draft pull
+   request** early shows the work is under way.
+5. **Pull request.** One per issue (or sub-issue), with the code, the tests **and** the doc updates together:
+   - `Fixes #<issue>` in the description, so the issue closes when it is merged;
+   - your area's `FIXES.md` / `FEATURES.md`: add an entry when the cause, evidence or reproduction is worth keeping
+     after the fix, or mark the existing entry **fixed** (with the issue and PR numbers) or remove it;
+   - the shared docs the change affects (`STATUS.md`, `REQUIRED.md`, an architecture page) and one line in
+     [HISTORY.md](HISTORY.md).
 
-   The entry says what was seen or wanted, why, what to do, and when it counts as done (the format the lists already
-   use). The pull request changes docs only, has the area in its title (`[Docs] …`, or `[Linux] …` for area docs) and
-   no `Fixes` line.
-2. **Then the issue**, once the docs pull request is merged. It links the doc entry (for example "FIXES §9") and
-   follows [Issues](#issues): one area → one issue; several areas → a parent with one sub-issue per area. The code pull
-   request adds the issue number to the doc entry.
-3. **Then the code pull request**, which says `Fixes #<issue>` and updates the doc entry (marks it done or removes it,
-   and adds a line to [HISTORY.md](HISTORY.md) for the owner's changes).
+**A docs pull request comes first only for a decision**, so it is agreed before anyone builds on it: changing a settled
+decision ([DECISIONS.md](DECISIONS.md)), a new interface several areas will use (for example a Core class that the
+Linux and Windows parts will call), or an architecture change. It goes in the parent issue's "Parts" as the first part;
+the code pull requests come after it is merged.
+
+**No issue needed** for trivial changes: typos, doc wording, a broken link. Open the pull request directly.
+
+**Questions go in the issue, not the pull request.** The plan, the split and the interface between parts are
+discussed on the issue (the parent, for a split) before code starts. The pull request is for reviewing the code.
+
+### Labels and the board
+
+| Label | Meaning | Set by |
+|---|---|---|
+| `triage` | new, not looked at yet; nobody works on it | the issue templates |
+| `ready` | triaged and free to claim | the owner |
+| `in progress` | assigned; someone is working on it | the owner, when assigning |
+| `bug`, `enhancement` | kind of issue | the issue templates |
+| `area: core`, `area: linux`, `area: windows`, `area: ui` | the area that does the work | the owner, when triaging |
+
+The **Sluice** project board (the repository's **Projects** tab) shows every issue and pull request in columns
+**Triage → Ready → In progress → In review → Done**. The labels are the source of truth; the board is the overview
+and follows them by itself (`.github/workflows/project-sync.yml`): a label moves the card to its column, a pull request
+moves to In review (and the issues it fixes with it; a draft stays In progress), and a closed issue or merged pull
+request moves to Done. New issues and pull requests are added to the board.
+
+**Unclaim rule:** an assigned issue with no activity (comments, commits, pull request updates) for **14 days** goes
+back to `ready` and is unassigned, so someone else can take it. A daily check (`.github/workflows/unclaim.yml`) posts a
+reminder after 10 days without activity and unassigns after 14. Activity is a comment, the assignment itself, or an
+update to an open pull request that fixes the issue. Say in the issue if you need longer.
 
 ### Before you start an issue
 
@@ -51,28 +97,28 @@ Check that it is free to work on, every time, before you write any code:
 
   Empty output means nothing blocks it. A pull request for a blocked issue can't be merged anyway (the required
   **Blocked issues** check, see [Issues](#issues) step 3), so work started early is likely to wait or need redoing.
-- **Yours.** It's in your area and assigned to you, or nobody else is assigned (then say in a comment that you are
-  taking it).
+- **Yours.** It's in your area, labelled `ready` or `in progress`, and **assigned to you** ([From idea to
+  merge](#from-idea-to-merge) step 3). Never work on a `triage` issue or on a parent issue.
 - **Its parent's order.** For a sub-issue, read the parent's "Parts" list for what lands first and which interface to
   use.
 
 ## Issues
 
-Every problem or request is a GitHub issue, opened after its doc entry is merged ([From idea to merge](#from-idea-to-merge)). Title starts with the area (`[Linux] …`, `[Windows] …`, `[UI] …`, `[Core] …`).
-Describe what you saw, how to reproduce it, the evidence (commands, output, log lines; no real server addresses), and
-what "fixed" would look like.
+Every problem or request is a GitHub issue ([From idea to merge](#from-idea-to-merge)). Use the template; the title
+starts with the area (`[Linux] …`, `[Windows] …`, `[UI] …`, `[Core] …`). Describe what you saw, how to reproduce it,
+the evidence (commands, output, log lines; no real server addresses), and what "fixed" would look like.
 
 **One area:** one issue, fixed by one pull request from that area's owner.
 
 **Several areas** (for example a bug with a Linux part and a Core part): one **parent issue** and one **sub-issue per
 area**, so each part has its own owner and pull request and nobody edits another area's files.
 
-1. **The finder opens the parent issue**: the problem once, the evidence, and a proposed split under a "Parts" heading
-   (`Core: …`, `Linux: …`). No title prefix, or name both areas.
-2. **The owner decides the split** and creates the sub-issues, one per area, each with its own area prefix. The owner
-   knows the shared design: a split can often keep a platform part free of Core changes (for example by adding a shared
-   helper the platform code just calls). If you can create and link sub-issues yourself, do so; the owner may still
-   change the split.
+1. **The finder opens the issue**: the problem once, the evidence, and a proposed split under a "Parts" heading
+   (`Core: …`, `Linux: …`). It becomes the parent. No title prefix, or name both areas.
+2. **The owner decides the split** when triaging, says so in a comment, and creates the sub-issues, one per area, each
+   with its own area prefix and labelled `ready` (or left without it while blocked). The owner knows the shared design:
+   a split can often keep a platform part free of Core changes (for example by adding a shared helper the platform code
+   just calls). Only the owner creates sub-issues.
 3. **Write down the order.** Usually the shared part (Core) lands first. Its sub-issue names the interface the others
    will use (class, method, event), so they can plan or start before it is merged. A part that has to wait is marked
    on GitHub: open its issue → **Relationships → Mark as blocked by** → the issue it waits for.
@@ -81,8 +127,8 @@ area**, so each part has its own owner and pull request and nobody edits another
    re-runs by itself when an issue is closed or reopened, and when the pull request's description changes. If you link
    the issue only in the PR's sidebar, re-run it from **Actions → Blocked issues → Run workflow**
    (`.github/workflows/blocked-issues.yml`).
-4. **One sub-issue, one pull request, one owner.** The pull request says `Fixes #<sub-issue>`, which closes that
-   sub-issue when it is merged. Each sub-issue is assigned to its owner.
+4. **One sub-issue, one pull request, one owner.** Contributors claim a sub-issue like any other issue (comment, then
+   the owner assigns). The pull request says `Fixes #<sub-issue>`, which closes that sub-issue when it is merged.
 5. **Close the parent by hand** when every sub-issue is closed (it doesn't close by itself), with a short note on what
    changed overall. The owner then updates the shared docs if no pull request did.
 
@@ -97,16 +143,16 @@ with #5 for the Windows part and #12 for the Linux part.
 3. Keep your fork's `main` up to date with the owner's (`git remote add upstream <owner's repository>`,
    `git pull upstream main`).
 4. Pick an issue that is free to work on ([Before you start an issue](#before-you-start-an-issue)); a new fix or
-   feature first gets its doc entry and issue ([From idea to merge](#from-idea-to-merge)).
+   feature gets its issue first ([From idea to merge](#from-idea-to-merge)).
 5. One branch per task: `linux/<topic>`, `windows/<topic>`, `ui/<topic>`.
 6. Before opening a pull request:
    - your area's tests pass: `dotnet test Sluice.Linux.slnf` on Linux or `dotnet test Sluice.Windows.slnf` on
      Windows (see the known environment-only failures below);
    - you checked the change for real (live capture run, or `--screenshot` images in light and dark for UI);
-   - you updated your area's docs.
+   - you updated the docs the change affects (your area's `FIXES.md` / `FEATURES.md`, shared docs, a `HISTORY.md`
+     line).
 7. Open the pull request against the owner's `main`. Title starts with the area (`[Linux] Bind the relay to loopback`).
-   Description: what changed and why, the issue it fixes (`Fixes #N`, so the issue closes on merge) or the doc item it
-   addresses (e.g. "FIXES §6"), how you tested it with the commands and their output, and anything that needs a change
+   Description: what changed and why, the issue it fixes (`Fixes #N`, so the issue closes on merge), how you tested it with the commands and their output, and anything that needs a change
    in another area (with the issue you opened for it).
 
 ## Building and testing
@@ -140,13 +186,32 @@ dotnet test  Sluice.Windows.slnf                                 # on Windows: s
 Platform guides: [linux/BUILD.md](linux/BUILD.md), [windows/BUILD.md](windows/BUILD.md). How everything works:
 [ARCHITECTURE.md](ARCHITECTURE.md).
 
-Known environment-only failures ([FIXES.md §7](FIXES.md#7-tests-that-depend-on-the-developer-machine)):
+Known environment-only failures ([core/FIXES.md §2](core/FIXES.md#2-tests-that-depend-on-the-developer-machine)):
 - `HappyEyeballsTests.DeadFirstAddress_DoesNotDelayTheWorkingOne` fails while a Sluice capture runs on the same machine.
 - Live sing-box tests are timing-sensitive under load; if one fails in a full run, rerun it alone
   (`--filter FullyQualifiedName~LiveSingBoxTests`).
 - **On Linux**, `RelayTests.SlowApp_DoesNotBlockUpstream_OnlyWithElasticBuffer` fails until
   [issue #3](https://github.com/ZaidX88/sluice/issues/3) is fixed. Every Linux test must still pass. List the
   failures you saw in the pull request.
+
+### More test tools
+
+- **Live tests** start real sing-box servers on 127.0.0.1 for every protocol (TCP and UDP) and connect through Sluice;
+  they need the sing-box binary the build fetches. REALITY additionally needs `SLUICE_TEST_INTERNET=1`. Without them:
+  `dotnet test Sluice.Windows.slnf --filter "FullyQualifiedName!~Live"`.
+- **UI check:** `Sluice.Desktop --screenshot <dir> [--theme dark]` renders every page and dialog off-screen. After UI
+  changes, compare both themes on Windows and Linux.
+- **Real servers:** `Sluice.Cli check "<share link>"` runs the three-step tunnel check. Public lists of free servers are
+  useful for compatibility testing (expect many dead entries; failures need a second look before blaming Sluice).
+- **Linux capture:** `scripts/linux/capture-livetest.sh` (root, WSL works) checks routing decisions, DNS and clean-up;
+  see [linux/BUILD.md](linux/BUILD.md). Always test capture from an *installed* package before handing one out.
+- **Environment pitfalls:**
+  - while a Sluice capture runs on the same machine, tests that make real connections are affected (fake DNS, routing);
+  - NuGet restores of large packages through a slow tunnel time out and restart forever: route `dotnet.exe` Direct, run
+    `dotnet restore --disable-parallel`, or download the `.nupkg` with a resumable `curl -C -` and pass
+    `-p:RestoreAdditionalProjectSources=<folder>`.
+- The first build downloads WinDivert and sing-box into `.deps/` (pinned, SHA-256 checked; `build/Dependencies.targets`);
+  `-p:SluiceFetchDependencies=false` skips that.
 
 ### Live testing with a real tunnel
 

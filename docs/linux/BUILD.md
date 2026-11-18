@@ -1,6 +1,6 @@
 # Linux: building, packaging and testing
 
-For installing a release, see [INSTALL.md](INSTALL.md). Shared build and test notes: [../FEATURES.md](../FEATURES.md).
+For installing a release, see [INSTALL.md](INSTALL.md). Shared build and test notes: [../CONTRIBUTING.md](../CONTRIBUTING.md#building-and-testing).
 
 ## Build and run from source
 
@@ -14,7 +14,7 @@ dotnet run --project src/Sluice.Cli -- --help
 ```
 
 These work as written on Linux: `Directory.Build.props` sets `EnableWindowsTargeting`, because restore also restores
-the Windows target of `Sluice.Desktop` ([FIXES §13](../FIXES.md#13-building-on-linux-needed-enablewindowstargeting--fixed)).
+the Windows target of `Sluice.Desktop` ([core FIXES §7](../core/FIXES.md#7-building-on-linux-needed-enablewindowstargeting--fixed)).
 Build output under `out/` is ignored by git.
 
 Capture needs root, or the capabilities the installer grants (see below). For a quick test: `sudo dotnet <path>/Sluice.Cli.dll <profile> --intercept`.

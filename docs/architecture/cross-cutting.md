@@ -20,7 +20,7 @@ Shared state follows a few patterns:
 - **Immutable snapshots swapped atomically:** `RoutingEngine._state` (profile + compiled rules + connector) is a
   `volatile` record replaced on `Reload`; a connection reads it once and keeps it. Captures take their `DnsPolicy` from a
   `DnsPolicyCache`, which rebuilds it when the name-resolution setting values change (the Settings page edits the profile
-  in place, so comparing the profile object is not enough, FIXES §11).
+  in place, so comparing the profile object is not enough, core/FIXES.md §5).
 - **Concurrent collections and `Interlocked` counters** for flow tables, sessions, connection lists and statistics;
   plain `lock`s for small structures (`FakeIpPool`, `Statistics`, `FileLog`).
 - **One start at a time per tunnel:** `TunnelBackends` holds a `SemaphoreSlim` per tunnel id around session start;
@@ -64,7 +64,7 @@ tracker only raises its `Log` event up to its `Level`, so each consumer raises t
 | CLI console | `--log` |
 
 Debug adds per-SYN decisions, DNS answers, periodic capture counters and (CLI `--intercept --log debug`) raw packet
-headers (`Interceptor.DiagnosticPackets`). Helper output (sing-box) is logged line by line ([FIXES.md §4](../FIXES.md#4-sing-box-output-logged-at-the-wrong-level)).
+headers (`Interceptor.DiagnosticPackets`). Helper output (sing-box) is logged line by line ([core/FIXES.md §1](../core/FIXES.md#1-sing-box-output-logged-at-the-wrong-level)).
 
 ## Security points
 
@@ -103,5 +103,6 @@ Not restated here; the plan of record is:
   and `Sluice.Cli` not multi-targeted.
 - [REQUIRED.md §2](../REQUIRED.md#2-udp-through-tunnels-on-linux): UDP through tunnels on Linux (TPROXY).
 - [REQUIRED.md §3](../REQUIRED.md#3-retire-the-wpf-app): retiring the WPF app (`Sluice.App`).
-- [FIXES.md](../FIXES.md): known bugs (WSL/VM DNS on Windows, fake answers after capture, layout, helper log levels,
-  UI gaps, Linux capture limits, machine-dependent tests).
+- Known bugs, by area: [core](../core/FIXES.md) (helper log levels, machine-dependent tests, IPv6 through tunnels),
+  [windows](../windows/FIXES.md) (WSL/VM DNS, fake answers after capture), [linux](../linux/FIXES.md) (capture
+  limits), [ui](../ui/FIXES.md) (layout, UI gaps, log file).

@@ -50,6 +50,20 @@ path, and report results in the pull request without the address.
 
 ## 3. How to work
 
+**Order for every fix, feature or required item** (`docs/CONTRIBUTING.md` → From idea to merge): first a **docs pull
+request** that writes the item down (owner: `docs/FIXES.md`, `FEATURES.md` or `REQUIRED.md`; Linux: `docs/linux/WORK.md`),
+then, once it is merged, the **issue**, then the **code pull request** with `Fixes #<issue>`. Don't write code for an
+item that has no merged doc entry and no issue: offer the person a draft of the doc entry first.
+
+**Before starting any issue, check that it isn't blocked:**
+
+```bash
+gh api repos/ZaidX88/sluice/issues/<N>/dependencies/blocked_by --jq '.[] | select(.state=="open") | "#\(.number) \(.title)"'
+```
+
+Any output means it is blocked by an open issue: stop and tell the person which one; don't start without their
+agreement. Also check it is in your area and not assigned to someone else.
+
 1. Read `docs/CONTRIBUTING.md` (workflow, areas, testing), then `docs/STATUS.md`, then the item you were given in
    `docs/REQUIRED.md`, `docs/FIXES.md` or `docs/FEATURES.md`. Linux: also `docs/linux/WORK.md`. Settled decisions are in
    `docs/DECISIONS.md`; don't reverse one without the owner's agreement. How everything works: `docs/ARCHITECTURE.md`.

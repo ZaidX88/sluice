@@ -66,3 +66,5 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   `out/` is ignored by git.
 - Issue dependencies enforced (2026-11-18): the "Blocked issues" check fails a PR while an issue it fixes is blocked by
   an open issue; a branch rule on `main` requires it.
+- Docs-first workflow (2026-11-18): docs pull request → issue → code pull request for every fix, feature or required
+  item; check an issue for open blockers before starting it (`docs/CONTRIBUTING.md`, `AGENTS.md`).

@@ -27,6 +27,7 @@ public sealed class LinuxCapture : ITrafficCapture
 {
     private const ushort QueueNumber = 0x5C1;     // 1473
     private const uint RedirectMark = 0x5C1CE;
+    private const uint RejectMark = 0x5C1CF;      // refused at once: IPv6 through a tunnel without IPv6 (Ipv6Fallback)
     private static readonly TimeSpan UdpVerdictTime = TimeSpan.FromSeconds(30);
 
     private readonly RoutingEngine _engine;
@@ -35,6 +36,7 @@ public sealed class LinuxCapture : ITrafficCapture
     private readonly ConcurrentDictionary<IPEndPoint, (OriginalDestination Dest, DateTime At)> _flows = new();
     private readonly ConcurrentDictionary<(IPEndPoint, IPEndPoint), (bool Drop, DateTime At)> _udpVerdicts = new();
     private readonly CancellationTokenSource _cts = new();
+    private readonly Ipv6Fallback _ipv6 = new();
     private DnsResolver? _resolver;
     private LinuxDnsServer? _dns;
     private LoopbackRelay? _relay;
@@ -45,7 +47,7 @@ public sealed class LinuxCapture : ITrafficCapture
     private bool _rulesApplied, _udpTunnelWarned;
     private readonly DnsPolicyCache _policies;
     private Task? _policyWatch;
-    private long _redirected, _passed, _udpDropped;
+    private long _redirected, _passed, _udpDropped, _refused;
 
     public LinuxCapture(RoutingEngine engine, IProcessLookup lookup)
     {
@@ -138,8 +140,9 @@ public sealed class LinuxCapture : ITrafficCapture
 
         _queue = NfQueue.Open(QueueNumber);
         UdpMode = _engine.Profile.Options.Udp;
-        NftRules.Apply(new NftRules.Settings(QueueNumber, RedirectMark, gid, _relay.Port, dnsPort, QueueUdp: UdpMode != UdpMode.Bypass));
+        NftRules.Apply(new NftRules.Settings(QueueNumber, RedirectMark, gid, _relay.Port, dnsPort, QueueUdp: UdpMode != UdpMode.Bypass, RejectMark));
         _rulesApplied = true;
+        _engine.Tracker.Closed += OnConnectionClosed;
 
         _thread = new Thread(QueueLoop) { IsBackground = true, Name = "Sluice NFQUEUE" };
         _thread.Start();
@@ -216,7 +219,7 @@ public sealed class LinuxCapture : ITrafficCapture
             {
                 if (f.Protocol == PacketInfo.Tcp)
                 {
-                    if (DecideTcp(f.Source, f.Destination)) mark = RedirectMark;
+                    mark = DecideTcp(f.Source, f.Destination);
                 }
                 else if (DecideUdpDrop(f.Source, f.Destination)) verdict = NfQueue.Drop;
             }
@@ -228,8 +231,11 @@ public sealed class LinuxCapture : ITrafficCapture
         _queue!.Verdict(p.Id, verdict, mark);
     }
 
-    /// <summary>True to redirect this new TCP connection to the relay.</summary>
-    private bool DecideTcp(IPEndPoint local, IPEndPoint remote)
+    /// <summary>
+    /// The mark for this new TCP connection's SYN: <see cref="RedirectMark"/> to send it to the relay,
+    /// <see cref="RejectMark"/> to refuse it, null to let it go direct.
+    /// </summary>
+    private uint? DecideTcp(IPEndPoint local, IPEndPoint remote)
     {
         var pid = _lookup.FindTcpOwner(local, remote);
         var fake = _fakeIps.TryGetHost(remote.Address, out var hostname);
@@ -246,7 +252,7 @@ public sealed class LinuxCapture : ITrafficCapture
                 // (RoutingEngine.HandleAsync), so the app looks the name up again.
                 _flows[Norm(local)] = (new OriginalDestination(remote, pid), DateTime.UtcNow);
                 Interlocked.Increment(ref _redirected);
-                return true;
+                return RedirectMark;
             }
             if (pid == 0 && !_engine.Profile.Options.ProcessServices) return Pass();
         }
@@ -261,15 +267,32 @@ public sealed class LinuxCapture : ITrafficCapture
             _engine.Tracker.Write(LogLevel.Verbose, $"{Path.GetFileName(path) ?? "?"} ({pid}) - {remote} direct (rule {match.Rule.Name}, not intercepted)");
             return Pass();
         }
+        if (!fake && match.Action.Type is RuleActionType.Tunnel or RuleActionType.Chain
+            && _engine.Describe(match.Action) is var via && _ipv6.ShouldRefuse(remote.Address, via))
+        {
+            // The app's connect() fails at once, so it uses the site's IPv4 address instead (see Ipv6Fallback).
+            _engine.Tracker.Write(LogLevel.Verbose, $"{Path.GetFileName(path) ?? "?"} ({pid}) - {remote} refused: IPv6 fails through {via}, so the app falls back to IPv4");
+            Interlocked.Increment(ref _refused);
+            return RejectMark;
+        }
         _flows[Norm(local)] = (new OriginalDestination(remote, pid, fake ? hostname : null), DateTime.UtcNow);
         Interlocked.Increment(ref _redirected);
-        return true;
+        return RedirectMark;
     }
 
-    private bool Pass()
+    private uint? Pass()
     {
         Interlocked.Increment(ref _passed);
-        return false;
+        return null;
+    }
+
+    /// <summary>Learns which routes cannot reach IPv6 destinations (see <see cref="Ipv6Fallback"/>).</summary>
+    private void OnConnectionClosed(ConnectionEntry e)
+    {
+        if (_ipv6.Observe(e.Target, e.Via, e.State, e.Error, e.BytesReceived))
+            _engine.Tracker.Write(LogLevel.Normal,
+                $"IPv6 destinations fail through {e.Via} (its server may have no IPv6): new IPv6 connections through it are refused " +
+                $"for {Ipv6Fallback.Hold.TotalMinutes:0} minutes, so apps use IPv4");
     }
 
     /// <summary>True to drop this new UDP flow. UDP is not tunneled on Linux yet: flows meant for a tunnel are blocked.</summary>
@@ -340,6 +363,7 @@ public sealed class LinuxCapture : ITrafficCapture
                     if (now - v.At > UdpVerdictTime) _udpVerdicts.TryRemove(k, out _);
                 _engine.Tracker.Write(LogLevel.Debug,
                     $"Capture stats: {Interlocked.Read(ref _redirected):N0} redirected, {Interlocked.Read(ref _passed):N0} passed, " +
+                    $"{Interlocked.Read(ref _refused):N0} IPv6 refused, " +
                     $"{Interlocked.Read(ref _udpDropped):N0} UDP dropped, DNS {_dns?.Answered ?? 0:N0} answered / {_dns?.Forwarded ?? 0:N0} forwarded, {_fakeIps.Count} fake IPs");
             }
         }
@@ -360,6 +384,7 @@ public sealed class LinuxCapture : ITrafficCapture
     private void Cleanup()
     {
         _cts.Cancel();
+        _engine.Tracker.Closed -= OnConnectionClosed;
         if (_rulesApplied) NftRules.Remove();     // first: no new packets are queued or redirected
         _rulesApplied = false;
         _queue?.Stop();

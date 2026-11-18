@@ -430,8 +430,7 @@ internal static class PacketInfo
                 break;
             case 6:
                 if (p.Length < 40) return false;
-                ipLen = 40;
-                proto = p[6];                     // extension headers are not followed (rare on a first packet)
+                if (!SkipIpv6ExtensionHeaders(p, out proto, out ipLen)) return false;
                 src = new IPAddress(p.Slice(8, 16));
                 dst = new IPAddress(p.Slice(24, 16));
                 break;
@@ -443,6 +442,52 @@ internal static class PacketInfo
         var dp = BinaryPrimitives.ReadUInt16BigEndian(p[(ipLen + 2)..]);
         flow = new Flow(proto, new IPEndPoint(src, sp), new IPEndPoint(dst, dp));
         return true;
+    }
+
+    private const int HopByHop = 0, Routing = 43, Fragment = 44, Esp = 50, Ah = 51, NoNextHeader = 59, DestinationOptions = 60,
+        Mobility = 135, Hip = 139, Shim6 = 140, Experimental1 = 253, Experimental2 = 254;
+
+    /// <summary>
+    /// Follows the IPv6 extension headers (RFC 8200 §4) to the upper-layer protocol: its number and where its header starts.
+    /// nftables' <c>meta l4proto</c> looks past them too, so such packets do reach the queue (Hop-by-Hop or Destination
+    /// Options set by an app, a Routing header, AH). False when the upper layer can't be read here: ESP (encrypted),
+    /// "no next header", a fragment other than the first (it carries no TCP/UDP header), a Routing header with segments
+    /// left (the header's destination isn't the real one), or a truncated chain.
+    /// </summary>
+    internal static bool SkipIpv6ExtensionHeaders(ReadOnlySpan<byte> p, out int protocol, out int offset)
+    {
+        protocol = p[6];
+        offset = 40;
+        for (var hops = 0; hops < 16; hops++)       // a real chain is short; this also stops a crafted endless one
+        {
+            switch (protocol)
+            {
+                case HopByHop or Routing or DestinationOptions or Mobility or Hip or Shim6 or Experimental1 or Experimental2:
+                    if (p.Length < offset + 8) return false;
+                    // A Routing header with segments left: the IPv6 destination is only the next hop, the real one is
+                    // inside the header. Redirecting would open the wrong address, so let it pass as before.
+                    if (protocol == Routing && p[offset + 3] != 0) return false;
+                    protocol = p[offset];
+                    offset += (p[offset + 1] + 1) * 8;            // length in 8-octet units, not counting the first 8
+                    break;
+                case Fragment:
+                    if (p.Length < offset + 8) return false;
+                    if ((BinaryPrimitives.ReadUInt16BigEndian(p[(offset + 2)..]) & 0xFFF8) != 0) return false;   // not the first fragment
+                    protocol = p[offset];
+                    offset += 8;
+                    break;
+                case Ah:
+                    if (p.Length < offset + 8) return false;
+                    protocol = p[offset];
+                    offset += (p[offset + 1] + 2) * 4;            // length in 4-octet units, minus 2
+                    break;
+                case Esp or NoNextHeader:
+                    return false;
+                default:
+                    return p.Length >= offset;                    // TCP, UDP or another upper layer: the caller checks which
+            }
+        }
+        return false;
     }
 }
 

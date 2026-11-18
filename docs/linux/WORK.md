@@ -41,13 +41,16 @@ Take one at a time; each says what "done" means in the linked doc.
 | Item | Where | Notes |
 |---|---|---|
 | Linux versions of the tests moved to the Windows project (issue #18): application rules with Linux paths (`WindowsRuleEngineTests`), UDP routing by app (`WindowsUdpRoutingTests`), loop prevention with a local tunnel host and the own-process rule with the `/proc` lookup (`WindowsEngineTests`) | `tests/Sluice.Tests.Linux` | write them as `Linux…Tests`; they may find real Linux bugs (full-path application rules) |
-| IPv6 extension headers not parsed; such first packets pass uncaptured | FIXES §6 | `PacketInfo.TryParse` |
 | DNS not captured without a non-loopback upstream (dnsmasq without systemd-resolved) | FIXES §6 | test on a distribution without systemd-resolved |
 | `/proc/*/fd` scan cost on busy machines | FIXES §6 | `NETLINK_SOCK_DIAG` + inode cache |
 | Process lookup on the packet thread | [FEATURES](../FEATURES.md) | worker + out-of-order verdicts |
 | UDP through tunnels (TPROXY) | [REQUIRED §2](../REQUIRED.md#2-udp-through-tunnels-on-linux) | the design reuses `UdpNat`, which is in Core: **ask the owner** to split its WinDivert part out first; the nft/TPROXY/socket side is Linux work |
 | Installer paths on Ubuntu, Fedora, Arch; ARM64; `.deb` / AppImage | [REQUIRED §5](../REQUIRED.md#5-linux-release-remaining) | packaging lives on the owner's `release/linux` branch; ask for it before starting |
 
+**IPv6 extension headers** (FIXES §6), fixed on 2026-11-18: `PacketInfo.TryParse` read only the IPv6 header's next-header
+field, so a first packet with Hop-by-Hop, Destination Options, Routing, Fragment or AH headers before TCP/UDP passed
+uncaptured (nftables' `meta l4proto` looks past them, so such packets are queued). It now follows the chain
+(`SkipIpv6ExtensionHeaders`); ESP, "no next header", later fragments and broken chains still pass as before.
 **Stopping the app by a signal while capturing** (`kill`, logout, Ctrl+C), fixed on 2026-11-18: the nftables table used to
 stay behind and send DNS to Sluice's dead DNS port, so name resolution stopped for every app until
 `sudo nft delete table inet sluice`. Now SIGTERM, SIGINT and SIGHUP remove the table and flush systemd-resolved's cache

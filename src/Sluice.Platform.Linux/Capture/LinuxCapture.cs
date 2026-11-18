@@ -37,7 +37,7 @@ public sealed class LinuxCapture : ITrafficCapture
     private readonly CancellationTokenSource _cts = new();
     private DnsResolver? _resolver;
     private LinuxDnsServer? _dns;
-    private TransparentInbound? _relay;
+    private LoopbackRelay? _relay;
     private NfQueue? _queue;
     private Thread? _thread;
     private Task? _sweeper;
@@ -128,12 +128,13 @@ public sealed class LinuxCapture : ITrafficCapture
                 "No upstream DNS server found (/run/systemd/resolve/resolv.conf, /etc/resolv.conf): DNS is not captured, so host rules only match connections by address.");
         }
 
-        _relay = new TransparentInbound(_engine, new IPEndPoint(IPAddress.IPv6Any, 0), new FlowTable(this));
+        // Loopback only (127.0.0.1 and ::1, one port): nftables redirects local connections there, nothing else needs it.
+        _relay = LoopbackRelay.Bind(_engine, new FlowTable(this));
         _relay.Start();
 
         _queue = NfQueue.Open(QueueNumber);
         UdpMode = _engine.Profile.Options.Udp;
-        NftRules.Apply(new NftRules.Settings(QueueNumber, RedirectMark, gid, _relay.LocalEndPoint.Port, dnsPort, QueueUdp: UdpMode != UdpMode.Bypass));
+        NftRules.Apply(new NftRules.Settings(QueueNumber, RedirectMark, gid, _relay.Port, dnsPort, QueueUdp: UdpMode != UdpMode.Bypass));
         _rulesApplied = true;
 
         _thread = new Thread(QueueLoop) { IsBackground = true, Name = "Sluice NFQUEUE" };
@@ -143,7 +144,7 @@ public sealed class LinuxCapture : ITrafficCapture
 
         if (CurrentPolicy().Enabled)
             _engine.Tracker.Write(LogLevel.Normal, "Name resolution through tunnels is ON (fake IPs from 198.18.0.0/15)");
-        _engine.Tracker.Write(LogLevel.Normal, $"Capture started (nftables + NFQUEUE {QueueNumber}, relay port {_relay.LocalEndPoint.Port}" +
+        _engine.Tracker.Write(LogLevel.Normal, $"Capture started (nftables + NFQUEUE {QueueNumber}, relay port {_relay.Port}" +
             $"{(dnsPort is null ? "" : $", DNS port {dnsPort}")}; UDP: {UdpMode switch
             {
                 UdpMode.Tunnel => "tunneling is not available on Linux yet, so UDP of tunneled apps is blocked",

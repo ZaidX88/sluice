@@ -96,7 +96,7 @@ capture restart. (PR #13 first used a copy of the cache in the Linux module; it 
 198.18.x address, and switching it off returns real addresses, on both OSes, without restarting capture. Passes on
 both.
 
-## 6. IPv6 destinations fail through a tunnel whose server has no IPv6 — medium
+## 6. IPv6 destinations fail through a tunnel whose server has no IPv6 — fixed
 
 **Seen** ([issue #4](https://github.com/ZaidX88/sluice/issues/4)): with capture on and an SSH tunnel through sing-box,
 connections to IPv6 addresses fail ("ssh: rejected: connect failed", then "SOCKS5: general SOCKS server failure") when
@@ -123,6 +123,17 @@ unreachable" / "host unreachable" reply within 60 s, while the same route opened
 that time and no IPv6 one. sing-box and SSH.NET report the SSH "connect failed" of this issue as a general failure,
 so the reply code alone can't be narrower. The captures ask `ShouldRefuse(route)` for each new IPv6 flow; see
 [engine.md](../architecture/engine.md#ipv6-fallback-engineipv6fallbackcs).
+
+**Linux part done (#30, PR #22):** `LinuxCapture` gives a new SYN to a real IPv6 address on a marked route the mark
+`0x5C1CF`, and the nft chain `refuse` answers it with a TCP reset, so the app's connect() fails at once and it uses
+IPv4. Checked live on Ubuntu with an IPv4-only SSH tunnel.
+
+**Windows part done (#31):** `Interceptor.Decide` asks the same question for a new SYN to a real IPv6 address; while
+the route is marked, the SYN is neither redirected nor sent on, and Sluice injects a TCP reset (RST+ACK acknowledging
+the SYN, `Interceptor.BuildSynReset`) back to the app. Windows retries a connect() that got a reset, so every SYN of a
+refused flow is answered for 30 s, and connect() fails with "connection refused" after about 2 s (as for a closed
+port on Windows), then the app uses IPv4. Checked live on Windows 11 with a local IPv4-only test tunnel and a temporary
+IPv6 route: two IPv6 failures marked the route, the next IPv6 connect was refused after 2.1 s, and IPv4 kept working.
 
 ## 7. Building on Linux needed `EnableWindowsTargeting` — fixed
 

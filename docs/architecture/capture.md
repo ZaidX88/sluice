@@ -42,6 +42,7 @@ They follow the same model:
         └─ TCP: PacketReflector.ProcessOutbound
                ├─ first SYN of a new flow → Defer: copy queued ──▶ DecisionLoop (4 worker threads)
                │       └─ CompleteDeferred → Interceptor.Decide(local, remote) → redirect? (Classify) → send
+               │             (IPv6 on a route Core marked: TryRefuse injects a TCP reset instead of sending the SYN)
                ├─ repeated SYN while its decision is pending → Drop (the app retransmits it)
                └─ redirected flow → rewrite + reinject inbound to TransparentInbound ([::]:random)
 ```
@@ -62,6 +63,13 @@ They follow the same model:
   TCP table. Logged every 5 s at Verbose and once as a summary when capture stops. Measurements and what limits speed:
   [windows/FIXES.md §3](../windows/FIXES.md#3-windows-capture-seemed-slower-than-the-socks-listener--fixed).
 - Log strings for each connection are built only when the log level shows them.
+- **IPv6 fallback** ([core FIXES §6](../core/FIXES.md), #31): a SYN to a real IPv6 address whose rule sends it
+  through a tunnel or chain that Core marked (`RoutingEngine.Ipv6Fallback.ShouldRefuse(route)`, see
+  [engine.md](engine.md#ipv6-fallback-engineipv6fallbackcs)) is neither redirected nor sent on: Sluice injects a
+  reset (RST+ACK acknowledging the SYN, `BuildSynReset`) back to the app. Windows retries a connect() that got a reset,
+  and the reflector passes those retries as an already decided flow, so `TryRefuse` answers every SYN of a refused flow
+  (on the decision worker and on the packet thread) for 30 s; connect() fails with "connection refused" after about
+  2 s and the app uses IPv4. Without that, the retries would go out directly. Windows never marks a route.
 
 - `Decide` never redirects Sluice's own PID or DNS over TCP to a real server; always redirects fake IPs; skips
   connections with no PID unless `ProcessServices`; otherwise redirects anything that is not Direct (or everything with

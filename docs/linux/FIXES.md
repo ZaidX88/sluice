@@ -21,7 +21,7 @@ is worth keeping.
 
 ## 2. Captured connections reset after a source-port clash — fixed
 
-**Seen** (issue #38): now and then a connection through capture was reset at once, with `No redirect record for
+**Seen** (issue #38, fixed by PR #75): now and then a connection through capture was reset at once, with `No redirect record for
 <addr>:<port>; dropping` in the log: 19 times in about 7 hours of normal use on one machine, half of them on ports
 outside `ip_local_port_range`, and one of 6 parallel downloads in a speed test. Reproduced every time: two sockets bound
 to one port (`SO_REUSEADDR`) connecting through capture to two different servers; the second was reset.

@@ -37,7 +37,7 @@ public class LinuxAmbientCapabilityTests
         return result;
     }
 
-    [Fact]
+    [LinuxFact]
     public void Lowering_what_was_never_raised_is_harmless() => OnOwnThread(() =>
     {
         Assert.True(Libc.LowerAmbient(Libc.CAP_NET_ADMIN, out var problem), problem);
@@ -45,7 +45,7 @@ public class LinuxAmbientCapabilityTests
         Assert.False(Libc.IsInheritable(Libc.CAP_NET_ADMIN));
     });
 
-    [Fact]
+    [LinuxFact]
     public void Raise_then_lower_leaves_the_thread_without_it() => OnOwnThread(() =>
     {
         if (!CanRaise) return;
@@ -58,7 +58,7 @@ public class LinuxAmbientCapabilityTests
         Assert.True(Libc.IsPermitted(Libc.CAP_NET_ADMIN));        // still Sluice's own, for nft next time
     });
 
-    [Fact]
+    [LinuxFact]
     public void Running_nft_leaves_nothing_behind_for_later_threads() => OnOwnThread(() =>
     {
         if (!CanRaise || NftRules.FindNft() is null) return;

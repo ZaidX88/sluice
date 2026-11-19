@@ -230,5 +230,16 @@ public class LinuxCaptureTests
         return q.ToArray();
     }
 
+    [Fact]
+    public void Group_ids_are_read_from_proc_status()
+    {
+        // Under capture before #28: real and effective Sluice's group, saved the user's (GTK refuses to start then).
+        const string status = "Name:\tSluice.Desktop\nUmask:\t0002\nUid:\t1000\t1000\t1000\t1000\nGid:\t377294\t377294\t1000\t377294\nGroups:\t4 27 1000\n";
+        Assert.Equal((377294u, 377294u, 1000u), LinuxCapture.ParseGroupIds(status));
+        Assert.Equal((1000u, 1000u, 1000u), LinuxCapture.ParseGroupIds("Gid:\t1000\t1000\t1000\t1000"));
+        Assert.Null(LinuxCapture.ParseGroupIds("Uid:\t1000\t1000\t1000\t1000\n"));
+        Assert.Null(LinuxCapture.ParseGroupIds("Gid:\t1000\tx\t1000\t1000\n"));
+    }
+
     private static byte[] Concat(params byte[][] parts) => parts.SelectMany(p => p).ToArray();
 }

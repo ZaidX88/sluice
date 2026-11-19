@@ -31,8 +31,8 @@ public sealed class Interceptor : ITrafficCapture
     private readonly RoutingEngine _engine;
     private readonly ConcurrentDictionary<(int LocalPort, IPEndPoint Remote), (int Pid, DateTime At)> _socketPids = new();
     private readonly CancellationTokenSource _cts = new();
-    private IntPtr _net = IntPtr.Zero, _sock = IntPtr.Zero;
-    private Thread? _netThread, _sockThread;
+    private IntPtr _net = IntPtr.Zero, _sock = IntPtr.Zero, _vmDns = IntPtr.Zero;
+    private Thread? _netThread, _sockThread, _vmDnsThread;
 
     // Later packets of redirected flows to real (non-fake) addresses come on a second handle whose filter lists those
     // addresses (CaptureFilter.Followers). It is reopened when the list changes: the new handle opens first, then the
@@ -84,6 +84,14 @@ public sealed class Interceptor : ITrafficCapture
     // treats a repeated SYN as the same flow (30 s), then swept.
     private readonly ConcurrentDictionary<(IPEndPoint Local, IPEndPoint Remote), long> _refuse = new();
     private long _refused;
+
+    /// <summary>
+    /// Local UDP ports of Windows' DNS proxy for WSL, Hyper-V and Docker (the "SharedAccess" service). Its upstream
+    /// queries are asked for a virtual machine, whose connections are forwarded by Windows' NAT and never reach the relay,
+    /// so they get real answers; its other UDP isn't an app's either (docs/windows/FIXES.md §1). Refreshed every 5 s.
+    /// </summary>
+    private volatile HashSet<int> _hostProxyPorts = [];
+    private int _hostProxyPid;
 
     public LatencyStats QueueWait => _queueWait;
     public LatencyStats PacketHandling => _handling;
@@ -165,6 +173,9 @@ public sealed class Interceptor : ITrafficCapture
             _engine.Tracker.Write(LogLevel.Normal, "Name resolution through tunnels is ON (fake IPs from 198.18.0.0/15)");
         }
 
+        // DNS questions from WSL and virtual machines to Windows' DNS proxy (docs/windows/FIXES.md §1).
+        _vmDns = OpenOrThrow(VmDnsFilter, WinDivertNative.Layer.Network, WinDivertNative.OpenFlags.None);
+        _vmDnsThread = new Thread(VmDnsLoop) { IsBackground = true, Name = "Sluice DNS for virtual machines" };
         _sockThread = new Thread(SocketLoop) { IsBackground = true, Name = "Sluice WinDivert socket" };
         var main = _net;
         _netThread = new Thread(() => NetworkLoop(main, follower: false)) { IsBackground = true, Name = "Sluice WinDivert network" };
@@ -174,7 +185,9 @@ public sealed class Interceptor : ITrafficCapture
         foreach (var t in _deciders) t.Start();
         _sockThread.Start();
         _netThread.Start();
+        _vmDnsThread.Start();
         _startedAt = DateTime.UtcNow;
+        RefreshHostDnsProxy();
         _sweeper = Task.Run(SweepLoop);
 
         _engine.Tracker.Write(LogLevel.Normal, $"Interception started (relay port {port}; UDP: {UdpMode switch
@@ -592,6 +605,11 @@ public sealed class Interceptor : ITrafficCapture
         // DNS query: answer locally with a fake IP and drop the original.
         if ((buf[0] >> 4 == 4 && buf[9] == 17) || (buf[0] >> 4 == 6 && buf[6] == 17))
         {
+            if (FromHostDnsProxy(buf, len))
+            {
+                WinDivertNative.Send(handle, buf, len, out _, ref addr);
+                return;
+            }
             byte[]? reply = null;
             try { reply = _dns!.TryAnswer(buf.AsSpan(0, (int)len)); }
             catch (Exception ex) { _engine.Tracker.Write(LogLevel.Error, $"DNS handling failed, passing through: {ex.Message}"); }
@@ -658,6 +676,184 @@ public sealed class Interceptor : ITrafficCapture
         WinDivertNative.Send(_net, packet, (uint)packet.Length, out _, ref a);
     }
 
+    // ---------- DNS for WSL and virtual machines (docs/windows/FIXES.md §1) ----------
+    //
+    // WSL (NAT mode), Hyper-V and Docker VMs ask Windows' DNS proxy (SharedAccess) on the host's virtual adapter. The
+    // proxy asks the Windows DNS client, which can't tell a VM's question from a local app's, so the VM would get a fake
+    // address. But a VM's connections are forwarded by Windows' NAT below anything WinDivert sees: they never reach the
+    // relay, and a fake address leads nowhere. So the names Sluice fakes are answered here, for the VM, with real
+    // addresses from Sluice's own resolver; the VM goes direct, as without Sluice. Every other question goes on to the
+    // proxy unchanged, so local names (mshome.net, .local, the hosts file) and a VPN's DNS keep working.
+    // Not covered: WSL with DNS tunneling (Windows 11 22H2+), whose questions don't pass through a network adapter.
+
+    /// <summary>DNS questions arriving at this PC from another machine (a VM on a virtual switch, or the LAN).</summary>
+    internal const string VmDnsFilter = "inbound and !loopback and !ipv6 and udp.DstPort == 53";
+
+    /// <summary>TTL of the real answers given to VMs: short, so a VM asks again soon after capture stops.</summary>
+    private const uint VmDnsTtl = 30;
+
+    private readonly object _vmDnsGate = new();
+    private long _vmDnsAnswered;
+
+    private void VmDnsLoop()
+    {
+        var handle = _vmDns;
+        var buf = new byte[65535];
+        var addr = new WinDivertNative.Address();
+        while (!_cts.IsCancellationRequested)
+        {
+            if (!WinDivertNative.Recv(handle, buf, (uint)buf.Length, out var len, ref addr)) break;
+            var packet = buf.AsSpan(0, (int)len).ToArray();
+            var original = addr;
+            try
+            {
+                if (TryAnswerForVm(packet, original)) continue;
+            }
+            catch (Exception ex)
+            {
+                _engine.Tracker.Write(LogLevel.Error, $"DNS for a virtual machine failed, passing it to Windows: {ex.Message}");
+            }
+            WinDivertNative.Send(handle, packet, (uint)packet.Length, out _, ref original);
+        }
+    }
+
+    /// <summary>
+    /// Takes over <paramref name="packet"/> (a DNS question to Windows' DNS proxy) when Sluice would fake its name, and
+    /// answers it with real addresses. False: pass it on to the proxy unchanged.
+    /// </summary>
+    private bool TryAnswerForVm(byte[] packet, WinDivertNative.Address original)
+    {
+        if (!_hostProxyPorts.Contains(53)) return false;   // port 53 isn't Windows' DNS proxy (or it isn't running)
+        if (VmDnsQuestion(packet) is not { } q) return false;
+        if (q.Query.Class != DnsMessage.ClassIN || IsProxyOwnName(q.Query.Name) || !CurrentPolicy().ShouldFake(q.Query.Name))
+            return false;
+
+        switch ((DnsType)q.Query.Type)
+        {
+            case DnsType.A:
+                _ = AnswerForVmAsync(packet, original, q);
+                return true;
+            case DnsType.AAAA:
+            case DnsType.HTTPS:
+            case DnsType.SVCB:
+                // As for local apps: IPv4 only, no address hints. The VM then uses the A record.
+                SendToVm(packet, original, q, [], rcode: 0);
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    private async Task AnswerForVmAsync(byte[] packet, WinDivertNative.Address original, (DnsQuery Query, int UdpOffset) q)
+    {
+        byte rcode = 0;
+        IPAddress[] answers = [];
+        try
+        {
+            var all = await _resolver!.ResolveAsync(q.Query.Name, _cts.Token);
+            answers = all.Where(a => a.AddressFamily == AddressFamily.InterNetwork && !FakeIpPool.IsFake(a)).ToArray();
+        }
+        catch (OperationCanceledException) { return; }
+        catch (SocketException ex) when (ex.SocketErrorCode == SocketError.HostNotFound) { rcode = 3; }   // NXDOMAIN
+        catch (Exception) { rcode = 2; }                                                                  // SERVFAIL
+        _engine.Tracker.Write(LogLevel.Debug, rcode == 0
+            ? $"DNS {q.Query.Name} for a virtual machine: real answer ({string.Join(", ", answers.Take(3))})"
+            : $"DNS {q.Query.Name} for a virtual machine: {(rcode == 3 ? "no such name" : "lookup failed")}");
+        try { SendToVm(packet, original, q, answers, rcode); }
+        catch (Exception ex) { _engine.Tracker.Write(LogLevel.Error, $"DNS for a virtual machine failed: {ex.Message}"); }
+    }
+
+    private void SendToVm(byte[] packet, WinDivertNative.Address original, (DnsQuery Query, int UdpOffset) q,
+        IReadOnlyList<IPAddress> answers, byte rcode)
+    {
+        var dns = packet.AsSpan(q.UdpOffset + 8);
+        var reply = BuildVmDnsReply(packet, q.UdpOffset, DnsMessage.BuildResponse(dns, q.Query, answers, VmDnsTtl, rcode));
+        var a = original;
+        a.SetOutbound(true);
+        lock (_vmDnsGate)
+        {
+            if (_vmDns == IntPtr.Zero) return;   // capture stopped meanwhile
+            WinDivertNative.CalcChecksums(reply, (uint)reply.Length, ref a, 0);
+            WinDivertNative.Send(_vmDns, reply, (uint)reply.Length, out _, ref a);
+        }
+        Interlocked.Increment(ref _vmDnsAnswered);
+    }
+
+    /// <summary>
+    /// Names Windows' DNS proxy answers itself or a VM expects from its own network: the PC and other VMs under
+    /// mshome.net, single-label names, Docker's *.internal, and home-network suffixes. They always go on to the proxy.
+    /// </summary>
+    internal static bool IsProxyOwnName(string name)
+    {
+        name = name.TrimEnd('.');
+        if (!name.Contains('.')) return true;
+        foreach (var suffix in ProxyOwnSuffixes)
+            if (name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)
+                || name.Equals(suffix[1..], StringComparison.OrdinalIgnoreCase))
+                return true;
+        return false;
+    }
+
+    private static readonly string[] ProxyOwnSuffixes = [".mshome.net", ".internal", ".lan", ".home", ".localdomain"];
+
+    /// <summary>The DNS question in an IPv4/UDP packet to port 53, and where its UDP header starts; null if it isn't one.</summary>
+    internal static (DnsQuery Query, int UdpOffset)? VmDnsQuestion(ReadOnlySpan<byte> packet)
+    {
+        if (packet.Length < 28 || packet[0] >> 4 != 4 || packet[9] != 17) return null;
+        var udp = (packet[0] & 0x0F) * 4;
+        if (packet.Length < udp + 8 + 12 || BinaryPrimitives.ReadUInt16BigEndian(packet[(udp + 2)..]) != 53) return null;
+        return DnsMessage.TryParseQuery(packet[(udp + 8)..]) is { } q ? (q, udp) : null;
+    }
+
+    /// <summary>The reply packet to an IPv4/UDP question: addresses and ports swapped (checksums left to WinDivert).</summary>
+    internal static byte[] BuildVmDnsReply(ReadOnlySpan<byte> question, int udpOffset, byte[] dns)
+    {
+        var r = new byte[udpOffset + 8 + dns.Length];
+        question[..udpOffset].CopyTo(r);
+        question.Slice(12, 4).CopyTo(r.AsSpan(16));
+        question.Slice(16, 4).CopyTo(r.AsSpan(12));
+        BinaryPrimitives.WriteUInt16BigEndian(r.AsSpan(2), (ushort)r.Length);
+        BinaryPrimitives.WriteUInt16BigEndian(r.AsSpan(6), 0x4000);   // DF, no fragments
+        r[8] = 128;                                                   // TTL
+        r[10] = r[11] = 0;                                            // header checksum (recomputed)
+        BinaryPrimitives.WriteUInt16BigEndian(r.AsSpan(udpOffset), BinaryPrimitives.ReadUInt16BigEndian(question[(udpOffset + 2)..]));
+        BinaryPrimitives.WriteUInt16BigEndian(r.AsSpan(udpOffset + 2), BinaryPrimitives.ReadUInt16BigEndian(question[udpOffset..]));
+        BinaryPrimitives.WriteUInt16BigEndian(r.AsSpan(udpOffset + 4), (ushort)(8 + dns.Length));
+        r[udpOffset + 6] = r[udpOffset + 7] = 0;
+        dns.CopyTo(r, udpOffset + 8);
+        return r;
+    }
+
+    /// <summary>True when this UDP packet leaves from one of the host DNS proxy's ports (<see cref="_hostProxyPorts"/>).</summary>
+    private bool FromHostDnsProxy(byte[] buf, uint len)
+    {
+        var ports = _hostProxyPorts;
+        if (ports.Count == 0) return false;
+        var udp = buf[0] >> 4 == 4 ? (buf[0] & 0x0F) * 4 : 40;
+        return len >= udp + 8 && ports.Contains(BinaryPrimitives.ReadUInt16BigEndian(buf.AsSpan(udp)));
+    }
+
+    private void RefreshHostDnsProxy()
+    {
+        try
+        {
+            var pid = ProcessLookup.FindServicePid("SharedAccess");
+            var ports = ProcessLookup.FindUdpPorts(pid);
+            if (pid != _hostProxyPid)
+                _engine.Tracker.Write(LogLevel.Normal, pid == 0
+                    ? "Windows' DNS proxy for WSL and virtual machines isn't running"
+                    : $"Leaving Windows' DNS proxy for WSL and virtual machines alone (svchost {pid}): its lookups get real answers");
+            if (!ports.SetEquals(_hostProxyPorts))
+                _engine.Tracker.Write(LogLevel.Debug, $"DNS proxy ports: {string.Join(", ", ports.Order())}");
+            _hostProxyPid = pid;
+            _hostProxyPorts = ports;
+        }
+        catch (Exception ex)
+        {
+            _engine.Tracker.Write(LogLevel.Error, $"Could not find Windows' DNS proxy for WSL and virtual machines: {ex.Message}");
+        }
+    }
+
     private async Task SweepLoop()
     {
         using var timer = new PeriodicTimer(TimeSpan.FromSeconds(5));
@@ -669,12 +865,13 @@ public sealed class Interceptor : ITrafficCapture
                 _engine.Tracker.Write(LogLevel.Debug,
                     $"Interception stats: {PacketsReflected:N0} reflected, {PacketsPassed:N0} passed, " +
                     $"{Interlocked.Read(ref _refused):N0} IPv6 refused, {_reflector?.FlowCount ?? 0} flows, " +
-                    $"{DnsQueriesAnswered:N0} DNS answered, {_fakeIps.Count} fake IPs, {Interlocked.Read(ref _recvErrors)} recv errors" +
+                    $"{DnsQueriesAnswered:N0} DNS answered, {Interlocked.Read(ref _vmDnsAnswered):N0} for VMs, {_fakeIps.Count} fake IPs, {Interlocked.Read(ref _recvErrors)} recv errors" +
                     (_udp is null ? "" : $", UDP {_udp.FlowCount} flows / {_udp.DatagramsTunneled:N0} tunneled / {_udp.DatagramsDropped:N0} dropped"));
                 LogTimings();
                 _udp?.Sweep(TimeSpan.FromSeconds(60));
                 _reflector?.Sweep(TimeSpan.FromMinutes(10));
                 PruneFollowed();
+                RefreshHostDnsProxy();
                 _ = CurrentPolicy();   // apply changed DNS settings even when no app is looking names up (docs/core/FIXES.md §5)
                 CheckRelayReachable();
                 var cutoff = DateTime.UtcNow - TimeSpan.FromMinutes(1);
@@ -721,7 +918,7 @@ public sealed class Interceptor : ITrafficCapture
     public async ValueTask DisposeAsync()
     {
         _cts.Cancel();
-        foreach (var h in new[] { _net, _sock })
+        foreach (var h in new[] { _net, _sock, _vmDns })
             if (h != IntPtr.Zero) WinDivertNative.ShutdownHandle(h, WinDivertNative.Shutdown.Both);
         lock (_followGate)
         {
@@ -731,14 +928,18 @@ public sealed class Interceptor : ITrafficCapture
         }
         _netThread?.Join(2000);
         _sockThread?.Join(2000);
+        _vmDnsThread?.Join(2000);
         _deferred.CompleteAdding();
         foreach (var t in _deciders) t.Join(2000);
         Thread[] followers;
         lock (_followThreads) followers = [.. _followThreads];
         foreach (var t in followers) t.Join(2000);
-        foreach (var h in new[] { _net, _sock })
-            if (h != IntPtr.Zero) WinDivertNative.Close(h);
-        _net = _sock = IntPtr.Zero;
+        lock (_vmDnsGate)
+        {
+            foreach (var h in new[] { _net, _sock, _vmDns })
+                if (h != IntPtr.Zero) WinDivertNative.Close(h);
+            _net = _sock = _vmDns = IntPtr.Zero;
+        }
         if (_sweeper is not null) await _sweeper;
         if (_relay is not null) await _relay.DisposeAsync();
         if (_udp is not null) await _udp.DisposeAsync();

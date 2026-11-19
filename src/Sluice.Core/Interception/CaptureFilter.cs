@@ -27,10 +27,14 @@ public static class CaptureFilter
     /// <summary>More followed addresses than this: use <see cref="FollowersBroad"/> (WinDivert filters have a size limit).</summary>
     public const int MaxFollowed = 150;
 
+    /// <summary>
+    /// UDP from port 53 is a DNS server's answer (for example Windows' DNS proxy answering WSL and virtual machines), never
+    /// an app's query or datagram: it is left alone, or the UDP mode would block it (docs/windows/FIXES.md §1).
+    /// </summary>
     public static string Main(ushort relayPort, bool captureUdp) =>
         "outbound and !loopback and (" +
         $"(tcp and ((tcp.Syn and !tcp.Ack) or tcp.SrcPort == {relayPort} or {FakeRange}))" +
-        (captureUdp ? " or udp)" : " or (udp and udp.DstPort == 53))");
+        (captureUdp ? " or (udp and udp.SrcPort != 53))" : " or (udp and udp.DstPort == 53 and udp.SrcPort != 53))");
 
     /// <summary>The filter for later packets to <paramref name="addresses"/>; null when there are none.</summary>
     public static string? Followers(ushort relayPort, IEnumerable<IPAddress> addresses)

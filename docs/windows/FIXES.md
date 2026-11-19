@@ -7,22 +7,39 @@ Each entry: what was seen, why, what to do, and when it counts as fixed, with th
 Priorities: **high** = breaks normal use. An entry is kept after the fix, marked **fixed**, when its cause or evidence
 is worth keeping.
 
-## 1. Windows: WSL / VMs get fake DNS answers they can't use — high
+## 1. Windows: WSL / VMs get fake DNS answers they can't use — fixed (NAT mode)
 
 **Seen:** inside WSL2 (likely also Hyper-V VMs and Docker), names resolve to 198.18.x.x while capture is on in Windows,
-and connections to them time out (`dot.net → 198.18.0.57`). Direct IPs work.
+and connections to them time out (`dot.net → 198.18.0.57`). Direct IPs work. Later, with UDP of tunneled apps blocked,
+WSL got no DNS answers at all.
 
-**Why:** WSL sends DNS to the Windows host's DNS proxy, whose upstream query is captured and faked by `Interceptor`
-(`DnsRedirector.TryAnswer` doesn't know who asked). WSL's TCP to the fake address is then *forwarded* through the
-Hyper-V NAT and never reaches the relay (no owning PID; `PacketReflector` reflects local flows only).
+**Why:**
+1. WSL (NAT mode) sends DNS to Windows' DNS proxy (the "SharedAccess" service) on the host's virtual adapter. The proxy
+   asks the Windows DNS client, so the question reaches Sluice like any local app's and gets a fake address. Sluice
+   can't tell them apart there: the proxy doesn't use its own ports for it.
+2. WSL's connections are forwarded by Windows' NAT below anything WinDivert sees: a probe on the network and the
+   forward layer saw none of them, to a fake address or a real one. So they can't reach the relay, and a fake address
+   leads nowhere. WSL can't be tunneled this way.
+3. The proxy's replies to WSL (from port 53) and its DHCP replies (67/68) counted as svchost's own UDP, so the UDP mode
+   blocked them under a rule that tunnels everything.
 
-**To do:**
-1. Confirm how the forwarded SYN appears to WinDivert (`Sluice.Cli --intercept --log debug`, `DiagnosticPackets`).
-2. Fix by **(a)** not faking DNS for the host DNS proxy (svchost "SharedAccess"/HNS) — simpler and safer — or **(b)**
-   making forwarded flows to fake addresses reach the relay.
-3. Later, an option "Capture WSL / virtual machines" if (b) works.
+**Fixed** (#42; WSL works with capture on, **not tunneled**, as without Sluice):
+- WSL's DNS questions are caught as they arrive at the host (`Interceptor.VmDnsFilter`). Names Sluice would fake are
+  answered there with real addresses from Sluice's own resolver (TTL 30 s); the proxy's own names (`*.mshome.net`,
+  single-label names, `*.internal`, `.lan`, `.home`, `.localdomain`) and everything else go on to the proxy unchanged.
+  Only when SharedAccess owns port 53.
+- UDP from port 53 is never captured (a DNS server's reply), and SharedAccess's own UDP ports are left alone.
+- Local apps are unchanged: the Windows DNS cache still holds their fake answers, and their tunnels work.
 
-**Fixed when:** with Windows capture on, `curl https://dot.net` works inside WSL.
+**Live run** (WSL 2.6, Ubuntu 24.04, NAT mode, capture on, name resolution through tunnels on): `dig` through the proxy
+gave real addresses for `dot.net`, `www.example.com` and `github.com`, the PC's `*.mshome.net` name from the proxy, and
+NXDOMAIN for a name that doesn't exist; `curl https://dot.net` 301, `https://www.example.com` 200,
+`https://github.com` 200. On Windows, `dot.net` still resolved to its fake address and `curl` went through the tunnel.
+
+**Not covered:** WSL with **DNS tunneling** (`dnsTunneling`, the default on Windows 11 22H2 and later): its questions
+reach Windows without passing a network adapter, so they still get fake answers. Workaround: in WSL,
+`/etc/wsl.conf` → `[network] generateResolvConf = false`, and a public DNS server in `/etc/resolv.conf`; or
+`dnsTunneling=false` in `.wslconfig`. Mirrored networking isn't tested.
 
 ## 2. Fake DNS answers outliving capture — fixed (not reproduced)
 

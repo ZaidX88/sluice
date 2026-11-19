@@ -16,8 +16,8 @@ public class CaptureFilterTests
         Assert.Contains("(tcp.Syn and !tcp.Ack)", f);
         Assert.Contains("tcp.SrcPort == 50123", f);
         Assert.Contains(CaptureFilter.FakeRange, f);
-        Assert.Contains("(udp and udp.DstPort == 53)", f);
-        Assert.Contains(" or udp)", CaptureFilter.Main(Relay, captureUdp: true));
+        Assert.Contains("(udp and udp.DstPort == 53 and udp.SrcPort != 53)", f);
+        Assert.Contains(" or (udp and udp.SrcPort != 53))", CaptureFilter.Main(Relay, captureUdp: true));
     }
 
     [Fact]

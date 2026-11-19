@@ -80,8 +80,8 @@ also match a literal-IP host. The action is a `RuleAction`: `Direct`, `Block`, `
 Rules by application need the PID and executable behind a socket. `ProcessLookup` is a static facade with
 `FindTcpOwner`, `FindUdpOwner`, `FindListeners` and `GetProcessPath`. Its built-in implementation is Windows
 (iphlpapi `GetExtendedTcpTable` / UDP table, `QueryFullProcessImageName`); a platform module can replace it by setting
-`ProcessLookup.Backend` to an `IProcessLookup` — `LinuxPlatform.OnAppStart` installs `LinuxProcessLookup` (reads
-`/proc/net/*` and `/proc/<pid>/fd`). The Windows capture additionally learns PIDs directly from WinDivert's socket
+`ProcessLookup.Backend` to an `IProcessLookup` — `LinuxPlatform.OnAppStart` installs `LinuxProcessLookup` (sockets
+from the kernel's socket diagnostics, `/proc/net/*` as the fallback; processes from `/proc/<pid>/fd`). The Windows capture additionally learns PIDs directly from WinDivert's socket
 layer; see [capture.md](capture.md).
 
 ## Inbound listeners: `Inbound/`

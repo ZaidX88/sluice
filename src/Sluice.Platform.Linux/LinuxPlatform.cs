@@ -51,7 +51,11 @@ public sealed class LinuxPlatform : IPlatformServices
     /// <summary>A GUI cannot simply relaunch itself as root on Linux (sudo needs a terminal, and root apps lose the desktop session).</summary>
     public bool CanRestartElevated => false;
 
-    public ITrafficCapture CreateCapture(RoutingEngine engine) => new LinuxCapture(engine, Lookup);
+    public ITrafficCapture CreateCapture(RoutingEngine engine)
+    {
+        Lookup.Log = m => engine.Tracker.Write(LogLevel.Normal, m);     // e.g. sock_diag unavailable: owners through /proc
+        return new LinuxCapture(engine, Lookup);
+    }
 
     internal const string RightsHint =
         "Capturing traffic needs root, or these capabilities on the Sluice binary: " +

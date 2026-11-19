@@ -31,6 +31,31 @@ internal static partial class Libc
     [LibraryImport("libc", SetLastError = true)]
     public static partial int setsockopt(int fd, int level, int name, byte[] value, int len);
 
+    public const int NETLINK_SOCK_DIAG = 4;
+
+    /// <summary>recv that also returns the sender's address (sockaddr_nl for netlink: family, pad, nl_pid, groups).</summary>
+    [LibraryImport("libc", SetLastError = true)]
+    public static partial nint recvfrom(int fd, byte[] buf, nint len, int flags, byte[] addr, ref int addrLen);
+
+    public const int O_RDONLY = 0, O_DIRECTORY = 0x10000, O_CLOEXEC = 0x80000;
+
+    [LibraryImport("libc", SetLastError = true, StringMarshalling = StringMarshalling.Utf8)]
+    public static partial int open(string path, int flags);
+
+    /// <summary>Directory entries as struct linux_dirent64 { u64 ino; s64 off; u16 reclen; u8 type; char name[]; }.</summary>
+    [LibraryImport("libc", SetLastError = true)]
+    public static partial nint getdents64(int fd, byte[] buffer, nint size);
+
+    [LibraryImport("libc", SetLastError = true)]
+    public static partial nint readlinkat(int dirFd, byte[] path, byte[] buffer, nint size);
+
+    public const int AT_FDCWD = -100;
+    public const uint STATX_UID = 0x8;
+
+    /// <summary>statx(2): <c>struct statx</c> has the same layout on every architecture; stx_uid is at offset 20.</summary>
+    [LibraryImport("libc", SetLastError = true, StringMarshalling = StringMarshalling.Utf8)]
+    public static partial int statx(int dirFd, string path, int flags, uint mask, byte[] buffer);
+
     [LibraryImport("libc")]
     public static partial int close(int fd);
 

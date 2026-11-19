@@ -42,7 +42,6 @@ Take one at a time; each says what "done" means in the linked doc.
 |---|---|---|
 | Linux versions of the tests moved to the Windows project (issue #18): application rules with Linux paths (`WindowsRuleEngineTests`), UDP routing by app (`WindowsUdpRoutingTests`), loop prevention with a local tunnel host and the own-process rule with the `/proc` lookup (`WindowsEngineTests`) | `tests/Sluice.Tests.Linux` | write them as `Linux…Tests`; they may find real Linux bugs (full-path application rules) |
 | DNS not captured without a non-loopback upstream (dnsmasq without systemd-resolved) | [FIXES §1](FIXES.md#1-linux-capture-limitations) | test on a distribution without systemd-resolved |
-| `/proc/*/fd` scan cost on busy machines | [FIXES §1](FIXES.md#1-linux-capture-limitations) | `NETLINK_SOCK_DIAG` + inode cache |
 | Process lookup on the packet thread | [FEATURES](FEATURES.md#performance) | worker + out-of-order verdicts |
 | UDP through tunnels (TPROXY) | [REQUIRED §2](../REQUIRED.md#2-udp-through-tunnels-on-linux) | the design reuses `UdpNat`, which is in Core: **ask the owner** to split its WinDivert part out first; the nft/TPROXY/socket side is Linux work |
 | Installer paths on Ubuntu, Fedora, Arch; ARM64; `.deb` / AppImage | [REQUIRED §5](../REQUIRED.md#5-linux-release-remaining) | packaging lives on the owner's `release/linux` branch; ask for it before starting |

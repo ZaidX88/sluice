@@ -17,7 +17,7 @@ internal static class NftRules
     public const string Table = "sluice";
 
     /// <param name="RejectMark">A SYN Sluice gives this mark is refused with a TCP reset, so the app's connect() fails at
-    /// once (used for IPv6 through a tunnel without IPv6, see <see cref="Ipv6Fallback"/>). 0: no such rule.</param>
+    /// once (used for IPv6 through a tunnel without IPv6, see <see cref="Sluice.Core.Engine.Ipv6Fallback"/>). 0: no such rule.</param>
     public sealed record Settings(ushort Queue, uint Mark, uint Gid, int RelayPort, int? DnsPort, bool QueueUdp, uint RejectMark = 0);
 
     public static string Build(Settings s)

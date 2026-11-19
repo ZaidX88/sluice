@@ -57,13 +57,14 @@ stay behind and send DNS to Sluice's dead DNS port, so name resolution stopped f
 `sudo nft delete table inet sluice`. Now SIGTERM, SIGINT and SIGHUP remove the table and flush systemd-resolved's cache
 before the process exits (`LinuxCapture.OnExitSignal`). SIGKILL and crashes still leave it behind.
 
-**IPv6 through a tunnel without IPv6** (FIXES §12, issue #4), Linux part fixed on 2026-11-18: the relay accepts the app's
-connection before the tunnel opens the destination, so an app whose IPv6 attempt "connected" never tried IPv4 and failed
-over and over (seen with Claude desktop, the `claude` CLI and ChatGPT/Codex on a network with IPv6). Now one failed IPv6
-connection through a tunnel marks it for 10 minutes (`Capture/Ipv6Fallback.cs`); new IPv6 connections meant for it are
-refused at the SYN (nft chain `refuse`, TCP reset), and apps use IPv4 at once. To test without an IPv6 network, add a
-dummy interface with a `2001:db8::` address and a route for the site's IPv6 prefix, then remove it
-(`sudo ip link del <name>`).
+**IPv6 through a tunnel without IPv6** ([core FIXES §6](../core/FIXES.md), issue #30, part of #4), Linux part
+fixed on 2026-11-19: the relay accepts the app's connection before the tunnel opens the destination, so an app whose
+IPv6 attempt "connected" never tried IPv4 and failed over and over (seen with Claude desktop, the `claude` CLI and
+ChatGPT/Codex on a network with IPv6). Core marks a route that can't reach IPv6 (`RoutingEngine.Ipv6Fallback`: 2 IPv6
+addresses failing before they opened while IPv4 works through it); while it is marked, `LinuxCapture` gives new IPv6
+SYNs for that route mark `0x5C1CF` and the nft chain `refuse` answers them with a TCP reset, so apps use IPv4 at once.
+To test without an IPv6 network, add a dummy interface with a `2001:db8::` address and a route for the site's IPv6
+prefix, then remove it (`sudo ip link del <name>`).
 
 UI problems found on Linux (layout, fonts, tray, notifications shown by the app) belong to the UI area: report them in an
 issue with a screenshot instead of changing `src/Sluice.Desktop/`.

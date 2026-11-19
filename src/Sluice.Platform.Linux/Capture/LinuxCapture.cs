@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net;
+using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using Sluice.Core.Dns;
 using Sluice.Core.Engine;
@@ -27,7 +28,7 @@ public sealed class LinuxCapture : ITrafficCapture
 {
     private const ushort QueueNumber = 0x5C1;     // 1473
     private const uint RedirectMark = 0x5C1CE;
-    private const uint RejectMark = 0x5C1CF;      // refused at once: IPv6 through a tunnel without IPv6 (Ipv6Fallback)
+    private const uint RejectMark = 0x5C1CF;      // refused at once: IPv6 through a route Core marked (RoutingEngine.Ipv6Fallback)
     private static readonly TimeSpan UdpVerdictTime = TimeSpan.FromSeconds(30);
 
     private readonly RoutingEngine _engine;
@@ -38,7 +39,6 @@ public sealed class LinuxCapture : ITrafficCapture
     private bool _conntrackWarned;
     private readonly ConcurrentDictionary<(IPEndPoint, IPEndPoint), (bool Drop, DateTime At)> _udpVerdicts = new();
     private readonly CancellationTokenSource _cts = new();
-    private readonly Ipv6Fallback _ipv6 = new();
     private DnsResolver? _resolver;
     private LinuxDnsServer? _dns;
     private LoopbackRelay? _relay;
@@ -152,7 +152,6 @@ public sealed class LinuxCapture : ITrafficCapture
         _rulesApplied = true;
         _exitSignals = [.. new[] { PosixSignal.SIGTERM, PosixSignal.SIGINT, PosixSignal.SIGHUP }
             .Select(s => PosixSignalRegistration.Create(s, OnExitSignal))];
-        _engine.Tracker.Closed += OnConnectionClosed;
 
         _thread = new Thread(QueueLoop) { IsBackground = true, Name = "Sluice NFQUEUE" };
         _thread.Start();
@@ -277,10 +276,8 @@ public sealed class LinuxCapture : ITrafficCapture
             _engine.Tracker.Write(LogLevel.Verbose, $"{Path.GetFileName(path) ?? "?"} ({pid}) - {remote} direct (rule {match.Rule.Name}, not intercepted)");
             return Pass();
         }
-        if (!fake && match.Action.Type is RuleActionType.Tunnel or RuleActionType.Chain
-            && _engine.Describe(match.Action) is var via && _ipv6.ShouldRefuse(remote.Address, via))
+        if (!fake && ShouldRefuseIpv6(_engine, remote.Address, match.Action, out var via))
         {
-            // The app's connect() fails at once, so it uses the site's IPv4 address instead (see Ipv6Fallback).
             _engine.Tracker.Write(LogLevel.Verbose, $"{Path.GetFileName(path) ?? "?"} ({pid}) - {remote} refused: IPv6 fails through {via}, so the app falls back to IPv4");
             Interlocked.Increment(ref _refused);
             return RejectMark;
@@ -290,20 +287,27 @@ public sealed class LinuxCapture : ITrafficCapture
         return RedirectMark;
     }
 
+    /// <summary>
+    /// True to refuse a new connection to the real address <paramref name="remote"/>: it is IPv6 and the rule sends it
+    /// through a tunnel or chain that Core marked as unable to reach IPv6 (<see cref="RoutingEngine.Ipv6Fallback"/>).
+    /// Refusing the SYN makes the app's connect() fail at once, so it uses the site's IPv4 address instead. Linux never
+    /// marks a route; Core does. <paramref name="via"/> is the route as <see cref="RoutingEngine.Describe"/> gives it.
+    /// </summary>
+    internal static bool ShouldRefuseIpv6(RoutingEngine engine, IPAddress remote, RuleAction action, out string via)
+    {
+        via = "";
+        if (remote.AddressFamily != AddressFamily.InterNetworkV6 || remote.IsIPv4MappedToIPv6) return false;
+        if (action.Type is not (RuleActionType.Tunnel or RuleActionType.Chain)) return false;
+        via = engine.Describe(action);
+        return engine.Ipv6Fallback.ShouldRefuse(via);
+    }
+
     private uint? Pass()
     {
         Interlocked.Increment(ref _passed);
         return null;
     }
 
-    /// <summary>Learns which routes cannot reach IPv6 destinations (see <see cref="Ipv6Fallback"/>).</summary>
-    private void OnConnectionClosed(ConnectionEntry e)
-    {
-        if (_ipv6.Observe(e.Target, e.Via, e.State, e.Error, e.BytesReceived))
-            _engine.Tracker.Write(LogLevel.Normal,
-                $"IPv6 destinations fail through {e.Via} (its server may have no IPv6): new IPv6 connections through it are refused " +
-                $"for {Ipv6Fallback.Hold.TotalMinutes:0} minutes, so apps use IPv4");
-    }
 
     /// <summary>True to drop this new UDP flow. UDP is not tunneled on Linux yet: flows meant for a tunnel are blocked.</summary>
     private bool DecideUdpDrop(IPEndPoint local, IPEndPoint remote)
@@ -429,7 +433,6 @@ public sealed class LinuxCapture : ITrafficCapture
     private void Cleanup()
     {
         _cts.Cancel();
-        _engine.Tracker.Closed -= OnConnectionClosed;
         if (_exitSignals is not null)
             foreach (var r in _exitSignals) r.Dispose();
         _exitSignals = null;

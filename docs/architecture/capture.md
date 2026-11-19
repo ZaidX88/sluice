@@ -80,11 +80,17 @@ They follow the same model:
 ```
   nftables  queue_new (output, mangle) ── first SYN / new UDP flow ──▶ NFQUEUE 1473 ──▶ NfQueue.Receive (own thread)
                                                                                          │
-            LinuxCapture.OnPacket ── TCP: DecideTcp → accept with mark 0x5C1CE, or plain accept
+            LinuxCapture.OnPacket ── TCP: DecideTcp → accept with mark 0x5C1CE or 0x5C1CF, or plain accept
                                   └─ UDP: DecideUdpDrop → accept or drop (cached 30 s)
   nftables  to_sluice (nat output, dstnat) ── mark 0x5C1CE ──▶ redirect to relay port
                                            └─ UDP/53 ─────────▶ redirect to LinuxDnsServer port
+  nftables  refuse (filter output) ── mark 0x5C1CF ──▶ reject with tcp reset
 ```
+
+- **IPv6 fallback** ([core FIXES §6](../core/FIXES.md), #30): a SYN to a real IPv6 address whose rule sends it
+  through a tunnel or chain that Core marked (`RoutingEngine.Ipv6Fallback.ShouldRefuse(route)`, see
+  [engine.md](engine.md#ipv6-fallback-engineipv6fallbackcs)) gets mark `0x5C1CF`, and the `refuse` chain answers it
+  with a TCP reset, so the app's connect() fails at once and Happy Eyeballs uses IPv4. Linux never marks a route.
 
 - `StartCore` order matters: restore fake IPs, check rights and `nft`, switch to the private group, start
   `DnsResolver` (upstreams from `LinuxDnsServer.UpstreamServers`) and `LinuxDnsServer`, start the relay, open the queue,

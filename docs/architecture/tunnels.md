@@ -91,8 +91,10 @@ Decision record: sing-box (GPL-3.0) runs as a **separate process, one per tunnel
      Sluice broke every later tunnel start. The folder is recreated before each start, the config is deleted once
      sing-box listens, and leftovers older than 10 minutes (from a crash) are removed;
   3. runs `sing-box run -c <config> --disable-color`, records the PID in `SingBoxSession.RunningHelpers` before
-     anything else (its own traffic must never be captured), and on Windows assigns it to a kill-on-close **job
-     object** so it dies with Sluice even after a crash;
+     anything else (its own traffic must never be captured), and ties it to Sluice
+     (`PlatformServices.Current.TieChildProcess`): on Windows a kill-on-close **job object**, so it dies with Sluice
+     even after a crash; on Linux SIGTERM when Sluice exits, and the next Sluice ends the helpers of one that was
+     killed or crashed;
   4. waits up to 10 s for the SOCKS inbound to accept, then **deletes the config file**;
   5. collects the helper's output into the log and `RecentOutput` (used in error messages).
 - The binary is `sing-box.exe` / `sing-box` next to the program (`TunnelBackends.SingBoxPath`), put there by the build

@@ -14,7 +14,7 @@ interface it hands out). Still in Core:
 | `Interception/WinDivertNative.cs`, `Interceptor.cs`, WinDivert I/O in `UdpNat.cs` | `Sluice.Platform.Windows`. `PacketReflector`, `DnsRedirector`, `TcpPacket`, `UdpPacket` are pure packet logic and can stay. |
 | `Platform/ProcessLookup.cs` (iphlpapi/kernel32 code) | `WindowsProcessLookup : IProcessLookup`; Core keeps the interface and `Backend`. |
 | `Profiles/Dpapi.cs` (used by `ProxifierPasswordCodec`) | an `ISecretProtector` in Core. Linux: a clear "not supported" for DPAPI blobs from `.ppx`. |
-| Job object in `Tunnels/SingBoxSession.cs` | `IPlatformServices.TieChildProcess(Process)`. Windows: Job object. Linux: watchdog that kills helpers on exit. |
+| Job object in `Tunnels/SingBoxSession.cs` | `IPlatformServices.TieChildProcess(Process)`. Windows: Job object. Linux: done (#57): SIGTERM to the helpers on exit, and the next start ends those of a Sluice killed with SIGKILL. |
 | `Interceptor.FlushOsDnsCache` (dnsapi) | platform method; Linux uses `resolvectl flush-caches`. |
 | WinDivert entries in `build/Dependencies.targets` | import from the Windows module instead of Core. |
 

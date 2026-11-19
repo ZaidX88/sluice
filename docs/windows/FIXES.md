@@ -24,14 +24,22 @@ Hyper-V NAT and never reaches the relay (no owning PID; `PacketReflector` reflec
 
 **Fixed when:** with Windows capture on, `curl https://dot.net` works inside WSL.
 
-## 2. Fake DNS answers outliving capture — investigate
+## 2. Fake DNS answers outliving capture — fixed (not reproduced)
 
 **Seen once** with the old WPF build: capture reported as paused, yet `Resolve-DnsName www.google.com` still returned
-`198.18.0.25` after `ipconfig /flushdns`.
+`198.18.0.25` after `ipconfig /flushdns`. A flush can't leave a fake answer behind, so capture was most likely still
+running in that build.
 
-**To do:** in the Avalonia app, stop capture every way (capture button, tray "Capture traffic", quit). After each,
-`Resolve-DnsName` must return a real address within a second. Confirm `Interceptor.DisposeAsync` (which flushes the OS
-cache when fakes were handed out) runs on every stop path; add a log line.
+**Checked** (2026-11-19, #43) in the Avalonia app: every stop path (the capture button, the tray's "Capture traffic",
+Exit, and the restart after a UDP-mode change) goes through `EngineHost.StopInterceptionAsync` →
+`Interceptor.DisposeAsync`, which flushes the Windows DNS cache when fake addresses were handed out. Fake answers also
+carry a 5 s TTL, so even a crash leaves them in the cache for 5 s at most. Each flush is now logged:
+`Flushed the Windows DNS cache (capture started | capture stopped | name resolution settings changed)`.
+
+**Live run** (name resolution through tunnels on; `Resolve-DnsName` polled every 200 ms for three names): after each
+stop the names returned real addresses 0.09–0.11 s after the "capture stopped" flush: capture button 0.09 s, tray
+"Capture traffic" 0.11 s, Exit 0.11 s. Turning name resolution on while capturing turned them fake 1.2 s after its
+flush.
 
 ## 3. Windows capture seemed slower than the SOCKS listener — fixed
 

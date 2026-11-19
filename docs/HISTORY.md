@@ -118,3 +118,5 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   `TryGrantCaptureRightsAsync`, `AutostartSupported`, `Autostart` as default members, for Linux (#69) and the UI (#70).
 - Capture's saved group ID set too (2026-11-19, issue #28, contributor): `LinuxCapture` switches the real, effective
   and saved group, so GTK's file dialog starts while capture runs (part of #9).
+- Fake DNS answers after capture stops (2026-11-19, #43): not reproduced; every stop path flushes the Windows DNS cache
+  and now logs it; real answers within 0.11 s of each stop (docs/windows/FIXES.md §2).

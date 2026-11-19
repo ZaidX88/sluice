@@ -113,7 +113,7 @@ public sealed class FileLogRetentionTests : IDisposable
             tracker.Write(LogLevel.Normal, "two");
             current = log.CurrentFile!;
         }
-        Assert.Equal(2, File.ReadAllLines(current).Length);
+        Assert.Equal(3, File.ReadAllLines(current).Length);    // the version line (#91), then "one" and "two"
     }
 
     [Theory]

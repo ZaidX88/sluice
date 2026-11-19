@@ -270,6 +270,18 @@ the repository**:
 - Shell scripts and anything given to Linux tools use LF line endings.
 - No third-party binaries in git: the build fetches them.
 
+## Releases
+
+- **One version for every build**, in one place: `<Version>` in `Directory.Build.props` (now `1.0.0-dev`). .NET puts
+  it into every assembly with the commit it was built from; `SluiceVersion` (`src/Sluice.Core/SluiceVersion.cs`) shows
+  it as `1.0.0-rc.1+abc1234`. `Sluice.Cli --version` prints it, and every log file starts with
+  `Sluice <version> on <system>`, so a bug report says which build it came from.
+- **Bumping it** is the owner's job, in its own small pull request: `1.0.0-dev` while working towards a release,
+  `1.0.0-rc.1`, `-rc.2` … for release candidates, `1.0.0` for the release, then the next `-dev`. Never change it in a
+  feature pull request.
+- **A release tag** `vX.Y.Z` (or `vX.Y.Z-rc.N`) must match `<Version>`; release CI (#74) checks that and builds the
+  packages, whose file names take the version (`sluice-1.0.0-linux-x64.tar.gz`).
+
 ## Branches in the owner's repository
 
 | Branch | Holds | Merged into `main`? |

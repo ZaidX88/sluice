@@ -11,7 +11,8 @@ the headless front end. Commands:
 
 | Command | What it does |
 |---|---|
-| `Sluice.Cli [profile] [--socks ADDR] [--intercept] [--udp MODE] [--log LEVEL] [--log-file DIR] [--duration N]` | Runs the engine: `ConnectionTracker` printing to the console, optional `FileLog`, `RoutingEngine`, a `Socks5Inbound`, and with `--intercept` a capture. Ctrl+C (or `--duration`) disconnects everything, stops capture and prints `Statistics` per application and target |
+| `Sluice.Cli --version` | Prints this build's version (`SluiceVersion.Text`, from `<Version>` in `Directory.Build.props`) |
+| `Sluice.Cli [profile] [--socks ADDR] [--intercept] [--udp MODE] [--log LEVEL] [--log-file DIR] [--duration N]` | Prints `Sluice <version> on <system>`, then runs the engine: `ConnectionTracker` printing to the console, optional `FileLog`, `RoutingEngine`, a `Socks5Inbound`, and with `--intercept` a capture. Ctrl+C (or `--duration`) disconnects everything, stops capture and prints `Statistics` per application and target |
 | `Sluice.Cli check <profile or share link>` | `TunnelChecker` on each tunnel (or one link) |
 | `Sluice.Cli import <profile.sluice> <link / file / --subscription URL>` | `Subscriptions.ImportLinks` / `AddSubscription` + `UpdateAsync`, then saves |
 | `Sluice.Cli update <profile.sluice>` | refreshes every subscription |

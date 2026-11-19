@@ -99,3 +99,5 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
 - File dialogs with capture rights on Linux (2026-11-19, issue #25, contributor): the in-process GTK dialog instead of
   the portal, which refuses a `setcap` process; the profile menu closes before its dialog opens. While capture runs,
   the dialog still needs two Linux fixes (group IDs #28, ambient capability).
+- Licence (2026-11-19, #92): Sluice is GPL-3.0-only (`LICENSE`); `THIRD-PARTY-NOTICES.md` lists sing-box, WinDivert,
+  the NuGet libraries and the font with their versions, licences and sources.

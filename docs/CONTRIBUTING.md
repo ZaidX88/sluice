@@ -51,7 +51,7 @@ Every fix, feature or required item: **an issue, triaged by the owner, then one 
    wanted, why, what to do, and when it counts as done. Title starts with the area. If it needs several areas, propose
    the split under a "Parts" heading; don't create sub-issues yourself. The template adds the **`triage`** label.
 2. **The owner triages it**, with a comment: confirms the area and that it is worth doing, and if it needs several
-   areas, **splits it**: the issue becomes the parent, the owner creates one sub-issue per area and marks which parts
+   areas, **splits it** and writes the parent's **Coordination** section ([Issues](#issues) step 3): the issue becomes the parent, the owner creates one sub-issue per area and marks which parts
    are blocked by which ([Issues](#issues)). Then the owner replaces `triage` with **`ready`** on each issue that can
    be worked on. A parent issue never gets `ready`; only its sub-issues do.
 3. **Claim it.** Comment "I'll take this" on a `ready` issue in your area. The owner assigns you (in this repository
@@ -111,8 +111,19 @@ Check that it is free to work on, every time, before you write any code:
   **Blocked issues** check, see [Issues](#issues) step 3), so work started early is likely to wait or need redoing.
 - **Yours.** It's in your area, labelled `ready` or `in progress`, and **assigned to you** ([From idea to
   merge](#from-idea-to-merge) step 3). Never work on a `triage` issue or on a parent issue.
-- **Its parent's order.** For a sub-issue, read the parent's "Parts" list for what lands first and which interface to
-  use.
+- **Its parent's Coordination.** For a sub-issue, read the parent's Coordination section: what lands first, the
+  interface to use, which files your part may touch ([Issues](#issues) step 3).
+- **Up to date.** Before any work, bring your copy up to date with the owner's `main` and start your branch from it:
+
+  ```bash
+  git fetch upstream
+  git switch main && git merge --ff-only upstream/main && git push origin main
+  git switch -c linux/<topic>
+  ```
+
+  Before you open the pull request, and before every later push to it, update the branch again
+  (`git fetch upstream && git rebase upstream/main`, or `git merge upstream/main`), resolve any conflict on your side,
+  and rerun your area's tests. A pull request built on an old `main` is how two finished parts end up conflicting.
 
 ## Issues
 
@@ -131,9 +142,22 @@ area**, so each part has its own owner and pull request and nobody edits another
    with its own area prefix and labelled `ready` (or left without it while blocked). The owner knows the shared design:
    a split can often keep a platform part free of Core changes (for example by adding a shared helper the platform code
    just calls). Only the owner creates sub-issues.
-3. **Write down the order.** Usually the shared part (Core) lands first. Its sub-issue names the interface the others
-   will use (class, method, event), so they can plan or start before it is merged. A part that has to wait is marked
-   on GitHub: open its issue → **Relationships → Mark as blocked by** → the issue it waits for.
+3. **Write the coordination down in the parent**, before any sub-issue is marked `ready`. The owner adds a
+   **Coordination** section to the parent issue; it is the contract every part follows, so two parts can't each solve
+   the problem their own way:
+   - **Order:** which part lands first and which wait for it.
+   - **Interface:** the exact names and signatures between the parts (class, method, event, setting, file format),
+     what each returns or raises, and who calls whom. A new interface several areas use is agreed in a docs pull
+     request first ([From idea to merge](#from-idea-to-merge)).
+   - **Who changes what:** the files or classes each part touches, so no two parts edit the same thing.
+   - **What stays as it is:** behaviour or files no part may change.
+
+   Each sub-issue links to the parent's Coordination section and is implemented exactly as written there. If it doesn't
+   fit once you start, **stop and say so on the parent**; the owner updates the section (and tells the other parts)
+   before anyone codes around it. A pull request that departs from the Coordination section isn't merged.
+   Usually the shared part (Core) lands first; the parts that use it start from it once it is merged ([Before you start
+   an issue](#before-you-start-an-issue): up to date), or, if they start earlier against the agreed interface, update
+   onto it before their pull request. A part that has to wait is marked on GitHub: open its issue → **Relationships → Mark as blocked by** → the issue it waits for.
    **This is enforced at merge time:** a pull request that fixes a blocked issue gets a failing **Blocked issues**
    check, and `main` requires that check, so it can be reviewed but not merged until the blocker is closed. The check
    re-runs by itself when an issue is closed or reopened, and when the pull request's description changes. If you link
@@ -152,8 +176,9 @@ with #5 for the Windows part and #12 for the Linux part.
 1. **Fork** the repository on GitHub and clone your fork.
 2. Install the [.NET 10 SDK](https://dotnet.microsoft.com/download) and git. Build once; the first build downloads
    WinDivert and sing-box (pinned, SHA-256 checked) into `.deps/`.
-3. Keep your fork's `main` up to date with the owner's (`git remote add upstream <owner's repository>`,
-   `git pull upstream main`).
+3. Add the owner's repository as `upstream` (`git remote add upstream <owner's repository>`). **Before any work**,
+   update your `main` from it and branch from there; update the branch again before opening the pull request and
+   before every later push ([Before you start an issue](#before-you-start-an-issue)).
 4. Pick an issue that is free to work on ([Before you start an issue](#before-you-start-an-issue)); a new fix or
    feature gets its issue first ([From idea to merge](#from-idea-to-merge)).
 5. One branch per task: `linux/<topic>`, `windows/<topic>`, `ui/<topic>`.

@@ -114,3 +114,5 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
 - Core side of the platform interfaces (2026-11-19, #104): `PlatformServices`, the new `IPlatformServices` members and
   `ISecretProtector` in Core, called by the desktop app, the CLI, `SingBoxSession` and the `.ppx` password codec; no
   behaviour change until the platform parts (#54–#57) fill them in.
+- Capture rights and autostart in the platform interface (2026-11-19, #68): `IPlatformServices.CanGrantCaptureRights`,
+  `TryGrantCaptureRightsAsync`, `AutostartSupported`, `Autostart` as default members, for Linux (#69) and the UI (#70).

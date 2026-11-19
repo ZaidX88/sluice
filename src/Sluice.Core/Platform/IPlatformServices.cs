@@ -47,4 +47,23 @@ public interface IPlatformServices
 
     /// <summary>Protects secrets with the current OS account (Windows DPAPI). Null where there is none.</summary>
     Sluice.Core.Profiles.ISecretProtector? SecretProtector => null;
+
+    // ---------- capture rights and autostart (#68; #50's Coordination) ----------
+    // Default members: a platform that doesn't offer these keeps building, and the UI hides them.
+
+    /// <summary>True when <see cref="TryGrantCaptureRightsAsync"/> can give this copy of Sluice the rights capture needs
+    /// without the installer (Linux: pkexec + setcap on the running binary). The UI shows its button only then.</summary>
+    bool CanGrantCaptureRights => false;
+
+    /// <summary>Asks the user (the OS's own password prompt) to give this copy the rights capture needs. True when it
+    /// worked; the app may have to restart to use them, which the platform's <see cref="CaptureRightsHint"/> says.
+    /// False when the user cancelled, it failed or it isn't supported. Never throws.</summary>
+    System.Threading.Tasks.Task<bool> TryGrantCaptureRightsAsync() => System.Threading.Tasks.Task.FromResult(false);
+
+    /// <summary>True when <see cref="Autostart"/> can start Sluice at login on this OS. The UI shows its switch only then.</summary>
+    bool AutostartSupported => false;
+
+    /// <summary>Whether Sluice starts at login for this user (Linux: <c>~/.config/autostart/sluice.desktop</c>). Setting
+    /// it where <see cref="AutostartSupported"/> is false does nothing.</summary>
+    bool Autostart { get => false; set { } }
 }

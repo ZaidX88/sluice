@@ -76,6 +76,17 @@ public class PlatformServicesTests
     }
 
     [Fact]
+    public async Task Capture_rights_and_autostart_are_off_by_default()
+    {
+        IPlatformServices p = new BarePlatform();
+        Assert.False(p.CanGrantCaptureRights);
+        Assert.False(await p.TryGrantCaptureRightsAsync());
+        Assert.False(p.AutostartSupported);
+        p.Autostart = true;                                 // ignored where unsupported
+        Assert.False(p.Autostart);
+    }
+
+    [Fact]
     public void Use_sets_the_platform_and_the_process_lookup_backend() => Restoring(() =>
     {
         var lookup = new FakeLookup();

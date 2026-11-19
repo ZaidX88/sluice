@@ -89,3 +89,5 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   `RoutingEngine.Ipv6Fallback` marked get a TCP reset from the nft chain `refuse`, so apps fall back to IPv4 at once.
 - Log retention (2026-11-19, #39): `FileLog` keeps the last 7 days of `Sluice-yyyy-MM-dd.log` files (`RetainDays`;
   0 keeps everything), so the desktop app can turn the file log on by default (#40).
+- Linux capture decides new connections on 4 worker threads instead of the NFQUEUE thread (2026-11-19, issue #83,
+  contributor): a program Sluice hasn't seen yet no longer holds up other programs' new connections.

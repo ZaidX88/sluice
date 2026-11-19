@@ -7,5 +7,6 @@ Issues](../CONTRIBUTING.md#issues)).
 
 ## Performance
 
-- **Process lookup on the Linux packet thread** holds up other packets too. Move it to a worker and give verdicts
-  out of order (NFQUEUE allows that).
+- ~~**Process lookup on the Linux packet thread** holds up other packets too~~ **done** (issue #83): the NFQUEUE
+  thread only receives; 4 worker threads (`VerdictWorkers`) decide and give verdicts out of order, through a bounded
+  hand-off that accepts a packet unmarked when it is full (fail-open), so the receive loop never blocks.

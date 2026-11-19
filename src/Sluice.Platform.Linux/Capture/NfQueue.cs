@@ -31,6 +31,7 @@ internal sealed class NfQueue : IDisposable
     private readonly byte[] _buf = new byte[256 * 1024];
     private uint _seq;
     private volatile bool _closed, _stopping;
+    private int _sending;     // verdicts being sent now: Dispose waits for them before closing the socket
 
     public readonly record struct Packet(uint Id, ArraySegment<byte> Payload);
 
@@ -137,12 +138,27 @@ internal sealed class NfQueue : IDisposable
         return list;
     }
 
-    /// <summary>Lets packet <paramref name="id"/> continue (<see cref="Accept"/>, optionally setting its mark) or drops it.</summary>
+    /// <summary>
+    /// Lets packet <paramref name="id"/> continue (<see cref="Accept"/>, optionally setting its mark) or drops it. Safe
+    /// from several threads at once (one <c>send</c> per verdict). A verdict given after <see cref="Dispose"/> is
+    /// dropped quietly: the kernel lets that packet pass anyway once the queue is gone.
+    /// </summary>
     public void Verdict(uint id, uint verdict, uint? mark = null)
     {
-        var msg = VerdictMessage(++_seq, _queue, id, verdict, mark);
-        if (!_closed) Libc.send(_fd, msg, msg.Length, 0);
+        var msg = VerdictMessage(NextSeq(), _queue, id, verdict, mark);
+        Interlocked.Increment(ref _sending);
+        try
+        {
+            if (!_closed) Libc.send(_fd, msg, msg.Length, 0);
+        }
+        finally
+        {
+            Interlocked.Decrement(ref _sending);
+        }
     }
+
+    /// <summary>The next netlink sequence number; unique across threads.</summary>
+    internal uint NextSeq() => Interlocked.Increment(ref _seq);
 
     /// <summary>NFQNL_MSG_VERDICT: verdict header (verdict, packet id) and an optional new packet mark.</summary>
     internal static byte[] VerdictMessage(uint seq, ushort queue, uint id, uint verdict, uint? mark)
@@ -159,7 +175,7 @@ internal sealed class NfQueue : IDisposable
     /// <summary>Sends a config request and waits for the kernel's acknowledgement.</summary>
     private void Request(ushort type, Action<Writer> build)
     {
-        var seq = ++_seq;
+        var seq = NextSeq();
         var w = new Writer(type, NLM_F_REQUEST | NLM_F_ACK, seq, _queue);
         build(w);
         var msg = w.Finish();
@@ -240,6 +256,14 @@ internal sealed class NfQueue : IDisposable
     {
         if (_closed) return;
         _closed = true;
+        Interlocked.MemoryBarrier();
+        // A verdict that saw the socket open may still be in send(): closing now could let the number be reused for
+        // another file and the verdict land there. Sends take microseconds.
+        var spin = new SpinWait();
+        while (Volatile.Read(ref _sending) > 0) spin.SpinOnce();
         Libc.close(_fd);
     }
+
+    /// <summary>For tests: an instance with no socket (fd -1), so <see cref="Verdict"/> and <see cref="NextSeq"/> can run.</summary>
+    internal static NfQueue ForTests(ushort queue = 1) => new(-1, queue);
 }

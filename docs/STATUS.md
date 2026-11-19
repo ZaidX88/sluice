@@ -116,7 +116,8 @@ it would reset every connection through it.
    translate them back), answers faked names, and forwards the rest to the real upstreams from
    `/run/systemd/resolve/resolv.conf` (falling back to `/etc/resolv.conf`), skipping loopback stubs.
 6. Rights: root, or `cap_net_admin,cap_setgid` (+ `cap_sys_ptrace,cap_dac_read_search` to see other users' processes) on
-   the binary. Under setcap, `NftRules` raises `CAP_NET_ADMIN` as an ambient capability so the `nft` child keeps it.
+   the binary. Under setcap, `NftRules` raises `CAP_NET_ADMIN` as an ambient capability so the `nft` child keeps it,
+   and lowers it again once `nft` has started (`Libc.LowerAmbient`), so nothing else Sluice starts gets it (#99).
 
 **sing-box helper** (`src/Sluice.Core/Tunnels/`): `SingBoxConfig` turns a tunnel into a sing-box config,
 `SingBoxSession` starts one helper per tunnel with a local SOCKS5 inbound. Configs hold secrets, so they are written to a

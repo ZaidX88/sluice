@@ -106,3 +106,5 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   tags `vX.Y.Z`; `release/linux` and `release/windows` are retired. The files move in a follow-up pull request.
 - Linux packaging moved onto `main` (2026-11-19, #93): `packaging/linux/` (`install.sh`, `uninstall.sh`,
   `sluice.desktop`, `README.txt`) and `scripts/package-linux.sh`, unchanged from `release/linux`.
+- Ambient capability lowered after `nft` (2026-11-19, issue #99, contributor): `NftRules` no longer leaves
+  `CAP_NET_ADMIN` raised on the thread that started capture, which broke GTK's file dialog (part of #9).

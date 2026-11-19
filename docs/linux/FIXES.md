@@ -66,3 +66,23 @@ Three small improvements to the fix in §2, found in the review. None is a bug s
 **Fixed when:** with conntrack made unavailable mid-capture (for example by a test double that never answers), new
 connections are not delayed beyond the first few; replies not from the kernel are ignored (unit test); the logging
 decision uses the enum.
+
+## 4. CAP_NET_ADMIN left raised after starting nft — fixed
+
+**Seen** ([issue #99](https://github.com/ZaidX88/sluice/issues/99), part of #9, found while testing #25): with the app
+installed by `install.sh` and capture started once, the in-process GTK file dialog aborted the app (`Loader process
+exited early`): GTK's sandboxed image loader (`bwrap`) refused to run ("Unexpected capabilities but not setuid"). The
+thread that had started capture showed `CapAmb: cap_net_admin`, also after capture was turned off.
+
+**Why:** `NftRules.Run` raised `CAP_NET_ADMIN` as an ambient capability (and added it to the inheritable set) so `nft`
+gets it under `setcap`, and never lowered it. Every thread and program started from that thread afterwards had it too.
+
+**Fixed:** `Libc.LowerAmbient` lowers the ambient capability and clears it from the inheritable set; `NftRules.Run`
+calls it right after `nft` has started (in a `finally`, so a failed start lowers it too). `nft` keeps its own copy.
+Before the first raise, `NftRules` also starts .NET's signal-handling thread (`.NET SigHandler`), which .NET otherwise
+creates during the first `Process.Start`, i.e. while the capability is raised, and which would keep it. The
+sing-box helpers (SOCKS inbound only) and `resolvectl flush-caches` don't need the capability. Tests:
+`LinuxAmbientCapabilityTests` (they raise the capability only when it is permitted; see the class for running them in a
+user namespace). Live, with the `setcap` install: before, 7 of 38 threads had `CAP_NET_ADMIN` as ambient; after
+starting, stopping and restarting capture, none of 41 threads has it, ambient or inheritable. The file dialog with
+capture on also needs #28 (capture's group IDs).

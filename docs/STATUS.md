@@ -109,9 +109,10 @@ it would reset every connection through it.
    remember the original destination by the app's endpoint and the destination (`FlowRecords`); the relay finds it through
    conntrack (`Conntrack`, by the reply tuple), which also covers a source port renumbered after a clash. UDP → drop or
    pass, cached 30 s.
-4. Sluice's own sockets are recognised by group: at start the process calls `setresgid(gid, gid, -1)` (377294 or the next
-   free GID); helpers it starts inherit it. Real and effective group must match, or the kernel strips the ambient
-   capability that `nft` needs.
+4. Sluice's own sockets are recognised by group: at start the process calls `setresgid(gid, gid, gid)` (377294 or the
+   next free GID); helpers it starts inherit it. Real and effective group must match, or the kernel strips the ambient
+   capability that `nft` needs; the saved group must match too, or GTK refuses to start the file dialog (#28). On stop
+   all three go back to what they were.
 5. `LinuxDnsServer` listens on **127.0.0.1:P and [::1]:P** (replies must leave from the redirect address for conntrack to
    translate them back), answers faked names, and forwards the rest to the real upstreams from
    `/run/systemd/resolve/resolv.conf` (falling back to `/etc/resolv.conf`), skipping loopback stubs.

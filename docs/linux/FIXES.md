@@ -85,4 +85,17 @@ sing-box helpers (SOCKS inbound only) and `resolvectl flush-caches` don't need t
 `LinuxAmbientCapabilityTests` (they raise the capability only when it is permitted; see the class for running them in a
 user namespace). Live, with the `setcap` install: before, 7 of 38 threads had `CAP_NET_ADMIN` as ambient; after
 starting, stopping and restarting capture, none of 41 threads has it, ambient or inheritable. The file dialog with
-capture on also needs #28 (capture's group IDs).
+capture on also needs #28 (capture's group IDs, §5).
+
+## 5. Capture's group IDs kept GTK from starting — fixed
+
+**Seen** ([issue #28](https://github.com/ZaidX88/sluice/issues/28), part of #9, found while testing #25): with capture
+on, the in-process GTK file dialog didn't start: GTK refuses to run in a process whose real, effective and saved group
+IDs differ ("running setuid or setgid"), and capture switched only two of them (`Gid: 377294 377294 1000`).
+
+**Why:** `LinuxCapture` called `setresgid(gid, gid, -1)`, keeping the user's group as the saved one so it could switch
+back without privileges. It doesn't need to: switching to Sluice's group needs `CAP_SETGID` anyway, and that also
+switches back.
+
+**Fixed:** capture calls `setresgid(gid, gid, gid)` and, on stop, restores the real, effective and saved group it read
+from `/proc/self/status` (an error is logged if it can't). Sluice's own traffic is still excluded by `meta skgid`.

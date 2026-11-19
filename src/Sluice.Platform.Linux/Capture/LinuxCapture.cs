@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
@@ -47,7 +48,7 @@ public sealed class LinuxCapture : ITrafficCapture
     private VerdictWorkers? _workers;
     private readonly ConcurrentDictionary<(int Protocol, IPEndPoint Source, IPEndPoint Destination), byte> _deciding = new();
     private Task? _sweeper;
-    private (uint Real, uint Effective)? _previousGid;
+    private (uint Real, uint Effective, uint Saved)? _previousGid;
     private bool _rulesApplied;
     private int _udpTunnelWarned;
     private readonly DnsPolicyCache _policies;
@@ -113,10 +114,12 @@ public sealed class LinuxCapture : ITrafficCapture
 
         // From here on, sockets Sluice (and helpers it starts) creates carry this group and are left alone by the rules.
         var gid = SluiceGroup.Pick();
-        // Real and effective both: if they differed, the kernel would treat every program Sluice starts as setgid
-        // and strip the capability nft needs under setcap. The saved group keeps the original for switching back.
-        var before = (Libc.getgid(), Libc.getegid());
-        if (Libc.setresgid(gid, gid, Libc.Unchanged) != 0)
+        // Real, effective and saved all three: if real and effective differed, the kernel would treat every program
+        // Sluice starts as setgid and strip the capability nft needs under setcap; if the saved group differed, GTK would
+        // take Sluice for a setgid program and refuse to start, so the in-process file dialog couldn't open (#28).
+        // Switching back on stop needs CAP_SETGID, which capture needs to switch here anyway.
+        var before = CurrentGroupIds();
+        if (Libc.setresgid(gid, gid, gid) != 0)
             throw new InvalidOperationException($"Could not switch to Sluice's network group: {Libc.Error(Marshal.GetLastPInvokeError())}");
         _previousGid = before;
 
@@ -456,8 +459,37 @@ public sealed class LinuxCapture : ITrafficCapture
         _queue = null;
         _conntrack?.Dispose();
         _conntrack = null;
-        if (_previousGid is { } g) Libc.setresgid(g.Real, g.Effective, Libc.Unchanged);
+        if (_previousGid is { } g && Libc.setresgid(g.Real, g.Effective, g.Saved) != 0)
+            _engine.Tracker.Write(LogLevel.Error, $"Could not switch back to the original group: {Libc.Error(Marshal.GetLastPInvokeError())}");
         _previousGid = null;
+    }
+
+    /// <summary>The process's real, effective and saved group IDs, from <c>/proc/self/status</c>.</summary>
+    private static (uint Real, uint Effective, uint Saved) CurrentGroupIds()
+    {
+        try
+        {
+            if (ParseGroupIds(File.ReadAllText("/proc/self/status")) is { } ids) return ids;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+        var effective = Libc.getegid();
+        return (Libc.getgid(), effective, effective);    // the saved group is the effective one unless set otherwise
+    }
+
+    /// <summary>Reads the "Gid:" line of a <c>/proc/&lt;pid&gt;/status</c> text: real, effective, saved, filesystem.</summary>
+    internal static (uint Real, uint Effective, uint Saved)? ParseGroupIds(string status)
+    {
+        foreach (var line in status.Split('\n'))
+        {
+            if (!line.StartsWith("Gid:", StringComparison.Ordinal)) continue;
+            var f = line[4..].Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+            return f.Length >= 3
+                && uint.TryParse(f[0], NumberStyles.None, CultureInfo.InvariantCulture, out var real)
+                && uint.TryParse(f[1], NumberStyles.None, CultureInfo.InvariantCulture, out var effective)
+                && uint.TryParse(f[2], NumberStyles.None, CultureInfo.InvariantCulture, out var saved)
+                ? (real, effective, saved) : null;
+        }
+        return null;
     }
 
     public async ValueTask DisposeAsync()

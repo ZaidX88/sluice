@@ -94,3 +94,5 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
 - Windows refuses IPv6 through a marked route (2026-11-19, #31): new IPv6 SYNs for a tunnel or chain that
   `RoutingEngine.Ipv6Fallback` marked are answered with an injected TCP reset, so apps fall back to IPv4 at once;
   with #29 and #30 this fixes #4.
+- One version for every build (2026-11-19, #91): `<Version>` in `Directory.Build.props` (`1.0.0-dev`), shown as
+  `1.0.0-dev+abc1234` by `Sluice.Cli --version`, the CLI's first line and the first line of every log file.

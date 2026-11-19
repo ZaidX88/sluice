@@ -5,7 +5,7 @@ namespace Sluice.Core.Engine;
 
 /// <summary>
 /// Writes the tracker's log to a daily file ("Sluice-yyyy-MM-dd.log") in a directory,
-/// with its own level, independent of the on-screen log. Keeps the last <see cref="RetainDays"/> days of files.
+/// with its own level, independent of the on-screen log. Each file starts with <see cref="SluiceVersion.Banner"/>. Keeps the last <see cref="RetainDays"/> days of files.
 /// </summary>
 public sealed class FileLog : IDisposable
 {
@@ -57,6 +57,8 @@ public sealed class FileLog : IDisposable
                 {
                     AutoFlush = true,
                 };
+                // Every file, and every start appending to one, begins with the build that wrote it (issue #91).
+                _writer.WriteLine($"[{now:yyyy-MM-dd HH:mm:ss.fff}] {Tag(LogLevel.Normal)} {SluiceVersion.Banner}");
                 DeleteOldFiles(today);
             }
             _writer.WriteLine($"[{now:yyyy-MM-dd HH:mm:ss.fff}] {Tag(level)} {message}");

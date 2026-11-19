@@ -5,5 +5,10 @@
          build asks for one (-f net10.0). Without this, building on Linux or macOS fails with NETSDK1100 (issue #1). It only
          allows restoring Windows targets; it doesn't build Windows code on other systems. -->
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
+
+    <!-- The one version of every Sluice build (issue #91): the only line a release changes (docs/CONTRIBUTING.md →
+         Releases). .NET puts it into every assembly and appends the commit ("1.0.0-dev+abc1234…"); Sluice.Core's
+         SluiceVersion shows it with the commit shortened. A release tag vX.Y.Z must match it. -->
+    <Version>1.0.0-dev</Version>
   </PropertyGroup>
 </Project>

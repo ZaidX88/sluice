@@ -213,7 +213,7 @@ public class StatisticsAndLogTests
                 tracker.Write(LogLevel.Debug, "noise");
                 Assert.EndsWith($"Sluice-{DateTime.Now:yyyy-MM-dd}.log", log.CurrentFile);
             }
-            var lines = File.ReadAllLines(Directory.GetFiles(dir).Single());
+            var lines = File.ReadAllLines(Directory.GetFiles(dir).Single()).Skip(1).ToArray();   // after the version line (#91)
             Assert.Equal(2, lines.Length);
             Assert.Contains("ERROR", lines[0]);
             Assert.EndsWith("boom", lines[0]);

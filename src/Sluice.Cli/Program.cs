@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Net;
+using Sluice.Core;
 using Sluice.Core.Checker;
 using Sluice.Core.Engine;
 using Sluice.Core.Inbound;
@@ -17,6 +18,8 @@ const string Usage = """
       --log-file DIR [--log-file-level LEVEL]     also write a daily log file in DIR (default level verbose)
       --duration N                stop cleanly after N seconds
 
+    Sluice.Cli --version          print the version of this build
+
     Sluice.Cli check <profile.sluice|.ppx | share link> [options]
                                   test tunnels like Proxifier's Proxy Checker
       share link: vless:// vmess:// trojan:// ss:// hysteria2:// tuic:// ssh://
@@ -31,6 +34,12 @@ const string Usage = """
     Sluice.Cli update <profile.sluice>
                                   refresh every subscription in the profile
     """;
+
+if (args.Length > 0 && args[0] is "--version" or "-V" or "version")
+{
+    Console.WriteLine($"Sluice {SluiceVersion.Text}");
+    return 0;
+}
 
 if (args.Length > 0 && args[0] is "-h" or "--help" or "help")
 {
@@ -92,6 +101,7 @@ static async Task<int> RunEngineAsync(string[] args)
     if (!TryLoadProfile(profilePath, out var profile)) return 1;
     if (udp is { } u) profile!.Options.Udp = u;
 
+    Console.WriteLine(SluiceVersion.Banner);
     var tracker = new ConnectionTracker { Level = screenLevel };
     var gate = new object();
     tracker.Log += (lvl, msg) =>

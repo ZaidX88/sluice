@@ -28,9 +28,14 @@ public static class StartMenuShortcut
             if (exe is null) return;
             // Test and scratch builds must not take over the user's shortcut.
             if (exe.StartsWith(Path.GetTempPath(), StringComparison.OrdinalIgnoreCase)) return;
-            // Keep a working shortcut (e.g. to an installed copy); replace a missing or broken one.
+            // Keep a working shortcut (e.g. to an installed copy); replace a missing or broken one. A working one with an
+            // old description (before #62 it was mis-encoded: "Sluice â€” …") is rewritten to the same target.
             if (File.Exists(ShortcutPath) && ReadTarget(ShortcutPath) is { } target && File.Exists(target) &&
-                ReadAppId(ShortcutPath) == AppId) return;
+                ReadAppId(ShortcutPath) == AppId)
+            {
+                if (ReadDescription(ShortcutPath) != Description) Write(ShortcutPath, target);
+                return;
+            }
             Write(ShortcutPath, exe);
         }
         catch
@@ -42,14 +47,17 @@ public static class StartMenuShortcut
     /// <summary>Developer tool: (re)write the shortcut for this executable, wherever it runs from.</summary>
     public static void WriteForThisExe() => Write(ShortcutPath, Environment.ProcessPath!);
 
-    private static void Write(string path, string exe)
+    /// <summary>The shortcut's tooltip. Escaped, so the file's encoding can't garble the dash.</summary>
+    internal const string Description = "Sluice \u2014 route applications through tunnels";
+
+    internal static void Write(string path, string exe)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         var link = (IShellLinkW)new ShellLink();
         link.SetPath(exe);
         link.SetWorkingDirectory(Path.GetDirectoryName(exe)!);
         link.SetIconLocation(exe, 0);
-        link.SetDescription("Sluice â€” route applications through tunnels");
+        link.SetDescription(Description);
         var store = (IPropertyStore)link;
         var key = AppUserModelIdKey;
         var value = PropVariant.FromString(AppId);
@@ -65,7 +73,16 @@ public static class StartMenuShortcut
         ((IPersistFile)link).Save(path, true);
     }
 
-    private static string? ReadTarget(string path)
+    internal static string? ReadDescription(string path)
+    {
+        var link = (IShellLinkW)new ShellLink();
+        ((IPersistFile)link).Load(path, 0);
+        var sb = new char[1024];
+        link.GetDescription(sb, sb.Length);
+        return new string(sb).TrimEnd('\0');
+    }
+
+    internal static string? ReadTarget(string path)
     {
         var link = (IShellLinkW)new ShellLink();
         ((IPersistFile)link).Load(path, 0);
@@ -75,7 +92,7 @@ public static class StartMenuShortcut
         return s.Length == 0 ? null : s;
     }
 
-    private static string? ReadAppId(string path)
+    internal static string? ReadAppId(string path)
     {
         var link = (IShellLinkW)new ShellLink();
         ((IPersistFile)link).Load(path, 0);

@@ -52,8 +52,8 @@ Check by hand on Windows that the Avalonia app does everything `src/Sluice.App` 
 - closing the window goes to the tray with the hint toast;
 - `--profile`, `--log-file`, `--theme`, `--screenshot`.
 
-Then remove `Sluice.App` from `Sluice.slnx` and delete it, and move the Start Menu shortcut / AUMID code fully into the
-Windows module.
+Then remove `Sluice.App` from `Sluice.slnx` and delete it. The Start Menu shortcut / AUMID code is already in the
+Windows module (`StartMenuShortcut`, #62); only the WPF app's own copy goes with it.
 
 ## 4. Windows release package
 

@@ -126,3 +126,5 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
 - WSL and virtual machines work with capture on (2026-11-19, #42): their DNS questions to Windows' DNS proxy get
   real answers from Sluice for the names it fakes; the proxy's replies and DHCP aren't blocked by the UDP mode.
   Not tunneled; WSL with DNS tunneling not covered (docs/windows/FIXES.md §1).
+- Start Menu shortcut and app ID only in the Windows module (2026-11-20, #62): confirmed; the shortcut's
+  mis-encoded tooltip fixed, and older shortcuts rewritten at start (docs/windows/FIXES.md §4).

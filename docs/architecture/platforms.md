@@ -84,7 +84,7 @@ classes implement it; the rest of the app only sees `OsPlatform.Current`, typed 
 | Member | `WindowsPlatform` | `LinuxPlatform` |
 |---|---|---|
 | `Name` | `"Windows"` | `"Linux"` |
-| `OnAppStart()` | `StartMenuShortcut.Ensure()`: registers the app ID "Sluice" and a Start Menu shortcut carrying it, so notifications show Sluice's name and icon | Points Core's process lookup ("which app owns this connection") at `/proc` (`LinuxProcessLookup`) |
+| `OnAppStart()` | `StartMenuShortcut.Ensure()`: registers the app ID "Sluice" and a Start Menu shortcut carrying it, so notifications show Sluice's name and icon | Nothing (the `/proc` process lookup is `LinuxPlatform.ProcessLookup`, set by `PlatformServices.Use`) |
 | `Notify(title, message, isError)` | A Windows toast under the app ID "Sluice"; errors use the "urgent" scenario | `notify-send --app-name=Sluice …` (freedesktop notifications); errors use "critical" urgency |
 | `CaptureUnavailableReason` | Always `null`: WinDivert ships with Sluice | "install nftables" when `nft` is missing |
 | `HasCaptureRights` | Running as administrator? | Root, **or** `CAP_NET_ADMIN` + `CAP_SETGID` in the effective set (read from `/proc/self/status`) |

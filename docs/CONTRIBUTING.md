@@ -131,6 +131,8 @@ Every problem or request is a GitHub issue ([From idea to merge](#from-idea-to-m
 starts with the area (`[Linux] …`, `[Windows] …`, `[UI] …`, `[Core] …`). Describe what you saw, how to reproduce it,
 the evidence (commands, output, log lines; no real server addresses), and what "fixed" would look like.
 
+**Security problems** don't go in an issue: report them privately ([SECURITY.md](../.github/SECURITY.md)).
+
 **One area:** one issue, fixed by one pull request from that area's owner.
 
 **Several areas** (for example a bug with a Linux part and a Core part): one **parent issue** and one **sub-issue per

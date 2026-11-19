@@ -132,3 +132,5 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   a privacy note in Settings; on Linux the settings folder no longer falls back to the current folder on a fresh account.
 - Fake-DNS state always in the settings folder (2026-11-20, #115): on a fresh Linux account it went to the current
   folder (docs/core/FIXES.md §8).
+- Security policy (2026-11-20): `.github/SECURITY.md`; security problems are reported through GitHub's private
+  vulnerability reporting, linked from the README and CONTRIBUTING.

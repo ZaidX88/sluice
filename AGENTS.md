@@ -74,6 +74,18 @@ goes back to `ready`.
 Only a **decision** gets a docs pull request before the code: changing `docs/DECISIONS.md`, a new interface several
 areas will use, or an architecture change. Trivial changes (typos, wording) need no issue.
 
+**Before any work, update the local copy with the latest `main` of the owner's repository**
+(`github.com/ZaidX88/sluice`) and start the branch from it. Check `git remote -v`: in a fork that remote is usually
+`upstream` (the fork itself is `origin`, and its `main` may be old); in the owner's own clone it is `origin`. Then
+`git fetch <that remote>`, `git switch main && git merge --ff-only <that remote>/main`, `git switch -c <area>/<topic>`.
+Before opening the pull request and before every later push, update the branch onto that `main` again, resolve
+conflicts on your side and rerun the tests.
+
+**For a sub-issue, follow the parent's Coordination section exactly:** the order, the interface between the parts
+(names, signatures, formats), and which files your part may touch. Don't design your own interface or change another
+part's files. If the Coordination section doesn't fit what you find, stop and tell the person; it is raised on the
+parent and the owner updates the section before anyone codes around it.
+
 **Before starting any issue, check that it isn't blocked:**
 
 ```bash

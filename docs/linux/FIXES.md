@@ -43,3 +43,21 @@ kernel test runs in a network namespace of its own:
 **Fixed when** (passes): the two-socket reproduction reaches **both** servers, one after the other and with both
 connections opened at once (each answer checked, 12 of 12), the log has no "No redirect record", and 3 bursts of 30
 parallel downloads through capture complete (90 of 90).
+
+## 3. Conntrack lookup: follow-ups from the review of PR #75 — low
+
+Three small improvements to the fix in §2, found in the review. None is a bug seen in use; no issue yet.
+
+1. **Lookups wait in line.** `Conntrack.TryGetOriginal` runs under one lock with a 1 s receive timeout. If conntrack
+   ever stopped answering, every connection the relay accepts would wait up to a second, one after another.
+   **To do:** after a few consecutive timeouts, skip the lookup for a while (fall back to the record by source) and log
+   it once.
+2. **No sender check.** Answers are read with `recv`, so the code doesn't check who sent them. **To do:** read with
+   `recvfrom` and accept only messages from the kernel (`nl_pid` 0), a cheap safeguard.
+3. **Fragile logging check.** `FlowTable.TryGetOriginal` decides what to log by comparing the `how` text
+   (`"conntrack"`, `"by source"`) from `FlowRecords.TryTake`. **To do:** return a small enum with the text kept only
+   for the log line.
+
+**Fixed when:** with conntrack made unavailable mid-capture (for example by a test double that never answers), new
+connections are not delayed beyond the first few; replies not from the kernel are ignored (unit test); the logging
+decision uses the enum.

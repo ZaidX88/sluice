@@ -76,3 +76,6 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   contributor): flow records keyed by source and destination, found through conntrack.
 - Contributors in any area (2026-11-19): the area comes from the claimed issue; one issue at a time; Core on `help wanted`
   only; the "Area" check (`.github/workflows/area-check.yml`) fails a pull request that spans areas; `.github/CODEOWNERS`.
+- Coordination and syncing rules (2026-11-19): every split parent has a Coordination section the sub-issues follow;
+  work starts from the latest `main` and is updated onto it before each push. Review follow-ups of PR #75 recorded as
+  docs/linux/FIXES.md §3.

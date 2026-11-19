@@ -56,7 +56,7 @@ public sealed class ProxifierPasswordCodec : IPasswordCodec
         switch (_mode)
         {
             case PasswordEncryptionMode.CurrentUser:
-                var blob = Dpapi.Protect(text, "P");
+                var blob = Secrets.Protect(text, "P");
                 data = new byte[2 + blob.Length];
                 data[1] = 1;
                 blob.CopyTo(data, 2);
@@ -95,7 +95,7 @@ public sealed class ProxifierPasswordCodec : IPasswordCodec
         switch (data[1])
         {
             case 1:
-                return FromUtf16Z(Dpapi.Unprotect(data[2..]));
+                return FromUtf16Z(Secrets.Unprotect(data[2..]));
 
             case 0:
             case 2:
@@ -171,5 +171,18 @@ public sealed class ProxifierPasswordCodec : IPasswordCodec
             }
         }
         return output.ToArray();
+    }
+
+    /// <summary>
+    /// The account protection for "account" mode: the platform's <see cref="ISecretProtector"/> when it has one
+    /// (docs/architecture/platforms.md §6.3), otherwise the DPAPI code still in Core until #55 moves it.
+    /// </summary>
+    private static class Secrets
+    {
+        public static byte[] Protect(byte[] data, string? description) =>
+            Platform.PlatformServices.Current.SecretProtector is { } p ? p.Protect(data, description) : Dpapi.Protect(data, description);
+
+        public static byte[] Unprotect(byte[] data) =>
+            Platform.PlatformServices.Current.SecretProtector is { } p ? p.Unprotect(data) : Dpapi.Unprotect(data);
     }
 }

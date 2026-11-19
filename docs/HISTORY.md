@@ -109,3 +109,6 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
 - Platform interfaces for the Core split fixed (2026-11-19, #52): `PlatformServices.Use/Current`, `IPlatformServices`
   `ProcessLookup`, `TieChildProcess`, `FlushDnsCache`, `SecretProtector`; `ISecretProtector`; `UdpFlows` with
   `AppDatagram` / `IDatagramSender` (docs/architecture/platforms.md §6).
+- Core side of the platform interfaces (2026-11-19, #104): `PlatformServices`, the new `IPlatformServices` members and
+  `ISecretProtector` in Core, called by the desktop app, the CLI, `SingBoxSession` and the `.ppx` password codec; no
+  behaviour change until the platform parts (#54–#57) fill them in.

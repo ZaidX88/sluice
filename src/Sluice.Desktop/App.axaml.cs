@@ -25,6 +25,7 @@ public partial class App : Application
 
     public override async void OnFrameworkInitializationCompleted()
     {
+        Sluice.Core.Platform.PlatformServices.Use(OsPlatform.Current);   // first: Core reaches the OS module through it (#104)
         if (ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime desktop)
         {
             base.OnFrameworkInitializationCompleted();

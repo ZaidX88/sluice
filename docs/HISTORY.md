@@ -87,3 +87,5 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   new connection (2026-11-19, issue #82, contributor): 60 connections at once are decided in ~10 ms instead of ~200 ms.
 - Linux refuses IPv6 through a marked route (2026-11-19, #30): new IPv6 SYNs for a tunnel or chain that
   `RoutingEngine.Ipv6Fallback` marked get a TCP reset from the nft chain `refuse`, so apps fall back to IPv4 at once.
+- Log retention (2026-11-19, #39): `FileLog` keeps the last 7 days of `Sluice-yyyy-MM-dd.log` files (`RetainDays`;
+  0 keeps everything), so the desktop app can turn the file log on by default (#40).

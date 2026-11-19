@@ -104,7 +104,8 @@ it would reset every connection through it.
      ruleset), and the script must have LF line endings (a CRLF checkout once broke capture on a real PC).
 2. `NfQueue` is a hand-written netlink NFQUEUE client (no libnetfilter_queue), on raw `AF_NETLINK` sockets via
    `Native/Libc.cs`; fail-open, verdicts with an optional mark.
-3. `LinuxCapture.OnPacket`: TCP → owning PID from `/proc` (`LinuxProcessLookup`) → `RoutingEngine.Classify` → mark and
+3. `LinuxCapture.OnPacket`: TCP → owning PID (`LinuxProcessLookup`: the socket from sock_diag, its process from a cache
+   or `/proc/<pid>/fd`) → `RoutingEngine.Classify` → mark and
    remember the original destination by the app's endpoint and the destination (`FlowRecords`); the relay finds it through
    conntrack (`Conntrack`, by the reply tuple), which also covers a source port renumbered after a clash. UDP → drop or
    pass, cached 30 s.

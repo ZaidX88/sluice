@@ -14,8 +14,13 @@ is worth keeping.
   the chain; ESP, later fragments and Routing headers with segments left still pass uncaptured.
 - With no non-loopback upstream DNS (e.g. dnsmasq without systemd-resolved), DNS isn't captured (a log line says so).
   TPROXY for UDP would solve it (the original destination comes with each datagram).
-- `LinuxProcessLookup` scans `/proc/*/fd` on a miss. Fast in tests (20 parallel connections in ~0.15 s); on machines
-  with tens of thousands of fds consider `NETLINK_SOCK_DIAG` + a background inode→pid cache.
+- ~~Finding a connection's owner reads all of `/proc/net/tcp` for every new connection~~ **fixed** (issue #82): each
+  new connection cost ~4.4 ms on the packet thread (60 at once: the last waited ~267 ms). `LinuxProcessLookup` now asks
+  the kernel's socket diagnostics (`Native/SockDiag.cs`, `NETLINK_SOCK_DIAG`) for the socket's inode and uid (~0.01 ms;
+  UDP by local port), falls back to `/proc/net` if that isn't available (logged once), and maps the inode to a process
+  from a lock-free cache or by scanning the socket owner's newest processes first (`getdents64` + `readlinkat`).
+  Measured live: 60 connects at once spread 7–12 ms (was 116–214 ms). Still open: a miss scans `/proc/PID/fd`
+  (~0.8 ms for a program holding ~250 sockets); #83 moves decisions off the packet thread.
 - Running the GUI as root breaks notifications (no session bus) and Wayland may refuse it. The installer's `setcap`
   avoids that; long-term a privileged service (see [core FEATURES #5](../core/FEATURES.md)).
 

@@ -83,5 +83,7 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   can't reach IPv6 destinations (2 IPv6 addresses failing before they opened, while IPv4 works through it) for
   10 minutes; the Linux (#30) and Windows (#31) captures will refuse IPv6 through it. `ProxyException` keeps the
   SOCKS5 reply code.
+- Linux capture: a connection's owner from the kernel's socket diagnostics instead of parsing `/proc/net/tcp` for each
+  new connection (2026-11-19, issue #82, contributor): 60 connections at once are decided in ~10 ms instead of ~200 ms.
 - Linux refuses IPv6 through a marked route (2026-11-19, #30): new IPv6 SYNs for a tunnel or chain that
   `RoutingEngine.Ipv6Fallback` marked get a TCP reset from the nft chain `refuse`, so apps fall back to IPv4 at once.

@@ -21,6 +21,9 @@ interface it hands out). Still in Core:
 Then make `Sluice.Cli` multi-target like the desktop app and take its capture from the platform module instead of the
 `OperatingSystem.IsLinux()` branch in `Program.cs`.
 
+The interfaces every part uses (`PlatformServices`, the new `IPlatformServices` members, `ISecretProtector`,
+`UdpFlows` / `IDatagramSender`) are fixed in [architecture/platforms.md §6](architecture/platforms.md#6-interfaces-for-the-core-split-decided-in-52).
+
 **Done when:** Core has no `DllImport` of Windows libraries, both targets build, all tests pass.
 
 ## 2. UDP through tunnels on Linux

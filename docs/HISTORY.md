@@ -108,3 +108,6 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   `sluice.desktop`, `README.txt`) and `scripts/package-linux.sh`, unchanged from `release/linux`.
 - Ambient capability lowered after `nft` (2026-11-19, issue #99, contributor): `NftRules` no longer leaves
   `CAP_NET_ADMIN` raised on the thread that started capture, which broke GTK's file dialog (part of #9).
+- Platform interfaces for the Core split fixed (2026-11-19, #52): `PlatformServices.Use/Current`, `IPlatformServices`
+  `ProcessLookup`, `TieChildProcess`, `FlushDnsCache`, `SecretProtector`; `ISecretProtector`; `UdpFlows` with
+  `AppDatagram` / `IDatagramSender` (docs/architecture/platforms.md §6).

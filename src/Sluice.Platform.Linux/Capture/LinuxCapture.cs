@@ -32,7 +32,9 @@ public sealed class LinuxCapture : ITrafficCapture
     private readonly RoutingEngine _engine;
     private readonly IProcessLookup _lookup;
     private readonly FakeIpPool _fakeIps = new();
-    private readonly ConcurrentDictionary<IPEndPoint, (OriginalDestination Dest, DateTime At)> _flows = new();
+    private readonly FlowRecords _flows = new();
+    private Conntrack? _conntrack;
+    private bool _conntrackWarned;
     private readonly ConcurrentDictionary<(IPEndPoint, IPEndPoint), (bool Drop, DateTime At)> _udpVerdicts = new();
     private readonly CancellationTokenSource _cts = new();
     private DnsResolver? _resolver;
@@ -132,6 +134,11 @@ public sealed class LinuxCapture : ITrafficCapture
             _engine.Tracker.Write(LogLevel.Error,
                 "No upstream DNS server found (/run/systemd/resolve/resolv.conf, /etc/resolv.conf): DNS is not captured, so host rules only match connections by address.");
         }
+
+        // The relay finds each connection's original addresses in conntrack (issue #38); without it, by source only.
+        _conntrack = Conntrack.TryOpen(out var conntrackProblem);
+        if (_conntrack is null)
+            _engine.Tracker.Write(LogLevel.Normal, $"Connection tracking lookup unavailable ({conntrackProblem}): connections are matched by source address only");
 
         // Loopback only (127.0.0.1 and ::1, one port): nftables redirects local connections there, nothing else needs it.
         _relay = LoopbackRelay.Bind(_engine, new FlowTable(this));
@@ -247,7 +254,7 @@ public sealed class LinuxCapture : ITrafficCapture
             {
                 // A placeholder from before Sluice restarted (an app's own DNS cache): the relay resets it at once
                 // (RoutingEngine.HandleAsync), so the app looks the name up again.
-                _flows[Norm(local)] = (new OriginalDestination(remote, pid), DateTime.UtcNow);
+                _flows.Add(local, remote, new OriginalDestination(remote, pid), DateTime.UtcNow);
                 Interlocked.Increment(ref _redirected);
                 return true;
             }
@@ -264,7 +271,7 @@ public sealed class LinuxCapture : ITrafficCapture
             _engine.Tracker.Write(LogLevel.Verbose, $"{Path.GetFileName(path) ?? "?"} ({pid}) - {remote} direct (rule {match.Rule.Name}, not intercepted)");
             return Pass();
         }
-        _flows[Norm(local)] = (new OriginalDestination(remote, pid, fake ? hostname : null), DateTime.UtcNow);
+        _flows.Add(local, remote, new OriginalDestination(remote, pid, fake ? hostname : null), DateTime.UtcNow);
         Interlocked.Increment(ref _redirected);
         return true;
     }
@@ -313,19 +320,40 @@ public sealed class LinuxCapture : ITrafficCapture
 
     private static IPEndPoint Norm(IPEndPoint ep) => IRedirectTable.Normalize(ep);
 
-    /// <summary>Original destination of a redirected connection, by the app's endpoint (REDIRECT keeps the source).</summary>
+    /// <summary>
+    /// Original destination of a redirected connection. The relay only knows the client endpoint it sees, which
+    /// conntrack may have renumbered; the original tuple from conntrack (found by the reply tuple relay → client)
+    /// gives the app's own source and the real destination (<see cref="FlowRecords"/>, issue #38).
+    /// </summary>
     private sealed class FlowTable(LinuxCapture owner) : IRedirectTable
     {
         public bool TryGetOriginal(IPEndPoint clientEndPoint, out OriginalDestination original)
         {
-            if (owner._flows.TryRemove(Norm(clientEndPoint), out var f))
-            {
-                original = f.Dest;
-                return true;
-            }
-            original = null!;
-            return false;
+            var found = owner._flows.TryTake(clientEndPoint, owner._conntrack is null ? null : owner.LookUpOriginal, out original, out var how);
+            if (how != "conntrack" && how != "by source")
+                owner._engine.Tracker.Write(found ? LogLevel.Verbose : LogLevel.Debug, $"Redirect record for {clientEndPoint}: {how}");
+            return found;
         }
+    }
+
+    /// <summary>The original tuple of the connection the relay accepted from <paramref name="client"/>, via conntrack.</summary>
+    private bool LookUpOriginal(IPEndPoint client, out IPEndPoint source, out IPEndPoint destination)
+    {
+        source = destination = null!;
+        if (_conntrack is not { } ct || _relay is not { } relay) return false;
+        var relayAddress = client.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6 ? IPAddress.IPv6Loopback : IPAddress.Loopback;
+        if (ct.TryGetOriginal(new Conntrack.Tuple(new IPEndPoint(relayAddress, relay.Port), client), out var orig, out var errno))
+        {
+            source = orig.Source;
+            destination = orig.Destination;
+            return true;
+        }
+        if (errno != Conntrack.ENOENT && !_conntrackWarned)
+        {
+            _conntrackWarned = true;
+            _engine.Tracker.Write(LogLevel.Normal, $"Connection tracking lookup failed ({Libc.Error(errno)}): matching connections by source address only");
+        }
+        return false;
     }
 
     private async Task SweepLoop()
@@ -337,8 +365,7 @@ public sealed class LinuxCapture : ITrafficCapture
             {
                 SaveFakeIps();
                 var now = DateTime.UtcNow;
-                foreach (var (k, v) in _flows)
-                    if (now - v.At > TimeSpan.FromMinutes(1)) _flows.TryRemove(k, out _);
+                _flows.Sweep(now, TimeSpan.FromMinutes(1));
                 foreach (var (k, v) in _udpVerdicts)
                     if (now - v.At > UdpVerdictTime) _udpVerdicts.TryRemove(k, out _);
                 _engine.Tracker.Write(LogLevel.Debug,
@@ -387,6 +414,8 @@ public sealed class LinuxCapture : ITrafficCapture
         _thread?.Join(2000);
         _queue?.Dispose();
         _queue = null;
+        _conntrack?.Dispose();
+        _conntrack = null;
         if (_previousGid is { } g) Libc.setresgid(g.Real, g.Effective, Libc.Unchanged);
         _previousGid = null;
     }

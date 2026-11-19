@@ -62,11 +62,13 @@ public sealed class MainViewModel : ObservableObject
             else ShowInfo("Sluice is now allowed in Windows Firewall. Reload the page in your browser.");
         });
 
-        OpenCommand = new RelayCommand(Open);
-        SaveCommand = new RelayCommand(Save);
-        SaveAsCommand = new RelayCommand(SaveAs);
-        ExportProxifierCommand = new RelayCommand(ExportProxifier);
-        NewCommand = new RelayCommand(New);
+        // The profile menu's items open file pickers and other dialogs that wait until they close. Run them after the
+        // click has been handled, so the menu closes first instead of staying on top of the dialog.
+        OpenCommand = new RelayCommand(AfterMenuCloses(Open));
+        SaveCommand = new RelayCommand(AfterMenuCloses(Save));
+        SaveAsCommand = new RelayCommand(AfterMenuCloses(SaveAs));
+        ExportProxifierCommand = new RelayCommand(AfterMenuCloses(ExportProxifier));
+        NewCommand = new RelayCommand(AfterMenuCloses(New));
         DismissBannerCommand = new RelayCommand(() => Banner = null);
         RestartElevatedCommand = new RelayCommand(() =>
         {
@@ -280,6 +282,9 @@ public sealed class MainViewModel : ObservableObject
     }
 
     // ----- profile commands -----
+
+    private static Action AfterMenuCloses(Action action) =>
+        () => Dispatcher.UIThread.Post(action, DispatcherPriority.Background);
 
     private void Open()
     {

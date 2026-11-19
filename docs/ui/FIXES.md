@@ -34,3 +34,22 @@ a new install writes no log. After a problem there is nothing to attach to a rep
 at Verbose, so check the daily size first), or always keep the last few thousand lines in a rolling file.
 
 **Fixed when:** a fresh install has a log of the last session to attach to a report.
+
+## 4. File dialogs with capture rights on Linux — high (UI part fixed)
+
+**Seen** ([issue #9](https://github.com/ZaidX88/sluice/issues/9)): with the `setcap` capabilities `install.sh` gives
+the app, Open profile, Save as, Export for Proxifier and Load key showed no dialog: the xdg-desktop-portal file chooser
+refuses a process it can't inspect ("Unable to open /proc/<pid>/root"; a process with file capabilities isn't
+dumpable). On Ubuntu 26.04 the failure ends the whole app (#24 catches such errors).
+
+**UI part fixed** ([issue #25](https://github.com/ZaidX88/sluice/issues/25)): with capture rights on Linux,
+`Program.BuildAvaloniaApp` sets `X11PlatformOptions { UseDBusFilePicker = false }`, so Avalonia's in-process GTK file
+dialog is used; without capture rights, and on Windows, nothing changes. The dialog follows the system theme, not the
+app's. The profile menu's items now run after the menu has closed, so it no longer stays on top of the dialog.
+
+**Still open, Linux:** GTK 3 refuses to start while capture's group IDs differ (real and effective 377294, saved the
+user's: "running setuid or setgid", #28), and the ambient `CAP_NET_ADMIN` that `NftRules` raises for `nft` stays on
+that thread, so GTK's sandboxed image loader (`bwrap`) exits ("Unexpected capabilities but not setuid") and GTK aborts.
+Until both are fixed, the dialogs work only in a run where capture hasn't started.
+
+**Fixed when:** with the app installed by `install.sh` and capture on, the four dialogs open and work.

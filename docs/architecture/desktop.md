@@ -19,6 +19,7 @@ Program.cs ──▶ App (App.axaml.cs)
 
 | Folder / file | Holds |
 |---|---|
+| `Program.cs` | Avalonia set-up; on Linux with capture rights, the in-process file dialog instead of the portal ([ui/FIXES §4](../ui/FIXES.md)) |
 | `App.axaml(.cs)` | Start-up and shutdown, command-line options, single instance, clipboard and folder helpers |
 | `MainWindow.axaml(.cs)` | The shell: sidebar navigation, top bar (capture button, search, rates sparkline), banner, current page; closing hides to the tray when `MinimizeToTray` is on |
 | `Services/EngineHost.cs` | The bridge between UI and engine (below) |

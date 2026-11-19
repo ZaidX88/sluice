@@ -502,3 +502,6 @@ release-linux/
 
 # Contributors: profiles, share links and logs of real tunnels (never commit these)
 local/
+
+# Build output used by the docs (dotnet build -o out/…, dotnet publish -o out/app); issue #6
+out/

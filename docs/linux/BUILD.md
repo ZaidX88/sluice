@@ -1,6 +1,6 @@
 # Linux: building, packaging and testing
 
-For installing a release, see [INSTALL.md](INSTALL.md). Shared build and test notes: [../FEATURES.md](../FEATURES.md).
+For installing a release, see [INSTALL.md](INSTALL.md). Shared build and test notes: [../CONTRIBUTING.md](../CONTRIBUTING.md#building-and-testing).
 
 ## Build and run from source
 
@@ -8,15 +8,14 @@ Needs the .NET 10 SDK and the libraries the UI uses (X11, ICE, SM, fontconfig: p
 build downloads the Linux sing-box into `.deps/`.
 
 ```bash
-dotnet build src/Sluice.Desktop -f net10.0 -p:EnableWindowsTargeting=true
-dotnet run --project src/Sluice.Desktop -f net10.0 -p:EnableWindowsTargeting=true
-dotnet run --project src/Sluice.Cli -p:EnableWindowsTargeting=true -- --help
+dotnet build src/Sluice.Desktop -f net10.0
+dotnet run --project src/Sluice.Desktop -f net10.0
+dotnet run --project src/Sluice.Cli -- --help
 ```
 
-`-p:EnableWindowsTargeting=true` is needed on Linux for now: restore also restores the Windows target of
-`Sluice.Desktop` ([FIXES §13](../FIXES.md#13-building-on-linux-needs-enablewindowstargeting--high-for-contributors),
-issue #1). Add it to `dotnet build` and `dotnet test` too. Build output under `out/` is not ignored by git yet
-(issue #6): don't commit it.
+These work as written on Linux: `Directory.Build.props` sets `EnableWindowsTargeting`, because restore also restores
+the Windows target of `Sluice.Desktop` ([core FIXES §7](../core/FIXES.md#7-building-on-linux-needed-enablewindowstargeting--fixed)).
+Build output under `out/` is ignored by git.
 
 Capture needs root, or the capabilities the installer grants (see below). For a quick test: `sudo dotnet <path>/Sluice.Cli.dll <profile> --intercept`.
 
@@ -58,7 +57,7 @@ Package layout and installer: `packaging/linux/` (`install.sh`, `uninstall.sh`, 
 
 ## Testing on Linux
 
-- **Tests:** `dotnet test Sluice.Linux.slnf` runs the shared and the Linux tests (no `EnableWindowsTargeting` needed).
+- **Tests:** `dotnet test Sluice.Linux.slnf` runs the shared and the Linux tests.
   `Socket_owner_is_found_through_proc` runs only on Linux. One shared relay test fails on Linux for now (issue #3).
   New Linux tests go in `tests/Sluice.Tests.Linux` ([CONTRIBUTING.md → Tests](../CONTRIBUTING.md#tests)).
 - **Capture live test** (root; WSL works):

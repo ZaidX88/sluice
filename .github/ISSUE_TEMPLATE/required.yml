@@ -1,0 +1,37 @@
+name: Required work
+description: Work that must be done (an item of docs/REQUIRED.md)
+title: "[Area] "
+labels: [triage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For items of `docs/REQUIRED.md`: link the section and say which part this issue covers. Title starts with the
+        area: `[Linux]`, `[Windows]`, `[UI]` or `[Core]`.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options: [Linux, Windows, UI, Core, Several (parent issue)]
+    validations:
+      required: true
+  - type: input
+    id: item
+    attributes:
+      label: REQUIRED.md section
+      placeholder: "REQUIRED §2: UDP through tunnels on Linux"
+    validations:
+      required: true
+  - type: textarea
+    id: todo
+    attributes:
+      label: To do
+      description: The part this issue covers, and what it waits for (mark it on GitHub too, Relationships → Blocked by).
+    validations:
+      required: true
+  - type: textarea
+    id: done
+    attributes:
+      label: Done when
+    validations:
+      required: true

@@ -50,7 +50,7 @@ Real capture is tested outside xUnit: `scripts/linux/capture-livetest.sh` (runs 
 a profile from `scripts/linux/make-test-profile.cs` and `scripts/linux/test-socks5.py` as a stand-in tunnel, then checks
 that curl is tunneled, wget blocked, DNS faked and the nft table gone after stop), and by hand on Windows
 (`Sluice.Cli --intercept`). Tests that misbehave on a developer machine (a running capture, timing under load)
-are listed in [FIXES.md §7](../FIXES.md#7-tests-that-depend-on-the-developer-machine).
+are listed in [core/FIXES.md §2](../core/FIXES.md#2-tests-that-depend-on-the-developer-machine).
 
 ## Build-time dependencies: `build/Dependencies.targets`
 

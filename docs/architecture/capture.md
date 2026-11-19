@@ -25,7 +25,7 @@ They follow the same model:
 | Packet source | WinDivert driver (`WinDivertNative`): a socket-layer sniff handle (PIDs) and a network-layer handle (packets) | nftables table `inet sluice` (`NftRules`) queueing first SYNs to NFQUEUE 1473, read by `NfQueue` (raw netlink, `Native/Libc.cs`) |
 | PID | WinDivert socket events (`processId`; waits up to 3 ms for the event), else iphlpapi (`ProcessLookup`) | `/proc` (`LinuxProcessLookup`) |
 | Steering to the relay | **Reflection**: `PacketReflector` rewrites the packets of a redirected flow and reinjects them inbound, in both directions, for the whole connection | **Mark + REDIRECT**: the verdict sets mark `0x5C1CE`; nftables' nat chain redirects marked SYNs to the relay port; the kernel does the rest |
-| Original destination | `PacketReflector` flow table, keyed by (remote address, app port) | `LinuxCapture.FlowTable`, keyed by the app's endpoint (REDIRECT keeps the source) |
+| Original destination | `PacketReflector` flow table, keyed by (remote address, app port) | `LinuxCapture.FlowTable` over `FlowRecords`, keyed by (app endpoint, original destination); the relay looks the connection up in conntrack (`Conntrack`) by the reply tuple, so a source port renumbered after a clash still finds its record |
 | DNS | `DnsRedirector.TryAnswer` on captured UDP/53 packets; an answer is injected, the query dropped. Unfaked queries pass | nftables redirects UDP/53 to `LinuxDnsServer` (127.0.0.1:P and [::1]:P); unfaked queries are forwarded to the real upstreams (`UpstreamServers`, skipping loopback stubs) |
 | UDP | `UdpNat`: tunneled through SOCKS5 UDP associations | pass or drop only (tunneling planned, [REQUIRED.md §2](../REQUIRED.md#2-udp-through-tunnels-on-linux)) |
 | Self-exclusion | filters skip Sluice's PID; helpers by PID in `Classify` | Sluice switches to a private group (`SluiceGroup.Pick`, `setresgid`) inherited by helpers; nftables skips `meta skgid` |
@@ -60,7 +60,7 @@ They follow the same model:
 - **Timing counters** (`LatencyStats`): queue wait (WinDivert's capture timestamp to Sluice reading the packet),
   handling time per packet, decision time per new connection, and whether the owner came from the socket event or the
   TCP table. Logged every 5 s at Verbose and once as a summary when capture stops. Measurements and what limits speed:
-  [FIXES.md §8](../FIXES.md#8-windows-capture-seemed-slower-than-the-socks-listener--fixed).
+  [windows/FIXES.md §3](../windows/FIXES.md#3-windows-capture-seemed-slower-than-the-socks-listener--fixed).
 - Log strings for each connection are built only when the log level shows them.
 
 - `Decide` never redirects Sluice's own PID or DNS over TCP to a real server; always redirects fake IPs; skips
@@ -93,4 +93,5 @@ They follow the same model:
 - `RelayUnreachable` is never raised: no firewall stands between a local REDIRECT and a loopback relay.
 - The nft script is normalised to LF line endings (a CRLF checkout once broke capture), and chain names avoid nft
   keywords.
-- Known limits (IPv6 extension headers, `/proc` scan cost, relay bound to `[::]`, root GUIs): [FIXES.md §6](../FIXES.md#6-linux-capture-limitations).
+- Known limits (UDP of tunneled apps, DNS without a non-loopback upstream, `/proc` scan cost, root GUIs):
+  [linux/FIXES.md §1](../linux/FIXES.md#1-linux-capture-limitations).

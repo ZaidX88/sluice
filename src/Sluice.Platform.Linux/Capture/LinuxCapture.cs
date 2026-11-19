@@ -33,7 +33,9 @@ public sealed class LinuxCapture : ITrafficCapture
     private readonly RoutingEngine _engine;
     private readonly IProcessLookup _lookup;
     private readonly FakeIpPool _fakeIps = new();
-    private readonly ConcurrentDictionary<IPEndPoint, (OriginalDestination Dest, DateTime At)> _flows = new();
+    private readonly FlowRecords _flows = new();
+    private Conntrack? _conntrack;
+    private bool _conntrackWarned;
     private readonly ConcurrentDictionary<(IPEndPoint, IPEndPoint), (bool Drop, DateTime At)> _udpVerdicts = new();
     private readonly CancellationTokenSource _cts = new();
     private readonly Ipv6Fallback _ipv6 = new();
@@ -47,6 +49,7 @@ public sealed class LinuxCapture : ITrafficCapture
     private bool _rulesApplied, _udpTunnelWarned;
     private readonly DnsPolicyCache _policies;
     private Task? _policyWatch;
+    private PosixSignalRegistration[]? _exitSignals;
     private long _redirected, _passed, _udpDropped, _refused;
 
     public LinuxCapture(RoutingEngine engine, IProcessLookup lookup)
@@ -134,6 +137,11 @@ public sealed class LinuxCapture : ITrafficCapture
                 "No upstream DNS server found (/run/systemd/resolve/resolv.conf, /etc/resolv.conf): DNS is not captured, so host rules only match connections by address.");
         }
 
+        // The relay finds each connection's original addresses in conntrack (issue #38); without it, by source only.
+        _conntrack = Conntrack.TryOpen(out var conntrackProblem);
+        if (_conntrack is null)
+            _engine.Tracker.Write(LogLevel.Normal, $"Connection tracking lookup unavailable ({conntrackProblem}): connections are matched by source address only");
+
         // Loopback only (127.0.0.1 and ::1, one port): nftables redirects local connections there, nothing else needs it.
         _relay = LoopbackRelay.Bind(_engine, new FlowTable(this));
         _relay.Start();
@@ -142,6 +150,8 @@ public sealed class LinuxCapture : ITrafficCapture
         UdpMode = _engine.Profile.Options.Udp;
         NftRules.Apply(new NftRules.Settings(QueueNumber, RedirectMark, gid, _relay.Port, dnsPort, QueueUdp: UdpMode != UdpMode.Bypass, RejectMark));
         _rulesApplied = true;
+        _exitSignals = [.. new[] { PosixSignal.SIGTERM, PosixSignal.SIGINT, PosixSignal.SIGHUP }
+            .Select(s => PosixSignalRegistration.Create(s, OnExitSignal))];
         _engine.Tracker.Closed += OnConnectionClosed;
 
         _thread = new Thread(QueueLoop) { IsBackground = true, Name = "Sluice NFQUEUE" };
@@ -250,7 +260,7 @@ public sealed class LinuxCapture : ITrafficCapture
             {
                 // A placeholder from before Sluice restarted (an app's own DNS cache): the relay resets it at once
                 // (RoutingEngine.HandleAsync), so the app looks the name up again.
-                _flows[Norm(local)] = (new OriginalDestination(remote, pid), DateTime.UtcNow);
+                _flows.Add(local, remote, new OriginalDestination(remote, pid), DateTime.UtcNow);
                 Interlocked.Increment(ref _redirected);
                 return RedirectMark;
             }
@@ -275,7 +285,7 @@ public sealed class LinuxCapture : ITrafficCapture
             Interlocked.Increment(ref _refused);
             return RejectMark;
         }
-        _flows[Norm(local)] = (new OriginalDestination(remote, pid, fake ? hostname : null), DateTime.UtcNow);
+        _flows.Add(local, remote, new OriginalDestination(remote, pid, fake ? hostname : null), DateTime.UtcNow);
         Interlocked.Increment(ref _redirected);
         return RedirectMark;
     }
@@ -333,19 +343,40 @@ public sealed class LinuxCapture : ITrafficCapture
 
     private static IPEndPoint Norm(IPEndPoint ep) => IRedirectTable.Normalize(ep);
 
-    /// <summary>Original destination of a redirected connection, by the app's endpoint (REDIRECT keeps the source).</summary>
+    /// <summary>
+    /// Original destination of a redirected connection. The relay only knows the client endpoint it sees, which
+    /// conntrack may have renumbered; the original tuple from conntrack (found by the reply tuple relay → client)
+    /// gives the app's own source and the real destination (<see cref="FlowRecords"/>, issue #38).
+    /// </summary>
     private sealed class FlowTable(LinuxCapture owner) : IRedirectTable
     {
         public bool TryGetOriginal(IPEndPoint clientEndPoint, out OriginalDestination original)
         {
-            if (owner._flows.TryRemove(Norm(clientEndPoint), out var f))
-            {
-                original = f.Dest;
-                return true;
-            }
-            original = null!;
-            return false;
+            var found = owner._flows.TryTake(clientEndPoint, owner._conntrack is null ? null : owner.LookUpOriginal, out original, out var how);
+            if (how != "conntrack" && how != "by source")
+                owner._engine.Tracker.Write(found ? LogLevel.Verbose : LogLevel.Debug, $"Redirect record for {clientEndPoint}: {how}");
+            return found;
         }
+    }
+
+    /// <summary>The original tuple of the connection the relay accepted from <paramref name="client"/>, via conntrack.</summary>
+    private bool LookUpOriginal(IPEndPoint client, out IPEndPoint source, out IPEndPoint destination)
+    {
+        source = destination = null!;
+        if (_conntrack is not { } ct || _relay is not { } relay) return false;
+        var relayAddress = client.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6 ? IPAddress.IPv6Loopback : IPAddress.Loopback;
+        if (ct.TryGetOriginal(new Conntrack.Tuple(new IPEndPoint(relayAddress, relay.Port), client), out var orig, out var errno))
+        {
+            source = orig.Source;
+            destination = orig.Destination;
+            return true;
+        }
+        if (errno != Conntrack.ENOENT && !_conntrackWarned)
+        {
+            _conntrackWarned = true;
+            _engine.Tracker.Write(LogLevel.Normal, $"Connection tracking lookup failed ({Libc.Error(errno)}): matching connections by source address only");
+        }
+        return false;
     }
 
     private async Task SweepLoop()
@@ -357,8 +388,7 @@ public sealed class LinuxCapture : ITrafficCapture
             {
                 SaveFakeIps();
                 var now = DateTime.UtcNow;
-                foreach (var (k, v) in _flows)
-                    if (now - v.At > TimeSpan.FromMinutes(1)) _flows.TryRemove(k, out _);
+                _flows.Sweep(now, TimeSpan.FromMinutes(1));
                 foreach (var (k, v) in _udpVerdicts)
                     if (now - v.At > UdpVerdictTime) _udpVerdicts.TryRemove(k, out _);
                 _engine.Tracker.Write(LogLevel.Debug,
@@ -381,16 +411,36 @@ public sealed class LinuxCapture : ITrafficCapture
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException) { /* no systemd-resolved */ }
     }
 
+    /// <summary>
+    /// The app is being stopped by a signal (kill, systemctl, logout, Ctrl+C) while capturing. The nftables table
+    /// outlives the process: left behind, it keeps sending DNS to Sluice's dead DNS port, and name resolution stops
+    /// for every app until someone runs <c>nft delete table inet sluice</c>. Remove it, and drop placeholder answers from
+    /// systemd-resolved's cache. The signal then ends the process as usual (not cancelled).
+    /// </summary>
+    private void OnExitSignal(PosixSignalContext context)
+    {
+        if (!_rulesApplied) return;
+        _engine.Tracker.Write(LogLevel.Normal, $"{context.Signal} received while capturing: removing the nftables rules before exit");
+        NftRules.Remove();
+        _rulesApplied = false;
+        FlushResolverCache();
+    }
+
     private void Cleanup()
     {
         _cts.Cancel();
         _engine.Tracker.Closed -= OnConnectionClosed;
+        if (_exitSignals is not null)
+            foreach (var r in _exitSignals) r.Dispose();
+        _exitSignals = null;
         if (_rulesApplied) NftRules.Remove();     // first: no new packets are queued or redirected
         _rulesApplied = false;
         _queue?.Stop();
         _thread?.Join(2000);
         _queue?.Dispose();
         _queue = null;
+        _conntrack?.Dispose();
+        _conntrack = null;
         if (_previousGid is { } g) Libc.setresgid(g.Real, g.Effective, Libc.Unchanged);
         _previousGid = null;
     }
@@ -434,8 +484,7 @@ internal static class PacketInfo
                 break;
             case 6:
                 if (p.Length < 40) return false;
-                ipLen = 40;
-                proto = p[6];                     // extension headers are not followed (rare on a first packet)
+                if (!SkipIpv6ExtensionHeaders(p, out proto, out ipLen)) return false;
                 src = new IPAddress(p.Slice(8, 16));
                 dst = new IPAddress(p.Slice(24, 16));
                 break;
@@ -447,6 +496,52 @@ internal static class PacketInfo
         var dp = BinaryPrimitives.ReadUInt16BigEndian(p[(ipLen + 2)..]);
         flow = new Flow(proto, new IPEndPoint(src, sp), new IPEndPoint(dst, dp));
         return true;
+    }
+
+    private const int HopByHop = 0, Routing = 43, Fragment = 44, Esp = 50, Ah = 51, NoNextHeader = 59, DestinationOptions = 60,
+        Mobility = 135, Hip = 139, Shim6 = 140, Experimental1 = 253, Experimental2 = 254;
+
+    /// <summary>
+    /// Follows the IPv6 extension headers (RFC 8200 §4) to the upper-layer protocol: its number and where its header starts.
+    /// nftables' <c>meta l4proto</c> looks past them too, so such packets do reach the queue (Hop-by-Hop or Destination
+    /// Options set by an app, a Routing header, AH). False when the upper layer can't be read here: ESP (encrypted),
+    /// "no next header", a fragment other than the first (it carries no TCP/UDP header), a Routing header with segments
+    /// left (the header's destination isn't the real one), or a truncated chain.
+    /// </summary>
+    internal static bool SkipIpv6ExtensionHeaders(ReadOnlySpan<byte> p, out int protocol, out int offset)
+    {
+        protocol = p[6];
+        offset = 40;
+        for (var hops = 0; hops < 16; hops++)       // a real chain is short; this also stops a crafted endless one
+        {
+            switch (protocol)
+            {
+                case HopByHop or Routing or DestinationOptions or Mobility or Hip or Shim6 or Experimental1 or Experimental2:
+                    if (p.Length < offset + 8) return false;
+                    // A Routing header with segments left: the IPv6 destination is only the next hop, the real one is
+                    // inside the header. Redirecting would open the wrong address, so let it pass as before.
+                    if (protocol == Routing && p[offset + 3] != 0) return false;
+                    protocol = p[offset];
+                    offset += (p[offset + 1] + 1) * 8;            // length in 8-octet units, not counting the first 8
+                    break;
+                case Fragment:
+                    if (p.Length < offset + 8) return false;
+                    if ((BinaryPrimitives.ReadUInt16BigEndian(p[(offset + 2)..]) & 0xFFF8) != 0) return false;   // not the first fragment
+                    protocol = p[offset];
+                    offset += 8;
+                    break;
+                case Ah:
+                    if (p.Length < offset + 8) return false;
+                    protocol = p[offset];
+                    offset += (p[offset + 1] + 2) * 4;            // length in 4-octet units, minus 2
+                    break;
+                case Esp or NoNextHeader:
+                    return false;
+                default:
+                    return p.Length >= offset;                    // TCP, UDP or another upper layer: the caller checks which
+            }
+        }
+        return false;
     }
 }
 

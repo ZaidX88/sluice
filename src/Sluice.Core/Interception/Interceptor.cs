@@ -564,7 +564,7 @@ public sealed class Interceptor : ITrafficCapture
                 _udp?.Sweep(TimeSpan.FromSeconds(60));
                 _reflector?.Sweep(TimeSpan.FromMinutes(10));
                 PruneFollowed();
-                _ = CurrentPolicy();   // apply changed DNS settings even when no app is looking names up (FIXES §11)
+                _ = CurrentPolicy();   // apply changed DNS settings even when no app is looking names up (docs/core/FIXES.md §5)
                 CheckRelayReachable();
                 var cutoff = DateTime.UtcNow - TimeSpan.FromMinutes(1);
                 foreach (var (k, v) in _socketPids)

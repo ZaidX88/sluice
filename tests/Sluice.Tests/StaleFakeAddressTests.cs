@@ -9,7 +9,7 @@ using Sluice.Core.Proxy;
 namespace Sluice.Tests;
 
 /// <summary>
-/// Apps cache Sluice's fake DNS answers beyond Sluice's lifetime (docs/FIXES.md, "stale fake addresses"): the pool is
+/// Apps cache Sluice's fake DNS answers beyond Sluice's lifetime (fixed 2026-11-14, docs/HISTORY.md): the pool is
 /// kept between runs, and a fake address Sluice doesn't know fails at once instead of being sent into a tunnel.
 /// </summary>
 public class StaleFakeAddressTests

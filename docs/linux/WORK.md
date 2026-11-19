@@ -1,9 +1,9 @@
 # Linux work
 
-What the **Linux area** needs, for whoever works on it on a real Linux machine (see
-[../CONTRIBUTING.md](../CONTRIBUTING.md) for the workflow and [../../AGENTS.md](../../AGENTS.md) for the rules). Linux
-work changes Linux files only: `src/Sluice.Platform.Linux/`, `scripts/linux/`, `docs/linux/`,
-`tests/Sluice.Tests.Linux/`. Anything else needed goes in an issue for the owner.
+What the **Linux area** needs, for whoever claims a Linux issue and works on it on a real Linux machine (see
+[../CONTRIBUTING.md](../CONTRIBUTING.md) for the workflow and [../../AGENTS.md](../../AGENTS.md) for the rules). A Linux
+issue's pull request changes Linux files only: `src/Sluice.Platform.Linux/`, `scripts/linux/`, `docs/linux/`,
+`tests/Sluice.Tests.Linux/` (plus shared docs). Anything else needed goes in an issue.
 
 ## Where it stands
 
@@ -41,12 +41,21 @@ Take one at a time; each says what "done" means in the linked doc.
 | Item | Where | Notes |
 |---|---|---|
 | Linux versions of the tests moved to the Windows project (issue #18): application rules with Linux paths (`WindowsRuleEngineTests`), UDP routing by app (`WindowsUdpRoutingTests`), loop prevention with a local tunnel host and the own-process rule with the `/proc` lookup (`WindowsEngineTests`) | `tests/Sluice.Tests.Linux` | write them as `Linux…Tests`; they may find real Linux bugs (full-path application rules) |
-| IPv6 extension headers not parsed; such first packets pass uncaptured | FIXES §6 | `PacketInfo.TryParse` |
-| DNS not captured without a non-loopback upstream (dnsmasq without systemd-resolved) | FIXES §6 | test on a distribution without systemd-resolved |
-| `/proc/*/fd` scan cost on busy machines | FIXES §6 | `NETLINK_SOCK_DIAG` + inode cache |
-| Process lookup on the packet thread | [FEATURES](../FEATURES.md) | worker + out-of-order verdicts |
+| DNS not captured without a non-loopback upstream (dnsmasq without systemd-resolved) | [FIXES §1](FIXES.md#1-linux-capture-limitations) | test on a distribution without systemd-resolved |
+| `/proc/*/fd` scan cost on busy machines | [FIXES §1](FIXES.md#1-linux-capture-limitations) | `NETLINK_SOCK_DIAG` + inode cache |
+| Process lookup on the packet thread | [FEATURES](FEATURES.md#performance) | worker + out-of-order verdicts |
 | UDP through tunnels (TPROXY) | [REQUIRED §2](../REQUIRED.md#2-udp-through-tunnels-on-linux) | the design reuses `UdpNat`, which is in Core: **ask the owner** to split its WinDivert part out first; the nft/TPROXY/socket side is Linux work |
 | Installer paths on Ubuntu, Fedora, Arch; ARM64; `.deb` / AppImage | [REQUIRED §5](../REQUIRED.md#5-linux-release-remaining) | packaging lives on the owner's `release/linux` branch; ask for it before starting |
+| sing-box helpers keep running after the app is stopped by a signal (`kill`, logout, Ctrl+C), crashes or gets SIGKILL: only a normal shutdown (`DisposeAsync`) stops them, so each leaves an orphaned `sing-box run` with its SSH session open. Windows avoids this with a kill-on-close job object (`SingBoxSession.Job`, Core) | `LinuxPlatform`, Core `SingBoxSession` | Signals: end Sluice's own `sing-box` children from a Linux signal handler (found via `/proc`: parent = Sluice, executable = the bundled sing-box). Crash/SIGKILL: needs `PR_SET_PDEATHSIG` set in the helper at start, which only Core can do (Linux counterpart of the job object). Done when: after `pkill -TERM`/`-HUP`/`-INT` no `sing-box run` from that Sluice is left; after SIGKILL too, once the Core part lands |
+
+**IPv6 extension headers** (FIXES §1), fixed on 2026-11-18: `PacketInfo.TryParse` read only the IPv6 header's next-header
+field, so a first packet with Hop-by-Hop, Destination Options, Routing, Fragment or AH headers before TCP/UDP passed
+uncaptured (nftables' `meta l4proto` looks past them, so such packets are queued). It now follows the chain
+(`SkipIpv6ExtensionHeaders`); ESP, "no next header", later fragments and broken chains still pass as before.
+**Stopping the app by a signal while capturing** (`kill`, logout, Ctrl+C), fixed on 2026-11-18: the nftables table used to
+stay behind and send DNS to Sluice's dead DNS port, so name resolution stopped for every app until
+`sudo nft delete table inet sluice`. Now SIGTERM, SIGINT and SIGHUP remove the table and flush systemd-resolved's cache
+before the process exits (`LinuxCapture.OnExitSignal`). SIGKILL and crashes still leave it behind.
 
 **IPv6 through a tunnel without IPv6** (FIXES §12, issue #4), Linux part fixed on 2026-11-18: the relay accepts the app's
 connection before the tunnel opens the destination, so an app whose IPv6 attempt "connected" never tried IPv4 and failed

@@ -1,6 +1,6 @@
 # Windows: building and testing
 
-Shared build and test notes: [../FEATURES.md](../FEATURES.md). There is no Windows release package yet
+Shared build and test notes: [../CONTRIBUTING.md](../CONTRIBUTING.md#building-and-testing). There is no Windows release package yet
 ([../REQUIRED.md](../REQUIRED.md#4-windows-release-package)); run Sluice from a build, as below.
 
 ## Build and run
@@ -35,6 +35,6 @@ dotnet run --project src/Sluice.Cli -- check "vless://..."               # test 
 - `dotnet test Sluice.Windows.slnf` runs the shared and the Windows tests, including live tests against local sing-box
   servers. New Windows tests go in `tests/Sluice.Tests.Windows` ([CONTRIBUTING.md → Tests](../CONTRIBUTING.md#tests)).
 - `Sluice.Desktop --screenshot <dir> [--theme dark]` renders every page and dialog off-screen (at 1× scale; see
-  [../FIXES.md](../FIXES.md#5-avalonia-ui-gaps-small)).
+  [../ui/FIXES.md §2](../ui/FIXES.md#2-avalonia-ui-gaps-small)).
 - While your own Sluice capture is running, real-connection tests and NuGet restores go through it: see the pitfalls in
-  [../FEATURES.md](../FEATURES.md#testing).
+  [../CONTRIBUTING.md](../CONTRIBUTING.md#more-test-tools).

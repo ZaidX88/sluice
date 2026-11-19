@@ -36,6 +36,25 @@ creates it) and is fed by every inbound listener and capture.
 - **SSH routes** get a 16 MB elastic download buffer in `Relay` (`SshDownstreamBuffer`), because SSH.NET channels have
   no per-channel flow control.
 
+### IPv6 fallback: `Engine/Ipv6Fallback.cs`
+
+A tunnel whose server has no IPv6 can't open IPv6 destinations, and an app holding a real IPv6 address only falls back
+to IPv4 after each attempt failed through the tunnel ([core FIXES §6](../core/FIXES.md)). `RoutingEngine.Ipv6Fallback`
+remembers such routes:
+
+- **Only Core marks.** `HandleAsync` reports every tunnel or chain connection that opened (`Opened`) and every one
+  that failed before it opened (`FailedBeforeOpen`), keyed by the route text `Describe(action)` gives.
+- **The evidence:** at least 2 different IPv6 addresses failed with a SOCKS5 reply 0x01 (general failure; sing-box
+  and SSH.NET report an SSH "connect failed" this way), 0x03 or 0x04 (`ProxyException.Socks5Reply`) within 60 s;
+  the route opened an IPv4 or hostname connection within those 60 s (so the tunnel itself works); and no IPv6
+  connection through it opened meanwhile (an IPv6 success clears the evidence). "Refused", timeouts, a tunnel that is
+  down and failures after the connection opened never count.
+- **A mark lasts 10 minutes**, is announced once through the `Marked` event, and Core writes the log line ("refusing
+  IPv6 through … for 10 minutes"). `Reload` forgets all marks.
+- **The captures refuse:** for each new flow to an IPv6 address they ask `ShouldRefuse(route)` and, while it is true,
+  reset it at once so the app's Happy Eyeballs moves to IPv4 (Linux: nft `reject with tcp reset`; Windows: a reset to
+  the SYN). IPv4 and hostname targets are never refused.
+
 `InboundRequest(Host, Port, ProcessId, ProcessPath)` is what every listener hands in. `Host` is a hostname when one is
 known (SOCKS5 with a name, or a fake IP mapped back), otherwise the IP as text.
 

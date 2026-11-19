@@ -1,6 +1,7 @@
 using System.Net;
 using Sluice.Core.Engine;
 using Sluice.Platform.Linux.Capture;
+using Ipv6Fallback = Sluice.Platform.Linux.Capture.Ipv6Fallback;   // Core has one too (#29); this file goes with #30
 
 namespace Sluice.Tests;
 

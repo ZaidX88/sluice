@@ -1,7 +1,7 @@
 # Status
 
 Where Sluice stands and how it is put together. For what to do next see [REQUIRED.md](REQUIRED.md) (must-do),
-[FIXES.md](FIXES.md) (known bugs) and [FEATURES.md](FEATURES.md) (ideas, with how to test).
+each area's `FIXES.md` (known bugs) and `FEATURES.md` (ideas), listed in [README.md](README.md).
 
 Last updated: 2026-11-16.
 
@@ -67,7 +67,7 @@ UDP of tunneled apps goes through `UdpNat`.
     `CaptureFilter.MaxFollowed` (150) addresses, or if WinDivert rejects the list, it captures all later TCP packets.
   - So direct apps' traffic and the tunnel helpers' own connections to their servers stay in the kernel. Measured
     (10 MB download): Sluice handled 10,600 packets instead of 13,164 when captured, and 282 instead of 2,376 when the
-    download went through the SOCKS listener ([FIXES.md §8](FIXES.md)).
+    download went through the SOCKS listener ([windows/FIXES.md §3](windows/FIXES.md#3-windows-capture-seemed-slower-than-the-socks-listener--fixed)).
 - Every handled packet still makes one round trip through one user-mode thread (`Interceptor.NetworkLoop`); app↔relay
   packets are MTU-sized because they go through the adapter path. Both are what batching or a WFP driver would improve.
 - **New flows are decided off the packet thread.** `PacketReflector.DeferDecisions` hands a new flow's first SYN back as
@@ -105,7 +105,9 @@ it would reset every connection through it.
 2. `NfQueue` is a hand-written netlink NFQUEUE client (no libnetfilter_queue), on raw `AF_NETLINK` sockets via
    `Native/Libc.cs`; fail-open, verdicts with an optional mark.
 3. `LinuxCapture.OnPacket`: TCP → owning PID from `/proc` (`LinuxProcessLookup`) → `RoutingEngine.Classify` → mark and
-   remember the original destination by the app's endpoint (REDIRECT keeps the source). UDP → drop or pass, cached 30 s.
+   remember the original destination by the app's endpoint and the destination (`FlowRecords`); the relay finds it through
+   conntrack (`Conntrack`, by the reply tuple), which also covers a source port renumbered after a clash. UDP → drop or
+   pass, cached 30 s.
 4. Sluice's own sockets are recognised by group: at start the process calls `setresgid(gid, gid, -1)` (377294 or the next
    free GID); helpers it starts inherit it. Real and effective group must match, or the kernel strips the ambient
    capability that `nft` needs.

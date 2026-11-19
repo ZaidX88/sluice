@@ -1,0 +1,87 @@
+# Unclaim rule (docs/CONTRIBUTING.md → Labels and the board): an assigned open issue with no activity for 14 days is
+# unassigned and goes back to "ready"; after 10 days it gets a reminder.
+#
+# Activity = the assignment itself, a comment by a person (not this workflow), or an update to an open pull request that
+# fixes the issue ("Fixes #N"). Issues assigned to the repository owner are left alone. Runs once a day and by hand.
+name: Unclaim idle issues
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  unclaim:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/scripts
+      - name: Remind or unassign
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PROJECT_TOKEN: ${{ secrets.PROJECT_TOKEN }}
+          REPO: ${{ github.repository }}
+          OWNER: ${{ github.repository_owner }}
+          REMIND_DAYS: "10"
+          UNCLAIM_DAYS: "14"
+        run: |
+          set -euo pipefail
+          marker='<!-- unclaim-reminder -->'
+          now=$(date -u +%s)
+          gh issue list --repo "$REPO" --state open --limit 500 --json number,assignees \
+            --jq '.[] | select(.assignees | length > 0) | .number' |
+          while read -r n; do
+            info=$(gh api graphql -f query='
+              query($o: String!, $r: String!, $n: Int!) {
+                repository(owner: $o, name: $r) {
+                  issue(number: $n) {
+                    id
+                    assignees(first: 10) { nodes { login } }
+                    timelineItems(last: 100, itemTypes: [ISSUE_COMMENT, ASSIGNED_EVENT]) {
+                      nodes {
+                        __typename
+                        ... on IssueComment { createdAt body author { login } }
+                        ... on AssignedEvent { createdAt }
+                      }
+                    }
+                    closedByPullRequestsReferences(first: 10, includeClosedPrs: false) { nodes { updatedAt } }
+                  }
+                }
+              }' -f o="${REPO%/*}" -f r="${REPO#*/}" -F n="$n" --jq '.data.repository.issue')
+
+            assignees=$(jq -r '[.assignees.nodes[].login] | join(",")' <<<"$info")
+            if jq -e --arg o "$OWNER" '[.assignees.nodes[].login] | index($o)' <<<"$info" > /dev/null; then
+              continue   # the owner's own issues
+            fi
+            last=$(jq -r '
+              [ (.timelineItems.nodes[] | select(.__typename == "AssignedEvent") | .createdAt),
+                (.timelineItems.nodes[] | select(.__typename == "IssueComment" and .author.login != "github-actions") | .createdAt),
+                (.closedByPullRequestsReferences.nodes[].updatedAt) ] | max // empty' <<<"$info")
+            [ -n "$last" ] || continue
+            reminded=$(jq -r --arg m "$marker" --arg last "$last" '
+              [ .timelineItems.nodes[] | select(.__typename == "IssueComment" and .author.login == "github-actions"
+                and (.body | contains($m)) and .createdAt > $last) ] | length' <<<"$info")
+            days=$(( (now - $(date -u -d "$last" +%s)) / 86400 ))
+            mentions=$(sed 's/\([^,]*\)/@\1/g; s/,/ /g' <<<"$assignees")
+
+            if [ "$days" -ge "$UNCLAIM_DAYS" ]; then
+              gh issue edit "$n" --repo "$REPO" --remove-assignee "$assignees" --add-label ready > /dev/null
+              gh issue edit "$n" --repo "$REPO" --remove-label "in progress" > /dev/null 2>&1 || true
+              gh issue comment "$n" --repo "$REPO" --body "No activity for $days days, so this issue is unassigned and back to **ready** (the unclaim rule in docs/CONTRIBUTING.md). $mentions, comment here to claim it again." > /dev/null
+              if [ -n "$PROJECT_TOKEN" ]; then
+                GH_TOKEN="$PROJECT_TOKEN" bash .github/scripts/project-status.sh "$(jq -r .id <<<"$info")" Ready || true
+              fi
+              echo "#$n: unassigned ($days days)"
+            elif [ "$days" -ge "$REMIND_DAYS" ] && [ "$reminded" = 0 ]; then
+              gh issue comment "$n" --repo "$REPO" --body "$marker
+          $mentions, no activity here for $days days. In $(( UNCLAIM_DAYS - days )) days this issue will be unassigned and go back to **ready** (the unclaim rule in docs/CONTRIBUTING.md). A comment or a pull request update keeps it yours; say here if you need longer." > /dev/null
+              echo "#$n: reminded ($days days)"
+            else
+              echo "#$n: $days days since activity"
+            fi
+          done

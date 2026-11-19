@@ -41,13 +41,13 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   `docs/architecture/`, read from the code.
 - Windows capture speed (2026-11-17): connection decisions moved off the packet thread to 4 workers, WinDivert queue
   at its maximum, timing counters; the health check no longer restarts a tunnel that is carrying data. Captured
-  traffic now matches the SOCKS listener on the same server (docs/FIXES.md §8, §9).
+  traffic now matches the SOCKS listener on the same server (docs/windows/FIXES.md §3, docs/core/FIXES.md §3).
 - sing-box configs moved out of the temp folder (2026-11-17): emptying the temp folder while Sluice ran made every
   later tunnel start fail ("Could not find a part of the path …"). They now go to a per-user app folder that is
   recreated before each start (`HelperConfigFolder`).
 - Narrowed Windows capture filter (2026-11-17): only packets Sluice may rewrite reach user mode (`CaptureFilter`):
   new SYNs, the relay's packets, the fake-address range, and a reopened "followers" handle for redirected real
-  addresses. Direct traffic and the tunnel helpers' own connections stay in the kernel (docs/FIXES.md §8).
+  addresses. Direct traffic and the tunnel helpers' own connections stay in the kernel (docs/windows/FIXES.md §3).
 - Relay counters (2026-11-17): reads per direction, read size and Sluice's CPU per MB, logged every 5 s at Verbose
   ("Relay (5 s)"), to explain CPU spikes (`RelayStats`).
 
@@ -62,3 +62,24 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
 - Linux capture relay bound to 127.0.0.1 and ::1 instead of every interface (2026-11-18, PR #14, contributor).
 - Tests split by platform (2026-11-18, issue #18): shared tests run on both OSes; `tests/Sluice.Tests.Linux` and
   `tests/Sluice.Tests.Windows` belong to their areas; each area runs `Sluice.Linux.slnf` or `Sluice.Windows.slnf`.
+- Linux builds without extra flags (2026-11-18, issues #1, #6): `Directory.Build.props` sets `EnableWindowsTargeting`;
+  `out/` is ignored by git.
+- Issue dependencies enforced (2026-11-18): the "Blocked issues" check fails a PR while an issue it fixes is blocked by
+  an open issue; a branch rule on `main` requires it.
+- Docs-first workflow (2026-11-18): docs pull request → issue → code pull request for every fix, feature or required
+  item; check an issue for open blockers before starting it (`docs/CONTRIBUTING.md`, `AGENTS.md`).
+- Issue-then-PR workflow and docs by area (2026-11-19): an issue (templates in `.github/ISSUE_TEMPLATE/`), then one pull
+  request with code, tests and docs; `FIXES.md` / `FEATURES.md` split per area (`docs/core|linux|windows|ui/`); every
+  area may update the shared docs for its own changes. New issues are triaged (and split) by the owner, claimed by
+  comment and assigned by the owner before work starts; labels, a project board and a 14-day unclaim rule.
+- Linux capture: connections that share a source port are no longer reset or mixed up (2026-11-19, issue #38,
+  contributor): flow records keyed by source and destination, found through conntrack.
+- Contributors in any area (2026-11-19): the area comes from the claimed issue; one issue at a time; Core on `help wanted`
+  only; the "Area" check (`.github/workflows/area-check.yml`) fails a pull request that spans areas; `.github/CODEOWNERS`.
+- Coordination and syncing rules (2026-11-19): every split parent has a Coordination section the sub-issues follow;
+  work starts from the latest `main` and is updated onto it before each push. Review follow-ups of PR #75 recorded as
+  docs/linux/FIXES.md §3.
+- Shared IPv6 fallback tracker (2026-11-19, #29): `RoutingEngine.Ipv6Fallback` marks a tunnel or chain route that
+  can't reach IPv6 destinations (2 IPv6 addresses failing before they opened, while IPv4 works through it) for
+  10 minutes; the Linux (#30) and Windows (#31) captures will refuse IPv6 through it. `ProxyException` keeps the
+  SOCKS5 reply code.

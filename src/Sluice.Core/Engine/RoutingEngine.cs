@@ -43,6 +43,9 @@ public sealed class RoutingEngine : IAsyncDisposable
     /// <summary>Reads per direction for every relayed connection (logged every 5 s at Verbose with Sluice's CPU time).</summary>
     public RelayStats RelayStats { get; } = new();
 
+    /// <summary>Tunnel and chain routes that can't reach IPv6 destinations; the captures refuse IPv6 through them.</summary>
+    public Ipv6Fallback Ipv6Fallback { get; } = new();
+
     private readonly Timer _relayLog;
 
     public RoutingEngine(Profile profile, ConnectionTracker? tracker = null)
@@ -52,6 +55,8 @@ public sealed class RoutingEngine : IAsyncDisposable
         _state = Build(profile);
         _ = Backends.PruneAsync(profile);   // learn the tunnels (and which are turned off)
         _relayLog = new Timer(_ => LogRelay(), null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
+        Ipv6Fallback.Marked += (route, span) => Tracker.Write(LogLevel.Normal,
+            $"IPv6 destinations fail through {route} while IPv4 works: refusing IPv6 through it for {span.TotalMinutes:F0} minutes, so apps use IPv4");
     }
 
     /// <summary>
@@ -92,6 +97,7 @@ public sealed class RoutingEngine : IAsyncDisposable
     public void Reload(Profile profile)
     {
         _state = Build(profile);
+        Ipv6Fallback.Clear();
         _ = Backends.PruneAsync(profile);
         Tracker.Write(LogLevel.Normal, $"Profile loaded: {profile.Tunnels.Count} tunnels, {profile.Chains.Count} chains, {profile.Rules.Count} rules");
     }
@@ -298,6 +304,8 @@ public sealed class RoutingEngine : IAsyncDisposable
         var via = Describe(match.Action);
         var entry = Tracker.Begin(req.ProcessId, req.ProcessPath, target, match.Rule.Name, via);
         var who = $"{entry.ProcessName} ({req.ProcessId})";
+        var tunneled = match.Action.Type is RuleActionType.Tunnel or RuleActionType.Chain;
+        var opened = false;
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, entry.Cts.Token);
 
         try
@@ -308,6 +316,8 @@ public sealed class RoutingEngine : IAsyncDisposable
             // Hold the route's tunnels for the life of the connection (they are never stopped as idle meanwhile).
             using var leases = LeaseTunnels(state.Profile, match.Action);
             using var upstream = await state.Connector.ConnectAsync(match.Action, match.Rule.Name, req.Host, req.Port, req.ProcessId, linked.Token);
+            opened = true;
+            if (tunneled) Ipv6Fallback.Opened(via, req.Host);
 
             await reply.SuccessAsync(linked.Token);
             entry.State = ConnectionState.Open;
@@ -343,6 +353,7 @@ public sealed class RoutingEngine : IAsyncDisposable
         }
         catch (Exception ex)
         {
+            if (tunneled && !opened) Ipv6Fallback.FailedBeforeOpen(via, req.Host, ex);
             Tracker.Write(LogLevel.Error, $"{who} - {target} error via {via}: {ex.Message}");
             await SafeFail(reply, ex, ct);
             Tracker.End(entry, ConnectionState.Failed, ex.Message);

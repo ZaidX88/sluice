@@ -6,7 +6,7 @@ namespace Sluice.Core.Dns;
 /// The current <see cref="DnsPolicy"/> for a profile, rebuilt whenever the settings it depends on change.
 ///
 /// The desktop app's Settings page edits <see cref="Profile.Options"/> in place and reloads the engine with the same
-/// profile object, so a policy cached by profile reference never noticed a change (FIXES §11, issue #5). This cache
+/// profile object, so a policy cached by profile reference never noticed a change (docs/core/FIXES.md §5, issue #5). This cache
 /// compares the setting values instead. It is cheap enough to ask on every DNS query.
 /// </summary>
 public sealed class DnsPolicyCache(Func<Profile> profile, string? computerName = null)

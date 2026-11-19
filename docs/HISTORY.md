@@ -106,3 +106,6 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   tags `vX.Y.Z`; `release/linux` and `release/windows` are retired. The files move in a follow-up pull request.
 - Linux packaging moved onto `main` (2026-11-19, #93): `packaging/linux/` (`install.sh`, `uninstall.sh`,
   `sluice.desktop`, `README.txt`) and `scripts/package-linux.sh`, unchanged from `release/linux`.
+- Platform interfaces for the Core split fixed (2026-11-19, #52): `PlatformServices.Use/Current`, `IPlatformServices`
+  `ProcessLookup`, `TieChildProcess`, `FlushDnsCache`, `SecretProtector`; `ISecretProtector`; `UdpFlows` with
+  `AppDatagram` / `IDatagramSender` (docs/architecture/platforms.md §6).

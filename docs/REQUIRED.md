@@ -61,7 +61,10 @@ warnings and antivirus complaints about the WinDivert driver.
 
 ## 5. Linux release, remaining
 
-- **ARM64 package** (`-r linux-arm64`; install.sh downloads sing-box linux-arm64).
+- ~~**ARM64 package**~~ **not planned for now** (2026-11-19): there is no plan to release for ARM64 for the time being;
+  v1.0.0 ships for x86-64 only. If it comes back: `-r linux-arm64`, install.sh downloads sing-box linux-arm64, and
+  check every architecture-specific constant in `Native/Libc.cs` (e.g. `O_DIRECTORY` differs on arm64). Issue #66 was
+  closed as not planned.
 - **`.deb` / AppImage** with the same layout (post-install = `install.sh` steps). Not Flatpak/Snap: a sandbox can't use
   nftables.
 - **"Grant capture rights" button** (pkexec + setcap) for people who run the app without the installer.

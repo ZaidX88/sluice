@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net;
+using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using Sluice.Core.Dns;
 using Sluice.Core.Engine;
@@ -27,6 +28,7 @@ public sealed class LinuxCapture : ITrafficCapture
 {
     private const ushort QueueNumber = 0x5C1;     // 1473
     private const uint RedirectMark = 0x5C1CE;
+    private const uint RejectMark = 0x5C1CF;      // refused at once: IPv6 through a route Core marked (RoutingEngine.Ipv6Fallback)
     private static readonly TimeSpan UdpVerdictTime = TimeSpan.FromSeconds(30);
 
     private readonly RoutingEngine _engine;
@@ -48,7 +50,7 @@ public sealed class LinuxCapture : ITrafficCapture
     private readonly DnsPolicyCache _policies;
     private Task? _policyWatch;
     private PosixSignalRegistration[]? _exitSignals;
-    private long _redirected, _passed, _udpDropped;
+    private long _redirected, _passed, _udpDropped, _refused;
 
     public LinuxCapture(RoutingEngine engine, IProcessLookup lookup)
     {
@@ -146,7 +148,7 @@ public sealed class LinuxCapture : ITrafficCapture
 
         _queue = NfQueue.Open(QueueNumber);
         UdpMode = _engine.Profile.Options.Udp;
-        NftRules.Apply(new NftRules.Settings(QueueNumber, RedirectMark, gid, _relay.Port, dnsPort, QueueUdp: UdpMode != UdpMode.Bypass));
+        NftRules.Apply(new NftRules.Settings(QueueNumber, RedirectMark, gid, _relay.Port, dnsPort, QueueUdp: UdpMode != UdpMode.Bypass, RejectMark));
         _rulesApplied = true;
         _exitSignals = [.. new[] { PosixSignal.SIGTERM, PosixSignal.SIGINT, PosixSignal.SIGHUP }
             .Select(s => PosixSignalRegistration.Create(s, OnExitSignal))];
@@ -226,7 +228,7 @@ public sealed class LinuxCapture : ITrafficCapture
             {
                 if (f.Protocol == PacketInfo.Tcp)
                 {
-                    if (DecideTcp(f.Source, f.Destination)) mark = RedirectMark;
+                    mark = DecideTcp(f.Source, f.Destination);
                 }
                 else if (DecideUdpDrop(f.Source, f.Destination)) verdict = NfQueue.Drop;
             }
@@ -238,8 +240,11 @@ public sealed class LinuxCapture : ITrafficCapture
         _queue!.Verdict(p.Id, verdict, mark);
     }
 
-    /// <summary>True to redirect this new TCP connection to the relay.</summary>
-    private bool DecideTcp(IPEndPoint local, IPEndPoint remote)
+    /// <summary>
+    /// The mark for this new TCP connection's SYN: <see cref="RedirectMark"/> to send it to the relay,
+    /// <see cref="RejectMark"/> to refuse it, null to let it go direct.
+    /// </summary>
+    private uint? DecideTcp(IPEndPoint local, IPEndPoint remote)
     {
         var pid = _lookup.FindTcpOwner(local, remote);
         var fake = _fakeIps.TryGetHost(remote.Address, out var hostname);
@@ -256,7 +261,7 @@ public sealed class LinuxCapture : ITrafficCapture
                 // (RoutingEngine.HandleAsync), so the app looks the name up again.
                 _flows.Add(local, remote, new OriginalDestination(remote, pid), DateTime.UtcNow);
                 Interlocked.Increment(ref _redirected);
-                return true;
+                return RedirectMark;
             }
             if (pid == 0 && !_engine.Profile.Options.ProcessServices) return Pass();
         }
@@ -271,16 +276,38 @@ public sealed class LinuxCapture : ITrafficCapture
             _engine.Tracker.Write(LogLevel.Verbose, $"{Path.GetFileName(path) ?? "?"} ({pid}) - {remote} direct (rule {match.Rule.Name}, not intercepted)");
             return Pass();
         }
+        if (!fake && ShouldRefuseIpv6(_engine, remote.Address, match.Action, out var via))
+        {
+            _engine.Tracker.Write(LogLevel.Verbose, $"{Path.GetFileName(path) ?? "?"} ({pid}) - {remote} refused: IPv6 fails through {via}, so the app falls back to IPv4");
+            Interlocked.Increment(ref _refused);
+            return RejectMark;
+        }
         _flows.Add(local, remote, new OriginalDestination(remote, pid, fake ? hostname : null), DateTime.UtcNow);
         Interlocked.Increment(ref _redirected);
-        return true;
+        return RedirectMark;
     }
 
-    private bool Pass()
+    /// <summary>
+    /// True to refuse a new connection to the real address <paramref name="remote"/>: it is IPv6 and the rule sends it
+    /// through a tunnel or chain that Core marked as unable to reach IPv6 (<see cref="RoutingEngine.Ipv6Fallback"/>).
+    /// Refusing the SYN makes the app's connect() fail at once, so it uses the site's IPv4 address instead. Linux never
+    /// marks a route; Core does. <paramref name="via"/> is the route as <see cref="RoutingEngine.Describe"/> gives it.
+    /// </summary>
+    internal static bool ShouldRefuseIpv6(RoutingEngine engine, IPAddress remote, RuleAction action, out string via)
+    {
+        via = "";
+        if (remote.AddressFamily != AddressFamily.InterNetworkV6 || remote.IsIPv4MappedToIPv6) return false;
+        if (action.Type is not (RuleActionType.Tunnel or RuleActionType.Chain)) return false;
+        via = engine.Describe(action);
+        return engine.Ipv6Fallback.ShouldRefuse(via);
+    }
+
+    private uint? Pass()
     {
         Interlocked.Increment(ref _passed);
-        return false;
+        return null;
     }
+
 
     /// <summary>True to drop this new UDP flow. UDP is not tunneled on Linux yet: flows meant for a tunnel are blocked.</summary>
     private bool DecideUdpDrop(IPEndPoint local, IPEndPoint remote)
@@ -370,6 +397,7 @@ public sealed class LinuxCapture : ITrafficCapture
                     if (now - v.At > UdpVerdictTime) _udpVerdicts.TryRemove(k, out _);
                 _engine.Tracker.Write(LogLevel.Debug,
                     $"Capture stats: {Interlocked.Read(ref _redirected):N0} redirected, {Interlocked.Read(ref _passed):N0} passed, " +
+                    $"{Interlocked.Read(ref _refused):N0} IPv6 refused, " +
                     $"{Interlocked.Read(ref _udpDropped):N0} UDP dropped, DNS {_dns?.Answered ?? 0:N0} answered / {_dns?.Forwarded ?? 0:N0} forwarded, {_fakeIps.Count} fake IPs");
             }
         }

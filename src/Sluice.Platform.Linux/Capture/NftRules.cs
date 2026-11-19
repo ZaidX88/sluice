@@ -16,13 +16,23 @@ internal static class NftRules
 {
     public const string Table = "sluice";
 
-    public sealed record Settings(ushort Queue, uint Mark, uint Gid, int RelayPort, int? DnsPort, bool QueueUdp);
+    /// <param name="RejectMark">A SYN Sluice gives this mark is refused with a TCP reset, so the app's connect() fails at
+    /// once (used for IPv6 through a tunnel without IPv6, see <see cref="Sluice.Core.Engine.Ipv6Fallback"/>). 0: no such rule.</param>
+    public sealed record Settings(ushort Queue, uint Mark, uint Gid, int RelayPort, int? DnsPort, bool QueueUdp, uint RejectMark = 0);
 
     public static string Build(Settings s)
     {
         string N(long v) => v.ToString(CultureInfo.InvariantCulture);
         var udp = s.QueueUdp ? $"\n        meta l4proto udp udp dport != 53 ct state new queue num {N(s.Queue)} bypass" : "";
         var dns = s.DnsPort is { } d ? $"\n        meta l4proto udp udp dport 53 redirect to :{N(d)}" : "";
+        // After queue_new (mangle) and to_sluice (dstnat): the mark set with the NFQUEUE verdict is on the packet by then.
+        var refuse = s.RejectMark == 0 ? "" : $$"""
+
+                chain refuse {
+                    type filter hook output priority filter; policy accept;
+                    meta mark {{N(s.RejectMark)}} meta l4proto tcp reject with tcp reset
+                }
+            """;
         // "table …" + "delete table …" first removes a table left behind by a crash (and does not fail when there is none).
         return $$"""
             table inet {{Table}}
@@ -38,7 +48,7 @@ internal static class NftRules
                     type nat hook output priority dstnat; policy accept;
                     meta skgid {{N(s.Gid)}} return
                     meta mark {{N(s.Mark)}} meta l4proto tcp redirect to :{{N(s.RelayPort)}}{{dns}}
-                }
+                }{{refuse}}
             }
 
             """.ReplaceLineEndings("\n");   // a raw string keeps the source file's line endings (CRLF on Windows checkouts); nft rejects CR

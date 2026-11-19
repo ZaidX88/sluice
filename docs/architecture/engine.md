@@ -105,7 +105,9 @@ hostname of fake IPs) and by `LinuxCapture.FlowTable`.
   `DisconnectAll` + `WaitIdleAsync` are used on shutdown.
 - **`Statistics`** folds closed connections into per-application / target / rule totals and adds the live ones at
   snapshot time.
-- **`FileLog`** subscribes to the tracker's log and writes `Sluice-yyyy-MM-dd.log` files with its own level.
+- **`FileLog`** subscribes to the tracker's log and writes `Sluice-yyyy-MM-dd.log` files with its own level. It keeps
+  the last `RetainDays` days of them, today included (default 7; 0 keeps everything): when it opens its first file and
+  when it rolls over to a new day it deletes older `Sluice-yyyy-MM-dd.log` files in its folder, never other files.
 - **`Relay.RunAsync`** pumps bytes both ways with 64 KB buffers, forwards half-closes, and tears down both sides when
   either fails. With `downstreamBuffer > 0` the download side reads into a bounded queue (`ElasticPumpAsync`) so a slow
   app cannot stall an SSH.NET session shared with other connections. Every read is counted in the engine's

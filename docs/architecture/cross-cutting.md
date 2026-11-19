@@ -59,7 +59,7 @@ tracker only raises its `Log` event up to its `Level`, so each consumer raises t
 | Consumer | Level |
 |---|---|
 | Log page (`LogViewModel`) | chosen in the page (default Normal); the tracker runs at Verbose in the app |
-| File log (`FileLog`, Settings → log to file) | Verbose, daily files `Sluice-yyyy-MM-dd.log` in `AppSettings.LogDirectory` |
+| File log (`FileLog`, Settings → log to file) | Verbose, daily files `Sluice-yyyy-MM-dd.log` in `AppSettings.LogDirectory`; the last 7 days are kept (`FileLog.RetainDays`) |
 | `--log-file DIR` (desktop or CLI) | Debug (CLI: `--log-file-level`) |
 | CLI console | `--log` |
 

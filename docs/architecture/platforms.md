@@ -267,7 +267,27 @@ The `OperatingSystem.IsLinux()` branch and the direct `new Interceptor(...)` go.
 `--log debug` (`Interceptor.DiagnosticPackets`) become the Windows capture's own choice: it enables them when the
 tracker's level is Debug.
 
-### 6.6 What stays in Core
+### 6.6 Capture rights and autostart (#68, for #69 and #70)
+
+Also default interface members on `IPlatformServices`, so a platform that doesn't offer them keeps building and the
+UI hides them:
+
+```csharp
+bool CanGrantCaptureRights => false;                                   // show the "Grant capture rights" button?
+Task<bool> TryGrantCaptureRightsAsync() => Task.FromResult(false);     // OS password prompt; true when it worked; never throws
+bool AutostartSupported => false;                                      // show the "Start at login" switch?
+bool Autostart { get => false; set { } }                               // start Sluice at login for this user
+```
+
+| Member | Windows | Linux |
+|---|---|---|
+| `CanGrantCaptureRights` / `TryGrantCaptureRightsAsync` | not offered (capture needs administrator; the banner offers a restart as administrator) | pkexec + setcap on the running binary (#69) |
+| `AutostartSupported` / `Autostart` | not offered yet | `~/.config/autostart/sluice.desktop` (#69) |
+
+The desktop app (#70) shows the button in the capture-rights banner and the switch in Settings only when the platform
+says it supports them.
+
+### 6.7 What stays in Core
 
 `PacketReflector`, `DnsRedirector`, `TcpPacket`, `UdpPacket`, `FakeIpPool`, `ITrafficCapture`, `IProcessLookup`, the
 static `ProcessLookup` (backend and forwarding only) and everything in sections 6.1–6.4. After #46, Core has no

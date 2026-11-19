@@ -99,3 +99,25 @@ switches back.
 
 **Fixed:** capture calls `setresgid(gid, gid, gid)` and, on stop, restores the real, effective and saved group it read
 from `/proc/self/status` (an error is logged if it can't). Sluice's own traffic is still excluded by `meta skgid`.
+
+## 6. sing-box helpers outlived Sluice — fixed
+
+**Seen** ([issue #57](https://github.com/ZaidX88/sluice/issues/57), recorded from #36): when the app was stopped by a
+signal (`kill`, logout, Ctrl+C), crashed or got SIGKILL, its `sing-box run` helpers kept running under systemd, each with
+its SSH session open. Only a normal shutdown (`SingBoxSession.DisposeAsync`) stopped them. Windows avoids this with a
+kill-on-close job object.
+
+**Why:** Linux has no job object, and `PR_SET_PDEATHSIG` can only be set by the helper itself before it runs sing-box,
+while Core starts the helper and hands it to `IPlatformServices.TieChildProcess` afterwards.
+
+**Fixed:** `LinuxPlatform.TieChildProcess` (`HelperTies`):
+- on SIGTERM, SIGINT, SIGHUP, an unhandled exception or an exit that didn't stop the tunnels, the tied helpers get
+  SIGTERM; a helper a tunnel starts while Sluice shuts down gets it at once;
+- each tied helper is also written to `<pid>-<start time>.helpers` in the helper folder (`HelperConfigFolder`). The
+  next Sluice ends the helpers listed in the files of Sluice processes that are gone (SIGKILL, a crash), when it starts.
+- Processes are known by pid and start time (`/proc/<pid>/stat`), and a file by its boot, so a reused pid is never
+  signalled and the helpers of another running Sluice are left alone.
+
+Tests: `LinuxHelperTiesTests` (a fake `/proc` for the rules, and a real child process ended as a leftover). Live, with
+the `setcap` install and an SSH tunnel through sing-box: before, the helper kept running after `kill -TERM` and
+`kill -KILL` of the app; after, none is left after TERM, HUP or INT, and after KILL the next start ends it.

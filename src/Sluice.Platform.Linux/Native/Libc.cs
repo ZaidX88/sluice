@@ -70,6 +70,11 @@ internal static partial class Libc
 
     public const uint Unchanged = uint.MaxValue;   // (gid_t)-1
 
+    public const int SIGTERM = 15;
+
+    [LibraryImport("libc", SetLastError = true)]
+    public static partial int kill(int pid, int sig);
+
     // ---------- capabilities ----------
 
     [LibraryImport("libc", SetLastError = true)]

@@ -418,14 +418,15 @@ public sealed class LinuxCapture : ITrafficCapture
     }
 
     /// <summary>systemd-resolved may have cached answers from before (or fake ones from Sluice): drop them.</summary>
-    private static void FlushResolverCache()
+    /// <remarks>Also the platform's <see cref="LinuxPlatform.FlushDnsCache"/>, so it never throws.</remarks>
+    internal static void FlushResolverCache()
     {
         try
         {
             using var p = Process.Start(new ProcessStartInfo("resolvectl", "flush-caches") { UseShellExecute = false, RedirectStandardError = true, RedirectStandardOutput = true });
             p?.WaitForExit(3000);
         }
-        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException) { /* no systemd-resolved */ }
+        catch (SystemException) { /* no systemd-resolved, or it failed */ }
     }
 
     /// <summary>

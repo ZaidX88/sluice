@@ -194,9 +194,9 @@ public interface IPlatformServices
 
 | Member | Windows | Linux | Called by |
 |---|---|---|---|
-| `ProcessLookup` | `WindowsProcessLookup` (iphlpapi + kernel32, moved out of `ProcessLookup.cs`, #54) | `LinuxProcessLookup` (sock_diag + `/proc`; today set in `OnAppStart`, moved to this property by #57) | `PlatformServices.Use` sets `ProcessLookup.Backend` |
-| `TieChildProcess` | the kill-on-close job object, moved out of `SingBoxSession` (#56) | ends helpers on exit signals and cleans up helpers left by a crashed run (#57) | `SingBoxSession`, right after `Process.Start` |
-| `FlushDnsCache` | `DnsFlushResolverCache` (dnsapi), moved out of `Interceptor` (#56) | `resolvectl flush-caches` (today `LinuxCapture.FlushResolverCache`, #57) | each capture, where it flushes today |
+| `ProcessLookup` | `WindowsProcessLookup` (iphlpapi + kernel32, moved out of `ProcessLookup.cs`, #54) | `LinuxProcessLookup` (sock_diag + `/proc`; this property since #57, no longer set in `OnAppStart`) | `PlatformServices.Use` sets `ProcessLookup.Backend` |
+| `TieChildProcess` | the kill-on-close job object, moved out of `SingBoxSession` (#56) | ends helpers on exit signals and cleans up helpers left by a crashed run (`HelperTies`, #57) | `SingBoxSession`, right after `Process.Start` |
+| `FlushDnsCache` | `DnsFlushResolverCache` (dnsapi), moved out of `Interceptor` (#56) | `resolvectl flush-caches` (`LinuxCapture.FlushResolverCache`, which the capture calls too, #57) | each capture, where it flushes today |
 | `SecretProtector` | `WindowsSecretProtector` (DPAPI, moved from `Profiles/Dpapi.cs`, #55) | `null` | `ProxifierPasswordCodec` |
 
 `ProcessLookup` (the static class in Core) keeps `Backend` and its forwarding methods; with no backend they return

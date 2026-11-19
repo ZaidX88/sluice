@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.Runtime.InteropServices;
 using Sluice.Core.Engine;
 using Sluice.Core.Interception;
 using Sluice.Core.Platform;
@@ -14,8 +15,62 @@ public sealed class LinuxPlatform : IPlatformServices
 
     private static readonly LinuxProcessLookup Lookup = new();
 
-    /// <summary>Process lookups (rules by application) read /proc. Notifications need no registration.</summary>
-    public void OnAppStart() => ProcessLookup.Backend = Lookup;
+    /// <summary>Nothing to set up: notifications need no registration, and <see cref="PlatformServices.Use"/> sets the
+    /// process lookup from <see cref="ProcessLookup"/>.</summary>
+    public void OnAppStart() { }
+
+    /// <summary>Process lookups (rules by application) read /proc (sock_diag when it can).</summary>
+    public IProcessLookup? ProcessLookup => Lookup;
+
+    // ---------- helpers end with Sluice (#57) ----------
+
+    private static readonly Lazy<HelperTies?> Ties = new(HelperTies.ForThisProcess);
+    private static int _exitHooked;
+    private static PosixSignalRegistration[]? _exitSignals;
+
+    /// <summary>
+    /// Started once, when the platform is created at start-up: ends the sing-box helpers left by an earlier Sluice that
+    /// was killed with SIGKILL or crashed (their SSH sessions would stay open). In the background: start-up doesn't wait.
+    /// </summary>
+    public LinuxPlatform() => _ = Task.Run(() => Ties.Value?.EndLeftovers());
+
+    /// <summary>
+    /// <paramref name="process"/> (a helper Sluice just started) gets SIGTERM when Sluice exits on a signal or an
+    /// unhandled exception, and a Sluice killed with SIGKILL leaves a note so the next one ends it (<see cref="HelperTies"/>).
+    /// </summary>
+    public void TieChildProcess(Process process)
+    {
+        if (Ties.Value is not { } ties) return;
+        int pid;
+        try
+        {
+            if (process.HasExited) return;
+            pid = process.Id;
+        }
+        catch (InvalidOperationException) { return; }   // not started
+        HookExit(ties);
+        ties.Tie(pid);
+        process.EnableRaisingEvents = true;
+        process.Exited += (_, _) => ties.Untie(pid);
+    }
+
+    /// <summary>On SIGTERM, SIGINT and SIGHUP (kill, logout, Ctrl+C), an unhandled exception, or an exit that didn't stop
+    /// the tunnels first, the tied helpers get SIGTERM. The signal then ends Sluice as usual.</summary>
+    private static void HookExit(HelperTies ties)
+    {
+        if (Interlocked.Exchange(ref _exitHooked, 1) != 0) return;
+        AppDomain.CurrentDomain.ProcessExit += (_, _) => ties.EndAll();
+        AppDomain.CurrentDomain.UnhandledException += (_, _) => ties.EndAll();
+        try
+        {
+            _exitSignals = [.. new[] { PosixSignal.SIGTERM, PosixSignal.SIGINT, PosixSignal.SIGHUP }
+                .Select(s => PosixSignalRegistration.Create(s, _ => ties.EndAll()))];
+        }
+        catch (Exception ex) when (ex is PlatformNotSupportedException or IOException) { /* ProcessExit still runs on SIGTERM */ }
+    }
+
+    /// <summary>Drops systemd-resolved's cached answers (<c>resolvectl flush-caches</c>). Never throws.</summary>
+    public void FlushDnsCache() => LinuxCapture.FlushResolverCache();
 
     /// <summary>
     /// Desktop notification through notify-send (libnotify), which every common desktop provides; it talks to the

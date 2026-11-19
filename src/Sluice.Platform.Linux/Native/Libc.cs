@@ -82,7 +82,7 @@ internal static partial class Libc
     private static partial int prctl(int option, nuint arg2, nuint arg3, nuint arg4, nuint arg5);
 
     private const int LinuxCapabilityVersion3 = 0x20080522;
-    private const int PR_CAP_AMBIENT = 47, PR_CAP_AMBIENT_RAISE = 2;
+    private const int PR_CAP_AMBIENT = 47, PR_CAP_AMBIENT_IS_SET = 1, PR_CAP_AMBIENT_RAISE = 2, PR_CAP_AMBIENT_LOWER = 3;
     public const int CAP_NET_ADMIN = 12;
 
     /// <summary>
@@ -104,6 +104,45 @@ internal static partial class Libc
         if (capset(header, data) != 0) { problem = $"capset: {Error(Marshal.GetLastPInvokeError())}"; return false; }
         if (prctl(PR_CAP_AMBIENT, PR_CAP_AMBIENT_RAISE, (nuint)cap, 0, 0) != 0) { problem = $"ambient raise: {Error(Marshal.GetLastPInvokeError())}"; return false; }
         return true;
+    }
+
+    /// <summary>
+    /// Undoes <see cref="RaiseAmbient"/> on the calling thread: lowers <paramref name="cap"/> from the ambient set and
+    /// clears it from the inheritable set, so the threads and programs this thread starts later don't get it (#99).
+    /// Call it once the program that needed it has started. No-op for root, like <see cref="RaiseAmbient"/>.
+    /// </summary>
+    public static unsafe bool LowerAmbient(int cap, out string? problem)
+    {
+        problem = null;
+        if (Environment.IsPrivilegedProcess) return true;
+        if (prctl(PR_CAP_AMBIENT, PR_CAP_AMBIENT_LOWER, (nuint)cap, 0, 0) != 0) { problem = $"ambient lower: {Error(Marshal.GetLastPInvokeError())}"; return false; }
+        var header = stackalloc int[2] { LinuxCapabilityVersion3, 0 };
+        var data = stackalloc int[6];
+        if (capget(header, data) != 0) { problem = $"capget: {Error(Marshal.GetLastPInvokeError())}"; return false; }
+        int word = cap / 32, bit = 1 << (cap % 32);
+        if ((data[word * 3 + 2] & bit) == 0) return true;          // not inheritable: nothing more to clear
+        data[word * 3 + 2] &= ~bit;
+        if (capset(header, data) != 0) { problem = $"capset: {Error(Marshal.GetLastPInvokeError())}"; return false; }
+        return true;
+    }
+
+    /// <summary>Whether <paramref name="cap"/> is in the calling thread's ambient set.</summary>
+    public static bool IsAmbient(int cap) => prctl(PR_CAP_AMBIENT, PR_CAP_AMBIENT_IS_SET, (nuint)cap, 0, 0) == 1;
+
+    /// <summary>Whether <paramref name="cap"/> is in the calling thread's inheritable set (false if it can't be read).</summary>
+    public static unsafe bool IsInheritable(int cap)
+    {
+        var header = stackalloc int[2] { LinuxCapabilityVersion3, 0 };
+        var data = stackalloc int[6];
+        return capget(header, data) == 0 && (data[cap / 32 * 3 + 2] & (1 << (cap % 32))) != 0;
+    }
+
+    /// <summary>Whether <paramref name="cap"/> is in the calling thread's permitted set (false if it can't be read).</summary>
+    public static unsafe bool IsPermitted(int cap)
+    {
+        var header = stackalloc int[2] { LinuxCapabilityVersion3, 0 };
+        var data = stackalloc int[6];
+        return capget(header, data) == 0 && (data[cap / 32 * 3 + 1] & (1 << (cap % 32))) != 0;
     }
 
     public static string Error(int errno) => $"{Marshal.GetPInvokeErrorMessage(errno)} (errno {errno})";

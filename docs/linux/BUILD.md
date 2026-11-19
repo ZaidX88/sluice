@@ -53,7 +53,9 @@ Package layout and installer: `packaging/linux/` (`install.sh`, `uninstall.sh`, 
   code. A CRLF ruleset broke capture on a real PC once.
 - **Capabilities.** Files copied from a Windows drive arrive as 777; the package and installer reset permissions. File
   capabilities are not inherited by child processes, so Sluice passes `CAP_NET_ADMIN` to `nft` as an ambient capability,
-  and keeps real and effective group equal (otherwise the kernel drops ambient capabilities on exec).
+  and keeps real and effective group equal (otherwise the kernel drops ambient capabilities on exec). The ambient
+  capability must be lowered again right after `nft` starts: left raised, every later thread and program got it, and
+  GTK's sandboxed image loader (`bwrap`) refused to run, which aborted the file dialog (#99).
 - **Shared `/tmp`.** sing-box configs hold secrets: they go to `$XDG_RUNTIME_DIR/sluice` (or
   `~/.local/state/sluice/helpers`), owner-only 0700, never `/tmp`.
 

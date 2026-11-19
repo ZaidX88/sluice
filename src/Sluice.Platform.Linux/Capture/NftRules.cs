@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.Runtime.InteropServices;
 
 namespace Sluice.Platform.Linux.Capture;
 
@@ -66,16 +67,36 @@ internal static class NftRules
     public static string? FindNft() =>
         new[] { "/usr/sbin/nft", "/sbin/nft", "/usr/bin/nft", "/bin/nft" }.FirstOrDefault(File.Exists);
 
-    private static void Run(string script)
+    private static int _signalThreadStarted;
+
+    /// <summary>
+    /// .NET starts its signal-handling thread (".NET SigHandler") the first time the app starts a process or registers a
+    /// signal handler. If that is nft, the thread is created while CAP_NET_ADMIN is raised and keeps it for good, so it
+    /// is started here first, by registering (and at once removing) a handler for a signal nobody acts on.
+    /// </summary>
+    private static void EnsureSignalThread()
+    {
+        if (Interlocked.Exchange(ref _signalThreadStarted, 1) != 0) return;
+        try { PosixSignalRegistration.Create(PosixSignal.SIGWINCH, _ => { }).Dispose(); }
+        catch (Exception ex) when (ex is PlatformNotSupportedException or IOException) { /* not fatal: nft still starts */ }
+    }
+
+    internal static void Run(string script)
     {
         var nft = FindNft() ?? throw new InvalidOperationException("nftables is not installed (no nft command). Install the \"nftables\" package.");
         var psi = new ProcessStartInfo(nft, "-f -")
         {
             UseShellExecute = false, RedirectStandardInput = true, RedirectStandardError = true, RedirectStandardOutput = true,
         };
-        // Under setcap (not root) nft would start without CAP_NET_ADMIN: hand it on explicitly.
+        // Under setcap (not root) nft would start without CAP_NET_ADMIN: hand it on explicitly, for nft only. Lowered
+        // again as soon as nft has started (it keeps its copy): left raised, every thread and program this thread starts
+        // later would get it too, and GTK's sandboxed image loader (bwrap) refuses to run with it (#99).
+        EnsureSignalThread();
         Native.Libc.RaiseAmbient(Native.Libc.CAP_NET_ADMIN, out var capProblem);
-        using var p = Process.Start(psi) ?? throw new InvalidOperationException("Could not run nft.");
+        Process? started;
+        try { started = Process.Start(psi); }
+        finally { Native.Libc.LowerAmbient(Native.Libc.CAP_NET_ADMIN, out _); }
+        using var p = started ?? throw new InvalidOperationException("Could not run nft.");
         p.StandardInput.Write(script.ReplaceLineEndings("\n"));
         p.StandardInput.Close();
         var err = p.StandardError.ReadToEnd();

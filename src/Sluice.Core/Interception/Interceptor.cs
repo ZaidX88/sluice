@@ -161,7 +161,7 @@ public sealed class Interceptor : ITrafficCapture
         var policy = CurrentPolicy();
         if (policy.Enabled)
         {
-            FlushOsDnsCache();
+            FlushOsDnsCache("capture started");
             _engine.Tracker.Write(LogLevel.Normal, "Name resolution through tunnels is ON (fake IPs from 198.18.0.0/15)");
         }
 
@@ -339,7 +339,7 @@ public sealed class Interceptor : ITrafficCapture
             : now.Enabled
                 ? "Name resolution through tunnels is now ON (fake IPs from 198.18.0.0/15)"
                 : "Name resolution through tunnels is now OFF");
-        _ = Task.Run(FlushOsDnsCache);   // not on the packet thread: the DNS client service can take a while
+        _ = Task.Run(() => FlushOsDnsCache("name resolution settings changed"));   // not on the packet thread: the DNS client service can take a while
     }
 
     /// <summary>Called on the SYN of every new outbound flow.</summary>
@@ -745,8 +745,10 @@ public sealed class Interceptor : ITrafficCapture
         SaveFakeIps();
         _engine.HostResolver = null;
         _resolver?.Dispose();
-        // Fake answers are meaningless once we stop: drop them from the OS cache.
-        if (_fakeIps.Count > 0) FlushOsDnsCache();
+        // Fake answers are meaningless once we stop: drop them from the OS cache. Every stop path (the capture button,
+        // the tray, quitting, a UDP-mode restart) ends here; the line in the log shows it ran (docs/windows/FIXES.md §2).
+        if (_fakeIps.Count > 0) FlushOsDnsCache("capture stopped");
+        else _engine.Tracker.Write(LogLevel.Debug, "No fake addresses handed out: the Windows DNS cache is left as it is");
         _engine.Tracker.Write(LogLevel.Normal, $"Interception stopped ({PacketsReflected:N0} packets reflected, {DnsQueriesAnswered:N0} DNS queries answered)");
         if (_handling.Total.Count > 0) _engine.Tracker.Write(LogLevel.Normal, $"Capture timing: {TimingSummary()}");
     }
@@ -754,11 +756,12 @@ public sealed class Interceptor : ITrafficCapture
     [DllImport("dnsapi.dll", EntryPoint = "DnsFlushResolverCache")]
     private static extern bool DnsFlushResolverCache();
 
-    private void FlushOsDnsCache()
+    private void FlushOsDnsCache(string why)
     {
         try
         {
-            if (!DnsFlushResolverCache()) _engine.Tracker.Write(LogLevel.Error, "Could not flush the Windows DNS cache");
+            if (DnsFlushResolverCache()) _engine.Tracker.Write(LogLevel.Normal, $"Flushed the Windows DNS cache ({why})");
+            else _engine.Tracker.Write(LogLevel.Error, $"Could not flush the Windows DNS cache ({why})");
         }
         catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
         {

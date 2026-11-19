@@ -1,0 +1,72 @@
+# One area per pull request (docs/CONTRIBUTING.md → Areas): fails a pull request whose changed files belong to more
+# than one area. Shared docs (docs/*.md and docs/architecture/, except the UI's desktop.md) belong to every area and
+# don't count. The repository owner's pull requests pass with the list of areas, for changes that are meant to span
+# areas (rules, renames).
+#
+# pull_request_target runs in this repository's context so it works for pull requests from forks; it only reads the
+# list of changed files through the API and never checks out or runs the pull request's code.
+name: Area
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize, ready_for_review]
+
+permissions:
+  pull-requests: read
+
+jobs:
+  area:
+    name: One area per pull request
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check which areas the changed files belong to
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          area_of() {
+            case "$1" in
+              src/Sluice.Platform.Linux/*|scripts/linux/*|docs/linux/*|tests/Sluice.Tests.Linux/*) echo linux ;;
+              src/Sluice.Platform.Windows/*|docs/windows/*|tests/Sluice.Tests.Windows/*) echo windows ;;
+              src/Sluice.Core/Interception/Interceptor.cs|src/Sluice.Core/Interception/WinDivertNative.cs) echo windows ;;
+              src/Sluice.Core/Interception/UdpNat.cs|src/Sluice.Core/Interception/CaptureFilter.cs) echo windows ;;
+              src/Sluice.Core/Platform/ProcessLookup.cs|src/Sluice.Core/Profiles/Dpapi.cs) echo windows ;;
+              scripts/*/*) echo core ;;
+              scripts/*.ps1) echo windows ;;
+              src/Sluice.Desktop/*|src/Sluice.App/*|docs/ui/*|docs/architecture/desktop.md) echo ui ;;
+              docs/architecture/*) echo shared ;;
+              docs/*/*) echo core ;;
+              docs/*.md) echo shared ;;
+              *) echo core ;;
+            esac
+          }
+          files=$(gh api --paginate "repos/$REPO/pulls/$PR/files" --jq '.[] | .filename, (.previous_filename // empty)')
+          declare -A areas=()
+          report=""
+          while read -r f; do
+            [ -n "$f" ] || continue
+            a=$(area_of "$f")
+            report+="  $a  $f"$'\n'
+            [ "$a" = shared ] || areas[$a]=1
+          done <<<"$files"
+          printf '%s' "$report"
+          list=$(printf '%s\n' "${!areas[@]}" | sort | paste -sd, -)
+          echo "Areas: ${list:-shared docs only}"
+          {
+            echo "### Areas in this pull request: ${list:-shared docs only}"
+            echo '```'
+            printf '%s' "$report"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "${#areas[@]}" -gt 1 ]; then
+            if [ "$AUTHOR" = "$OWNER" ]; then
+              echo "More than one area, allowed for the repository owner."
+            else
+              echo "::error::This pull request changes files of more than one area ($list). Split it: one pull request per area, each fixing its own sub-issue (docs/CONTRIBUTING.md → Areas)."
+              exit 1
+            fi
+          fi

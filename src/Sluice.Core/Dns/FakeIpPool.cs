@@ -23,9 +23,14 @@ public sealed class FakeIpPool
     private uint _next = 1;
     private bool _dirty;
 
-    /// <summary>Where capture keeps the mappings between runs: the Sluice settings folder.</summary>
-    public static string DefaultStatePath =>
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Sluice", "fake-dns.json");
+    /// <summary>
+    /// Where capture keeps the mappings between runs: the Sluice settings folder (%APPDATA%\Sluice, ~/.config/Sluice).
+    /// DoNotVerify: on Linux the folder is "" while ~/.config doesn't exist (a fresh account), which would put the file in
+    /// the current folder (#115).
+    /// </summary>
+    public static string DefaultStatePath => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData, Environment.SpecialFolderOption.DoNotVerify),
+        "Sluice", "fake-dns.json");
 
     /// <summary>True when mappings were added since the last <see cref="Save"/> or <see cref="Load"/>.</summary>
     public bool IsDirty { get { lock (_gate) return _dirty; } }

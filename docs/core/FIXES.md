@@ -150,3 +150,15 @@ for every project. It only allows restoring Windows targets; it doesn't change w
 
 **Fixed when:** the commands in `AGENTS.md`, `CONTRIBUTING.md` and `linux/BUILD.md` work as written on Linux. Builds on
 Windows unchanged; still to be confirmed on a Linux machine.
+
+## 8. Fake-DNS state in the current folder on a fresh Linux account — fixed
+
+**Seen** ([issue #115](https://github.com/ZaidX88/sluice/issues/115), found testing #40): on Linux,
+`Environment.GetFolderPath(ApplicationData)` returns `""` while `~/.config` doesn't exist, so
+`FakeIpPool.DefaultStatePath` became the relative `Sluice/fake-dns.json`, and capture kept its fake-address mappings in
+whatever folder Sluice was started from.
+
+**Fixed:** `DefaultStatePath` asks with `SpecialFolderOption.DoNotVerify`, as `AppSettings.Folder` does since #40. Checked
+in WSL with a fresh home: the old call gave `Sluice/fake-dns.json`, the new one `<home>/.config/Sluice/fake-dns.json`.
+`HelperConfigFolder` isn't affected (XDG variables or the home folder).
+

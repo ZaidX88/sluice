@@ -72,5 +72,7 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   request with code, tests and docs; `FIXES.md` / `FEATURES.md` split per area (`docs/core|linux|windows|ui/`); every
   area may update the shared docs for its own changes. New issues are triaged (and split) by the owner, claimed by
   comment and assigned by the owner before work starts; labels, a project board and a 14-day unclaim rule.
+- Linux capture: connections that share a source port are no longer reset or mixed up (2026-11-19, issue #38,
+  contributor): flow records keyed by source and destination, found through conntrack.
 - Contributors in any area (2026-11-19): the area comes from the claimed issue; one issue at a time; Core on `help wanted`
   only; the "Area" check (`.github/workflows/area-check.yml`) fails a pull request that spans areas; `.github/CODEOWNERS`.

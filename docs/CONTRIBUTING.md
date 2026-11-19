@@ -9,8 +9,8 @@ requests don't conflict. Contributors may work in any area, one claimed issue at
 
 | Area | Files | Typical work |
 |---|---|---|
-| **Linux** | `src/Sluice.Platform.Linux/`, `scripts/linux/`, `docs/linux/`, `tests/Sluice.Tests.Linux/` | capture (nftables, NFQUEUE), DNS, process lookup, notifications, testing on real distributions: [linux/WORK.md](linux/WORK.md) |
-| **Windows** | `src/Sluice.Platform.Windows/`, `docs/windows/`, the Windows-only files still in Core (listed in `AGENTS.md`), `scripts/*.ps1`, `tests/Sluice.Tests.Windows/` | WinDivert capture, Windows integration |
+| **Linux** | `src/Sluice.Platform.Linux/`, `scripts/linux/`, `packaging/linux/`, `scripts/package-linux.sh`, `docs/linux/`, `tests/Sluice.Tests.Linux/` | capture (nftables, NFQUEUE), DNS, process lookup, notifications, testing on real distributions: [linux/WORK.md](linux/WORK.md) |
+| **Windows** | `src/Sluice.Platform.Windows/`, `docs/windows/`, the Windows-only files still in Core (listed in `AGENTS.md`), `scripts/*.ps1` (including `scripts/package-windows.ps1`), `packaging/windows/`, `tests/Sluice.Tests.Windows/` | WinDivert capture, Windows integration, the Windows installer |
 | **UI** | `src/Sluice.Desktop/` (legacy `src/Sluice.App/`), `docs/ui/`, `docs/architecture/desktop.md` | the Avalonia app on both OSes |
 | **Core** (owner; `help wanted` issues: anyone) | everything else (`src/Sluice.Core/` shared engine, `src/Sluice.Cli/`, shared tests `tests/Sluice.Tests/` and `tests/Sluice.Tests.Support/`, `docs/core/`, `.github/`, build files) | the repository owner |
 | **Shared docs** | `docs/*.md` (`STATUS.md`, `REQUIRED.md`, `ARCHITECTURE.md`, `HISTORY.md`, …) and `docs/architecture/` | every area, in the pull request whose change they describe |
@@ -282,13 +282,21 @@ the repository**:
 - **Bumping it** is the owner's job, in its own small pull request: `1.0.0-dev` while working towards a release,
   `1.0.0-rc.1`, `-rc.2` … for release candidates, `1.0.0` for the release, then the next `-dev`. Never change it in a
   feature pull request.
-- **A release tag** `vX.Y.Z` (or `vX.Y.Z-rc.N`) must match `<Version>`; release CI (#74) checks that and builds the
-  packages, whose file names take the version (`sluice-1.0.0-linux-x64.tar.gz`).
+- **A release tag** `vX.Y.Z` (or `vX.Y.Z-rc.N`) on `main` must match `<Version>`; release CI (#74) checks that and
+  builds the packages, whose file names take the version (`sluice-1.0.0-linux-x64.tar.gz`). Built packages are never
+  committed.
+- **Packaging scripts are code on `main`**, reviewed like any other change: `packaging/linux/` and
+  `scripts/package-linux.sh` belong to the Linux area, `packaging/windows/` and `scripts/package-windows.ps1` to the
+  Windows area. Packages are built only from a clean checkout of a tag.
+- **After 1.0**, a patch release (`1.0.1`) comes from a `release/X.Y` branch cut from the release tag; fixes land on
+  `main` first and are cherry-picked onto it.
 
 ## Branches in the owner's repository
 
 | Branch | Holds | Merged into `main`? |
 |---|---|---|
-| `main` | code, tests, docs | — |
-| `release/linux`, `release/windows` | release packaging (installer scripts, package layout, version bumps) on top of `main` | never |
+| `main` | code (including the packaging scripts), tests, docs | — |
+| `release/X.Y` (after 1.0) | patch releases of version X.Y, cut from its release tag; fixes are cherry-picked from `main` | no (fixes land on `main` first) |
 | `agent-notes` | the owner's notes for AI agents | never |
+
+`release/linux` and `release/windows` are retired (#93): their packaging moves onto `main`.

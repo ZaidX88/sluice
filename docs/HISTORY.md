@@ -72,3 +72,5 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   request with code, tests and docs; `FIXES.md` / `FEATURES.md` split per area (`docs/core|linux|windows|ui/`); every
   area may update the shared docs for its own changes. New issues are triaged (and split) by the owner, claimed by
   comment and assigned by the owner before work starts; labels, a project board and a 14-day unclaim rule.
+- Contributors in any area (2026-11-19): the area comes from the claimed issue; one issue at a time; Core on `help wanted`
+  only; the "Area" check (`.github/workflows/area-check.yml`) fails a pull request that spans areas; `.github/CODEOWNERS`.

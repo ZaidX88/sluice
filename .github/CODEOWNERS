@@ -1,0 +1,26 @@
+# The owner reviews Core, the repository checks and the rules (docs/CONTRIBUTING.md → Areas). The platform and UI
+# areas, their docs and the shared docs have no code owner: the owner still reviews every pull request, but changes
+# there don't need a code-owner review.
+
+*                                   @ZaidX88
+
+/src/Sluice.Platform.Linux/
+/scripts/linux/
+/docs/linux/
+/tests/Sluice.Tests.Linux/
+
+/src/Sluice.Platform.Windows/
+/docs/windows/
+/tests/Sluice.Tests.Windows/
+
+/src/Sluice.Desktop/
+/src/Sluice.App/
+/docs/ui/
+
+/docs/*.md
+/docs/architecture/
+
+# Rules and settled decisions stay with the owner, although they are in docs/.
+/AGENTS.md                          @ZaidX88
+/docs/CONTRIBUTING.md               @ZaidX88
+/docs/DECISIONS.md                  @ZaidX88

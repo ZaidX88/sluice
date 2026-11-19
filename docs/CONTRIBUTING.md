@@ -1,7 +1,8 @@
 # Contributing
 
-Sluice is developed by several people in parallel, each on one **area** (Linux, Windows, UI), often with an AI coding
-agent. Areas don't overlap, so pull requests don't conflict. The rules for agents are in [../AGENTS.md](../AGENTS.md)
+Sluice is developed by several people in parallel, often with an AI coding agent. The code is split into **areas**
+(Linux, Windows, UI, Core); every issue and every pull request belongs to exactly one, and areas don't overlap, so pull
+requests don't conflict. Contributors may work in any area, one claimed issue at a time. The rules for agents are in [../AGENTS.md](../AGENTS.md)
 (`CLAUDE.md` loads the same file); this page is the same thing for people, with the workflow.
 
 ## Areas
@@ -11,11 +12,22 @@ agent. Areas don't overlap, so pull requests don't conflict. The rules for agent
 | **Linux** | `src/Sluice.Platform.Linux/`, `scripts/linux/`, `docs/linux/`, `tests/Sluice.Tests.Linux/` | capture (nftables, NFQUEUE), DNS, process lookup, notifications, testing on real distributions: [linux/WORK.md](linux/WORK.md) |
 | **Windows** | `src/Sluice.Platform.Windows/`, `docs/windows/`, the Windows-only files still in Core (listed in `AGENTS.md`), `scripts/*.ps1`, `tests/Sluice.Tests.Windows/` | WinDivert capture, Windows integration |
 | **UI** | `src/Sluice.Desktop/` (legacy `src/Sluice.App/`), `docs/ui/`, `docs/architecture/desktop.md` | the Avalonia app on both OSes |
-| **Core** | everything else (`src/Sluice.Core/` shared engine, `src/Sluice.Cli/`, shared tests `tests/Sluice.Tests/` and `tests/Sluice.Tests.Support/`, `docs/core/`, `.github/`, build files) | the repository owner |
+| **Core** (owner; `help wanted` issues: anyone) | everything else (`src/Sluice.Core/` shared engine, `src/Sluice.Cli/`, shared tests `tests/Sluice.Tests/` and `tests/Sluice.Tests.Support/`, `docs/core/`, `.github/`, build files) | the repository owner |
 | **Shared docs** | `docs/*.md` (`STATUS.md`, `REQUIRED.md`, `ARCHITECTURE.md`, `HISTORY.md`, …) and `docs/architecture/` | every area, in the pull request whose change they describe |
 
-A change outside your area, even a small one, is not made in your pull request: open an issue that says what is needed
-and why, and the area's owner makes it (see [Issues](#issues) for problems that need changes in several areas).
+**Who works where:**
+- **The area belongs to the issue, not to the person.** Claim any `ready` issue; its `area:` label decides which files
+  your pull request may change. Work that needs several areas is a parent with one sub-issue per area ([Issues](#issues)).
+- **One claimed issue at a time** (two at most while one waits for review).
+- **Only claim what you can test:** Windows issues need a Windows machine and Linux issues a Linux one, because a live
+  run is required; UI issues need at least one OS, with screenshots in light and dark.
+- **Core is the owner's**, except issues labelled `help wanted`, which anyone may claim. The rules (`AGENTS.md`, this
+  page) and [DECISIONS.md](DECISIONS.md) stay the owner's.
+- **One area per pull request.** The **Area** check (`.github/workflows/area-check.yml`) fails a pull request whose files
+  span more than one area (shared docs don't count). A change for another area, even a small one, goes in an issue.
+  `.github/CODEOWNERS` asks the owner to review changes to Core, `.github/` and the rules.
+- When triaging, the owner doesn't mark two issues `ready` at the same time if they change the same files; one waits
+  for the other (marked "blocked by").
 
 ### Docs
 

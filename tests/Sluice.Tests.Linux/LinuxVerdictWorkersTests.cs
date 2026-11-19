@@ -131,7 +131,7 @@ public class LinuxVerdictWorkersTests
         Assert.Empty(v.Duplicates);
     }
 
-    [Fact]
+    [LinuxFact]
     public void Sequence_numbers_stay_unique_across_threads_and_late_verdicts_are_quiet()
     {
         var q = NfQueue.ForTests();

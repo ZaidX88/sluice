@@ -23,7 +23,7 @@ Windows and Linux, and how every part works: [docs/ARCHITECTURE.md](docs/ARCHITE
 
 - **Use it:** [docs/QUICKSTART.md](docs/QUICKSTART.md)
 - **Linux:** install a release with [docs/linux/INSTALL.md](docs/linux/INSTALL.md) (`sudo ./install.sh` adds .NET,
-  nftables and the rest; packages are built from the `release/linux` branch); build from source with [docs/linux/BUILD.md](docs/linux/BUILD.md).
+  nftables and the rest; packaging scripts in `packaging/linux/`); build from source with [docs/linux/BUILD.md](docs/linux/BUILD.md).
 - **Windows:** build and run from source with [docs/windows/BUILD.md](docs/windows/BUILD.md) (a release package is planned).
 
 ## Building

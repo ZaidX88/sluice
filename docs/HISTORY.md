@@ -104,3 +104,5 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
 - Packaging on `main` (2026-11-19, #93): packaging scripts are code on `main` (Linux: `packaging/linux/`,
   `scripts/package-linux.sh`; Windows: `packaging/windows/`, `scripts/package-windows.ps1`), releases are built from
   tags `vX.Y.Z`; `release/linux` and `release/windows` are retired. The files move in a follow-up pull request.
+- Linux packaging moved onto `main` (2026-11-19, #93): `packaging/linux/` (`install.sh`, `uninstall.sh`,
+  `sluice.desktop`, `README.txt`) and `scripts/package-linux.sh`, unchanged from `release/linux`.

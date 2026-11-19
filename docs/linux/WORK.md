@@ -1,9 +1,9 @@
 # Linux work
 
-What the **Linux area** needs, for whoever works on it on a real Linux machine (see
-[../CONTRIBUTING.md](../CONTRIBUTING.md) for the workflow and [../../AGENTS.md](../../AGENTS.md) for the rules). Linux
-work changes Linux files only: `src/Sluice.Platform.Linux/`, `scripts/linux/`, `docs/linux/`,
-`tests/Sluice.Tests.Linux/`. Anything else needed goes in an issue for the owner.
+What the **Linux area** needs, for whoever claims a Linux issue and works on it on a real Linux machine (see
+[../CONTRIBUTING.md](../CONTRIBUTING.md) for the workflow and [../../AGENTS.md](../../AGENTS.md) for the rules). A Linux
+issue's pull request changes Linux files only: `src/Sluice.Platform.Linux/`, `scripts/linux/`, `docs/linux/`,
+`tests/Sluice.Tests.Linux/` (plus shared docs). Anything else needed goes in an issue.
 
 ## Where it stands
 

@@ -6,23 +6,30 @@ forks and pull requests. These rules keep their changes from colliding. Read all
 
 ## 1. Work in one area only
 
-Every task belongs to exactly one area. The person you work for names it at the start ("Area: Linux"). If they didn't,
-**ask before editing anything**. You may change only the files of that area, plus the shared docs (below):
+Every task belongs to exactly one area: the `area:` label of the issue the person you work for has claimed. Contributors
+may work in **any** area, but on **one claimed issue at a time**; the area comes from the issue, not from the person. If
+the area isn't clear, **ask before editing anything**. You may change only the files of that area, plus the shared docs
+(below):
 
 | Area | You may change | Owner of everything else |
 |---|---|---|
 | **Linux** | `src/Sluice.Platform.Linux/**`, `scripts/linux/**`, `docs/linux/**`, `tests/Sluice.Tests.Linux/**` | repository owner |
 | **Windows** | `src/Sluice.Platform.Windows/**`, `docs/windows/**`, the Windows-only files still in Core (`src/Sluice.Core/Interception/Interceptor.cs`, `WinDivertNative.cs`, `UdpNat.cs`, `CaptureFilter.cs`, `src/Sluice.Core/Platform/ProcessLookup.cs`, `src/Sluice.Core/Profiles/Dpapi.cs`), `scripts/*.ps1`, `tests/Sluice.Tests.Windows/**` | repository owner |
 | **UI** | `src/Sluice.Desktop/**` (and the legacy `src/Sluice.App/**`), `docs/ui/**`, `docs/architecture/desktop.md` | repository owner |
-| **Core** (owner only) | everything else: `src/Sluice.Core/**` (shared engine), `src/Sluice.Cli/**`, the shared tests `tests/Sluice.Tests/**` and `tests/Sluice.Tests.Support/**`, `build/**`,
+| **Core** (owner; contributors only on `help wanted` issues) | everything else: `src/Sluice.Core/**` (shared engine), `src/Sluice.Cli/**`, the shared tests `tests/Sluice.Tests/**` and `tests/Sluice.Tests.Support/**`, `build/**`,
 `Sluice.slnx`, `Sluice.*.slnf`, `docs/core/**`, `.github/**`, `README.md`, `AGENTS.md`, `CLAUDE.md`, `.gitignore`, `.gitattributes` | — |
 | **Shared docs** (every area) | `docs/*.md` (`STATUS.md`, `REQUIRED.md`, `ARCHITECTURE.md`, `HISTORY.md`, `QUICKSTART.md`, …) and `docs/architecture/**`, for what your change affects | — |
 
 - **Strict.** If the task needs a change outside your area, even one line in shared code or the UI, **stop**. Don't make
   it. Tell the person what is needed, where and why, so the area's owner can make it (a GitHub issue is the usual way).
   Then finish what you can inside your area.
-- **Linux work is Linux code only**: no UI changes, no `Sluice.Core` changes, no Windows changes. A UI change found
-  during Linux work goes to whoever works on the UI area.
+- **One area per pull request**, checked automatically (the "Area" check, `.github/workflows/area-check.yml`). A Linux
+  task changes Linux files only: no UI, no `Sluice.Core`, no Windows changes; the same for every area. A change found
+  for another area goes in an issue.
+- **Only claim what can be tested:** Windows issues need a Windows machine, Linux issues a Linux one (a live run is
+  required); UI issues at least one OS, with screenshots in light and dark.
+- **Core is the owner's** unless its issue is labelled `help wanted`; then a contributor may claim it like any other.
+  The rules (`AGENTS.md`, `docs/CONTRIBUTING.md`) and `docs/DECISIONS.md` stay the owner's.
 - **A problem that needs changes in several areas** gets one parent issue and one sub-issue per area
   (`docs/CONTRIBUTING.md` → Issues). Offer the person a draft: the parent with the evidence and a "Parts" list
   (`Core: …`, `Linux: …`), saying which part must land first and what interface the other parts will use. Only the

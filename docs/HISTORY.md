@@ -130,3 +130,5 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   mis-encoded tooltip fixed, and older shortcuts rewritten at start (docs/windows/FIXES.md §4).
 - File log on by default at Normal level (2026-11-20, #40): a "Log detail" choice, and the folder, the 7 days kept and
   a privacy note in Settings; on Linux the settings folder no longer falls back to the current folder on a fresh account.
+- Fake-DNS state always in the settings folder (2026-11-20, #115): on a fresh Linux account it went to the current
+  folder (docs/core/FIXES.md §8).

@@ -44,9 +44,12 @@ public sealed class LinuxCapture : ITrafficCapture
     private LoopbackRelay? _relay;
     private NfQueue? _queue;
     private Thread? _thread;
+    private VerdictWorkers? _workers;
+    private readonly ConcurrentDictionary<(int Protocol, IPEndPoint Source, IPEndPoint Destination), byte> _deciding = new();
     private Task? _sweeper;
     private (uint Real, uint Effective)? _previousGid;
-    private bool _rulesApplied, _udpTunnelWarned;
+    private bool _rulesApplied;
+    private int _udpTunnelWarned;
     private readonly DnsPolicyCache _policies;
     private Task? _policyWatch;
     private PosixSignalRegistration[]? _exitSignals;
@@ -153,6 +156,12 @@ public sealed class LinuxCapture : ITrafficCapture
         _exitSignals = [.. new[] { PosixSignal.SIGTERM, PosixSignal.SIGINT, PosixSignal.SIGHUP }
             .Select(s => PosixSignalRegistration.Create(s, OnExitSignal))];
 
+        var queue = _queue;
+        var workers = new VerdictWorkers(Decide, queue.Verdict,
+            ex => _engine.Tracker.Write(LogLevel.Error, $"Packet handling failed, letting it through: {ex.Message}"));
+        workers.Overflow += () => _engine.Tracker.Write(LogLevel.Normal,
+            $"New connections arrive faster than Sluice decides them: some go direct uncaptured until it catches up ({workers.Overflowed:N0} so far)");
+        _workers = workers;
         _thread = new Thread(QueueLoop) { IsBackground = true, Name = "Sluice NFQUEUE" };
         _thread.Start();
         _sweeper = Task.Run(SweepLoop);
@@ -205,12 +214,14 @@ public sealed class LinuxCapture : ITrafficCapture
 
     // ---------------------------------------------------------------- per-flow decisions
 
+    /// <summary>Receives queued packets and hands them to the workers; it never decides anything itself.</summary>
     private void QueueLoop()
     {
         var q = _queue!;
+        var workers = _workers!;
         try
         {
-            while (q.Receive(OnPacket)) { }
+            while (q.Receive(workers.Post)) { }
         }
         catch (Exception ex)
         {
@@ -218,33 +229,33 @@ public sealed class LinuxCapture : ITrafficCapture
         }
     }
 
-    private void OnPacket(NfQueue.Packet p)
+    /// <summary>
+    /// Decides one packet on a worker thread (<see cref="VerdictWorkers"/>). The same flow may be decided twice at
+    /// once (a retransmitted SYN, two packets of a new UDP flow): harmless, since the decision is the same and the
+    /// tables are concurrent, but only the first one logs.
+    /// </summary>
+    private (uint Verdict, uint? Mark) Decide(NfQueue.Packet p)
     {
-        uint verdict = NfQueue.Accept;
-        uint? mark = null;
+        if (!PacketInfo.TryParse(p.Payload, out var f)) return (NfQueue.Accept, null);
+        var key = (f.Protocol, Norm(f.Source), Norm(f.Destination));
+        var quiet = !_deciding.TryAdd(key, 0);
         try
         {
-            if (PacketInfo.TryParse(p.Payload, out var f))
-            {
-                if (f.Protocol == PacketInfo.Tcp)
-                {
-                    mark = DecideTcp(f.Source, f.Destination);
-                }
-                else if (DecideUdpDrop(f.Source, f.Destination)) verdict = NfQueue.Drop;
-            }
+            if (f.Protocol == PacketInfo.Tcp)
+                return (NfQueue.Accept, DecideTcp(f.Source, f.Destination, quiet));
+            return (DecideUdpDrop(f.Source, f.Destination, quiet) ? NfQueue.Drop : NfQueue.Accept, null);
         }
-        catch (Exception ex)
+        finally
         {
-            _engine.Tracker.Write(LogLevel.Error, $"Packet handling failed, letting it through: {ex.Message}");
+            if (!quiet) _deciding.TryRemove(key, out _);
         }
-        _queue!.Verdict(p.Id, verdict, mark);
     }
 
     /// <summary>
     /// The mark for this new TCP connection's SYN: <see cref="RedirectMark"/> to send it to the relay,
     /// <see cref="RejectMark"/> to refuse it, null to let it go direct.
     /// </summary>
-    private uint? DecideTcp(IPEndPoint local, IPEndPoint remote)
+    private uint? DecideTcp(IPEndPoint local, IPEndPoint remote, bool quiet = false)
     {
         var pid = _lookup.FindTcpOwner(local, remote);
         var fake = _fakeIps.TryGetHost(remote.Address, out var hostname);
@@ -270,10 +281,10 @@ public sealed class LinuxCapture : ITrafficCapture
         var host = fake ? hostname : remote.Address.ToString();
         var match = _engine.Classify(new InboundRequest(host, remote.Port, pid, path));
         var redirect = fake || match.Action.Type != RuleActionType.Direct || _engine.Profile.Options.HandleDirectConnections;
-        _engine.Tracker.Write(LogLevel.Debug, $"SYN {local} -> {host}:{remote.Port} pid {pid} ({Path.GetFileName(path) ?? "?"}) rule {match.Rule.Name} => {(redirect ? "redirect" : "pass")}");
+        if (!quiet) _engine.Tracker.Write(LogLevel.Debug, $"SYN {local} -> {host}:{remote.Port} pid {pid} ({Path.GetFileName(path) ?? "?"}) rule {match.Rule.Name} => {(redirect ? "redirect" : "pass")}");
         if (!redirect)
         {
-            _engine.Tracker.Write(LogLevel.Verbose, $"{Path.GetFileName(path) ?? "?"} ({pid}) - {remote} direct (rule {match.Rule.Name}, not intercepted)");
+            if (!quiet) _engine.Tracker.Write(LogLevel.Verbose, $"{Path.GetFileName(path) ?? "?"} ({pid}) - {remote} direct (rule {match.Rule.Name}, not intercepted)");
             return Pass();
         }
         if (!fake && ShouldRefuseIpv6(_engine, remote.Address, match.Action, out var via))
@@ -310,7 +321,7 @@ public sealed class LinuxCapture : ITrafficCapture
 
 
     /// <summary>True to drop this new UDP flow. UDP is not tunneled on Linux yet: flows meant for a tunnel are blocked.</summary>
-    private bool DecideUdpDrop(IPEndPoint local, IPEndPoint remote)
+    private bool DecideUdpDrop(IPEndPoint local, IPEndPoint remote, bool quiet = false)
     {
         var key = (Norm(local), Norm(remote));
         if (_udpVerdicts.TryGetValue(key, out var cached) && DateTime.UtcNow - cached.At < UdpVerdictTime) return Count(cached.Drop);
@@ -326,13 +337,12 @@ public sealed class LinuxCapture : ITrafficCapture
             var path = pid == 0 ? null : _lookup.GetProcessPath(pid);
             var route = _engine.ClassifyUdp(new InboundRequest(fake ? hostname : remote.Address.ToString(), remote.Port, pid, path));
             drop = fake || route.Verdict != UdpVerdict.Pass;   // a fake address is unreachable without a tunnel
-            if (route.Verdict == UdpVerdict.Tunnel && !_udpTunnelWarned)
+            if (route.Verdict == UdpVerdict.Tunnel && Interlocked.Exchange(ref _udpTunnelWarned, 1) == 0)
             {
-                _udpTunnelWarned = true;
                 _engine.Tracker.Write(LogLevel.Normal,
                     "UDP through tunnels is not available on Linux yet: UDP of tunneled apps is blocked, so browsers fall back from QUIC to TCP.");
             }
-            _engine.Tracker.Write(drop ? LogLevel.Verbose : LogLevel.Debug,
+            if (!quiet) _engine.Tracker.Write(drop ? LogLevel.Verbose : LogLevel.Debug,
                 $"{Path.GetFileName(path) ?? "?"} ({pid}) - UDP {(fake ? hostname : remote.Address.ToString())}:{remote.Port} {(drop ? "blocked" : "direct")} (rule {route.Match.Rule.Name})");
         }
         _udpVerdicts[key] = (drop, DateTime.UtcNow);
@@ -398,7 +408,7 @@ public sealed class LinuxCapture : ITrafficCapture
                 _engine.Tracker.Write(LogLevel.Debug,
                     $"Capture stats: {Interlocked.Read(ref _redirected):N0} redirected, {Interlocked.Read(ref _passed):N0} passed, " +
                     $"{Interlocked.Read(ref _refused):N0} IPv6 refused, " +
-                    $"{Interlocked.Read(ref _udpDropped):N0} UDP dropped, DNS {_dns?.Answered ?? 0:N0} answered / {_dns?.Forwarded ?? 0:N0} forwarded, {_fakeIps.Count} fake IPs");
+                    $"{Interlocked.Read(ref _udpDropped):N0} UDP dropped, {_workers?.Overflowed ?? 0:N0} accepted unmarked (workers behind), DNS {_dns?.Answered ?? 0:N0} answered / {_dns?.Forwarded ?? 0:N0} forwarded, {_fakeIps.Count} fake IPs");
             }
         }
         catch (OperationCanceledException) { }
@@ -439,7 +449,9 @@ public sealed class LinuxCapture : ITrafficCapture
         if (_rulesApplied) NftRules.Remove();     // first: no new packets are queued or redirected
         _rulesApplied = false;
         _queue?.Stop();
-        _thread?.Join(2000);
+        _thread?.Join(2000);                      // no more packets are handed to the workers
+        _workers?.Stop(TimeSpan.FromSeconds(2));  // every queued packet gets its verdict before the socket closes
+        _workers = null;
         _queue?.Dispose();
         _queue = null;
         _conntrack?.Dispose();

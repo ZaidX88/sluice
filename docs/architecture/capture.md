@@ -87,9 +87,11 @@ They follow the same model:
 
 ```
   nftables  queue_new (output, mangle) ── first SYN / new UDP flow ──▶ NFQUEUE 1473 ──▶ NfQueue.Receive (own thread)
+                                                                                         │ VerdictWorkers.Post
+                                                     bounded hand-off (1024) ── full ──▶ accept unmarked at once
                                                                                          │
-            LinuxCapture.OnPacket ── TCP: DecideTcp → accept with mark 0x5C1CE or 0x5C1CF, or plain accept
-                                  └─ UDP: DecideUdpDrop → accept or drop (cached 30 s)
+            LinuxCapture.Decide (4 worker threads) ── TCP: DecideTcp → accept with mark 0x5C1CE or 0x5C1CF, or plain accept
+                                                   └─ UDP: DecideUdpDrop → accept or drop (cached 30 s)
   nftables  to_sluice (nat output, dstnat) ── mark 0x5C1CE ──▶ redirect to relay port
                                            └─ UDP/53 ─────────▶ redirect to LinuxDnsServer port
   nftables  refuse (filter output) ── mark 0x5C1CF ──▶ reject with tcp reset
@@ -104,6 +106,13 @@ They follow the same model:
   `DnsResolver` (upstreams from `LinuxDnsServer.UpstreamServers`) and `LinuxDnsServer`, start the relay, open the queue,
   apply the nft rules, start the queue thread and the sweeper, flush systemd-resolved (`resolvectl flush-caches`).
   Any failure runs `Cleanup`, which removes the nft table before anything else.
+- **Decisions off the packet thread** (`VerdictWorkers`, #83): the NFQUEUE thread only receives and hands packets to 4
+  worker threads, so a slow decision (a program Sluice hasn't seen yet) doesn't hold up other programs' new connections.
+  Verdicts go out by packet id in any order (`NfQueue.Verdict` is safe from several threads). When the hand-off is full,
+  the packet is accepted unmarked at once (it goes direct, uncaptured) and one log line says so; the stats line counts
+  them. The same flow decided twice at once (a retransmitted SYN) gets the same decision and logs once. `Cleanup` stops
+  the receive thread, then the workers (queued packets get their verdicts), then closes the socket; a verdict after
+  that is dropped quietly.
 - `RelayUnreachable` is never raised: no firewall stands between a local REDIRECT and a loopback relay.
 - The nft script is normalised to LF line endings (a CRLF checkout once broke capture), and chain names avoid nft
   keywords.

@@ -24,16 +24,20 @@ Status; shorten the header to "Share"; add `--screenshot DIR --size 1040x650` to
 - **Linux tray:** Avalonia uses StatusNotifierItem; GNOME needs the AppIndicator extension. Without a tray, closing the
   window hides the app with no way back except relaunching. Detect a missing tray and quit on close instead.
 
-## 3. No log file unless "file log" is turned on — low (UI)
+## 3. No log file unless "file log" is turned on — fixed
 
-**Seen** ([issue #7](https://github.com/ZaidX88/sluice/issues/7)): `AppSettings.FileLogEnabled` defaults to `false`, so
-a new install writes no log. After a problem there is nothing to attach to a report. On Linux it matters more: the
+**Seen** ([issue #7](https://github.com/ZaidX88/sluice/issues/7)): `AppSettings.FileLogEnabled` defaulted to `false`,
+so a new install wrote no log. After a problem there was nothing to attach to a report. On Linux it matters more: the
 `setcap` app is not dumpable, so the log is the only outside view of what capture decided.
 
-**Options:** turn the file log on by default at Verbose (daily files are small; capture writes a timing line every 5 s
-at Verbose, so check the daily size first), or always keep the last few thousand lines in a rolling file.
+**Fixed** ([issue #40](https://github.com/ZaidX88/sluice/issues/40)): the file log is on for new settings files (an
+existing `settings.json` keeps its choice) and writes at **Normal**: tunnels, rules applied, blocked connections and
+errors. Settings → "Log detail" switches to Detailed (Verbose: also closed connections and relay statistics). The page
+says that the last 7 days are kept and that the log lists the apps and sites Sluice handled, and shows the folder
+(shortened to `%APPDATA%\…` / `~/…`) with "Open folder". Screenshot mode writes no log.
 
-**Fixed when:** a fresh install has a log of the last session to attach to a report.
+Found on the way: on Linux, .NET returns `""` for the config folder while `~/.config` doesn't exist (a fresh account),
+so settings and logs went to the current folder. `AppSettings.Folder` now asks with `DoNotVerify`.
 
 ## 4. File dialogs with capture rights on Linux — high (UI part fixed)
 

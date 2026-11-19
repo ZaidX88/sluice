@@ -128,3 +128,5 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   Not tunneled; WSL with DNS tunneling not covered (docs/windows/FIXES.md §1).
 - Start Menu shortcut and app ID only in the Windows module (2026-11-20, #62): confirmed; the shortcut's
   mis-encoded tooltip fixed, and older shortcuts rewritten at start (docs/windows/FIXES.md §4).
+- File log on by default at Normal level (2026-11-20, #40): a "Log detail" choice, and the folder, the 7 days kept and
+  a privacy note in Settings; on Linux the settings folder no longer falls back to the current folder on a fresh account.

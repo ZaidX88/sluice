@@ -138,7 +138,29 @@ public sealed class SettingsViewModel : PageViewModel
         set { Host.Settings.FileLogEnabled = value; Host.Settings.Save(); Host.ApplyFileLog(); Raise(); }
     }
 
-    public string LogDirectory => Host.Settings.LogDirectory;
+    public string LogDirectory => AppSettings.ShortPath(Host.Settings.LogDirectory);
+
+    public string LogKeptText =>
+        $"One file a day; the last {Sluice.Core.Engine.FileLog.DefaultRetainDays} days are kept. The log lists the apps and sites Sluice handled, so share it with care.";
+
+    public string[] LogLevels { get; } =
+    [
+        "Normal: tunnels, rules applied, blocked connections and errors",
+        "Detailed: also every closed connection and relay statistics (larger files)",
+    ];
+
+    public int LogLevelIndex
+    {
+        get => Host.Settings.FileLogDetailed ? 1 : 0;
+        set
+        {
+            if (value < 0 || (value == 1) == Host.Settings.FileLogDetailed) return;
+            Host.Settings.FileLogDetailed = value == 1;
+            Host.Settings.Save();
+            Host.ApplyFileLog();
+            Raise();
+        }
+    }
 
     public string SocksPortText
     {

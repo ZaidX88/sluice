@@ -108,11 +108,17 @@
                     <CheckBox Theme="{StaticResource Switch}" Margin="0,14,0,0" IsChecked="{Binding FileLog}">
                         <StackPanel>
                             <TextBlock Text="Write a log file"/>
-                            <TextBlock Classes="Muted" Text="{Binding LogDirectory}"/>
+                            <TextBlock Classes="Muted" TextWrapping="Wrap" Text="{Binding LogKeptText}"/>
                         </StackPanel>
                     </CheckBox>
-                    <Button Theme="{StaticResource GhostButton}" Content="Open log folder" Command="{Binding OpenLogFolderCommand}"
-                            HorizontalAlignment="Left" Margin="-8,6,0,0"/>
+                    <TextBlock Text="Log detail" Classes="FieldLabel" Margin="0,12,0,4"/>
+                    <ComboBox ItemsSource="{Binding LogLevels}" SelectedIndex="{Binding LogLevelIndex}" IsEnabled="{Binding FileLog}"
+                              HorizontalAlignment="Left" MinWidth="420"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                        <TextBlock Classes="Muted" Text="{Binding LogDirectory}" VerticalAlignment="Center"/>
+                        <Button Theme="{StaticResource GhostButton}" Content="Open folder" Command="{Binding OpenLogFolderCommand}"
+                                Margin="4,0,0,0"/>
+                    </StackPanel>
 
                     <TextBlock Text="Local SOCKS5 server port" Classes="FieldLabel" Margin="0,14,0,4"/>
                     <StackPanel Orientation="Horizontal">

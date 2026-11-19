@@ -81,9 +81,9 @@ The settings folder is `<ApplicationData>/Sluice` (`AppSettings.Folder`): `%APPD
 
 | Path | Written by |
 |---|---|
-| `settings.json` | `AppSettings.Save`: last profile path, local SOCKS port (1080), start capture on launch, minimise to tray, file log on/off and folder, tunnel idle minutes, tunnel notifications |
+| `settings.json` | `AppSettings.Save`: last profile path, local SOCKS port (1080), start capture on launch, minimise to tray, file log on/off (on by default), its detail and folder, tunnel idle minutes, tunnel notifications |
 | `Profiles/` | `.ppx` imports converted to `.sluice` (`AppSettings.ProfilesFolder`) |
-| `Logs/` | the optional file log (`FileLog`), default `AppSettings.LogDirectory` |
+| `Logs/` | the file log (`FileLog`), default `AppSettings.LogDirectory` |
 | `fake-dns.json` | the capture's fake-IP mappings (`FakeIpPool.DefaultStatePath`) |
 
 A missing or corrupt `settings.json` starts with defaults rather than refusing to launch.

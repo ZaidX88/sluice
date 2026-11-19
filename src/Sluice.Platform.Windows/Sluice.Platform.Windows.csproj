@@ -13,4 +13,7 @@
     <ProjectReference Include="..\Sluice.Core\Sluice.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Sluice.Tests.Windows" />
+  </ItemGroup>
 </Project>

@@ -161,3 +161,12 @@ minutes, which looked like a 2–3× gap).
   (runs 3, 4).
 - A Chromium browser's downloads through capture are within ~10% of the SOCKS listener. **Passes** (run 5).
 - The owner's browser speed test on the same hand-picked server, both modes. **Pending.**
+
+## 4. Garbled Start Menu shortcut tooltip — fixed
+
+**Seen** (#62): the shortcut Sluice writes for its notifications showed "Sluice â€” route applications through tunnels"
+as its tooltip. The em dash in `StartMenuShortcut.cs` had been saved mis-encoded.
+
+**Fixed:** the description is written with an escaped dash (`StartMenuShortcut.Description`), and a working shortcut
+with an older description is rewritten to the same target at start. The shortcut and app-ID code is only in
+`Sluice.Platform.Windows`; the desktop app calls `OnAppStart()` and `Notify()`.

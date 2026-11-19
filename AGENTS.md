@@ -13,8 +13,8 @@ the area isn't clear, **ask before editing anything**. You may change only the f
 
 | Area | You may change | Owner of everything else |
 |---|---|---|
-| **Linux** | `src/Sluice.Platform.Linux/**`, `scripts/linux/**`, `docs/linux/**`, `tests/Sluice.Tests.Linux/**` | repository owner |
-| **Windows** | `src/Sluice.Platform.Windows/**`, `docs/windows/**`, the Windows-only files still in Core (`src/Sluice.Core/Interception/Interceptor.cs`, `WinDivertNative.cs`, `UdpNat.cs`, `CaptureFilter.cs`, `src/Sluice.Core/Platform/ProcessLookup.cs`, `src/Sluice.Core/Profiles/Dpapi.cs`), `scripts/*.ps1`, `tests/Sluice.Tests.Windows/**` | repository owner |
+| **Linux** | `src/Sluice.Platform.Linux/**`, `scripts/linux/**`, `packaging/linux/**`, `scripts/package-linux.sh`, `docs/linux/**`, `tests/Sluice.Tests.Linux/**` | repository owner |
+| **Windows** | `src/Sluice.Platform.Windows/**`, `docs/windows/**`, the Windows-only files still in Core (`src/Sluice.Core/Interception/Interceptor.cs`, `WinDivertNative.cs`, `UdpNat.cs`, `CaptureFilter.cs`, `src/Sluice.Core/Platform/ProcessLookup.cs`, `src/Sluice.Core/Profiles/Dpapi.cs`), `scripts/*.ps1`, `packaging/windows/**`, `tests/Sluice.Tests.Windows/**` | repository owner |
 | **UI** | `src/Sluice.Desktop/**` (and the legacy `src/Sluice.App/**`), `docs/ui/**`, `docs/architecture/desktop.md` | repository owner |
 | **Core** (owner; contributors only on `help wanted` issues) | everything else: `src/Sluice.Core/**` (shared engine), `src/Sluice.Cli/**`, the shared tests `tests/Sluice.Tests/**` and `tests/Sluice.Tests.Support/**`, `build/**`,
 `Sluice.slnx`, `Sluice.*.slnf`, `docs/core/**`, `.github/**`, `README.md`, `AGENTS.md`, `CLAUDE.md`, `.gitignore`, `.gitattributes` | — |
@@ -131,5 +131,6 @@ test failures to expect are listed in `docs/CONTRIBUTING.md`.
   `IPlatformServices`; the UI is one Avalonia app for both OSes with the same design.
 - Outbound connections are **tunnels**, never "proxies", in UI text and code.
 - `*.sh` and anything handed to Linux tools must have LF line endings (`.gitattributes` handles `*.sh`).
-- `main` holds code, tests and docs only (plus repository checks in `.github/workflows/`). Release packaging lives on `release/linux` and `release/windows`, agent notes on
-  `agent-notes`; none of them is merged into `main`.
+- `main` holds code, tests and docs (plus repository checks in `.github/workflows/`). Packaging scripts are code and
+  live on `main` too (`packaging/**`, `scripts/package-*`); built packages are never committed, CI builds them from a
+  release tag. Agent notes live on `agent-notes`, which is never merged into `main`.

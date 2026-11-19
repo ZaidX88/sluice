@@ -6,11 +6,15 @@
 
 /src/Sluice.Platform.Linux/
 /scripts/linux/
+/packaging/linux/
+/scripts/package-linux.sh
 /docs/linux/
 /tests/Sluice.Tests.Linux/
 
 /src/Sluice.Platform.Windows/
 /docs/windows/
+/packaging/windows/
+/scripts/*.ps1
 /tests/Sluice.Tests.Windows/
 
 /src/Sluice.Desktop/

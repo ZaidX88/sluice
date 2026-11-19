@@ -101,3 +101,6 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   the dialog still needs two Linux fixes (group IDs #28, ambient capability).
 - Licence (2026-11-19, #92): Sluice is GPL-3.0-only (`LICENSE`); `THIRD-PARTY-NOTICES.md` lists sing-box, WinDivert,
   the NuGet libraries and the font with their versions, licences and sources.
+- Packaging on `main` (2026-11-19, #93): packaging scripts are code on `main` (Linux: `packaging/linux/`,
+  `scripts/package-linux.sh`; Windows: `packaging/windows/`, `scripts/package-windows.ps1`), releases are built from
+  tags `vX.Y.Z`; `release/linux` and `release/windows` are retired. The files move in a follow-up pull request.

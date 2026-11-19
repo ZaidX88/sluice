@@ -6,8 +6,9 @@ says so; it gets a parent issue with one sub-issue per area ([CONTRIBUTING.md �
 
 ## Features
 
-1. **Capture WSL / VMs on Windows** (see [FIXES.md
-   §1](FIXES.md#1-windows-wsl--vms-get-fake-dns-answers-they-cant-use--high)).
+1. **Capture WSL / VMs on Windows**: tunnel their traffic too. Not possible with WinDivert today: Windows' NAT forwards
+   their connections below the layers it sees ([FIXES.md §1](FIXES.md#1-windows-wsl--vms-get-fake-dns-answers-they-cant-use--fixed-nat-mode), which makes WSL work
+   direct while capturing).
 
 ## Performance
 

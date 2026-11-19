@@ -123,3 +123,6 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
 - sing-box helpers end with Sluice on Linux (2026-11-19, #57): `LinuxPlatform.TieChildProcess` ends them on exit
   signals, and the next start ends those of a Sluice killed with SIGKILL; `FlushDnsCache` and `ProcessLookup` on
   `LinuxPlatform`.
+- WSL and virtual machines work with capture on (2026-11-19, #42): their DNS questions to Windows' DNS proxy get
+  real answers from Sluice for the names it fakes; the proxy's replies and DHCP aren't blocked by the UDP mode.
+  Not tunneled; WSL with DNS tunneling not covered (docs/windows/FIXES.md §1).

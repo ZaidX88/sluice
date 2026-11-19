@@ -1,7 +1,7 @@
 # Required work
 
 Items that must be done (not optional ideas), roughly in order. Known bugs are in each area's `FIXES.md` ([README.md](README.md)); the
-**high** one (WSL/VM DNS, [windows/FIXES.md §1](windows/FIXES.md#1-windows-wsl--vms-get-fake-dns-answers-they-cant-use--high)) also belongs before a public release.
+**high** ones also belong before a public release.
 
 ## 1. Move Windows-only code out of Core
 

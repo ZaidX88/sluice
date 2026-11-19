@@ -135,6 +135,56 @@ public static class ProcessLookup
 
     private const int MIB_TCP_STATE_LISTEN = 2;
 
+    /// <summary>Local ports of the UDP sockets <paramref name="pid"/> has open (IPv4 and IPv6 tables).</summary>
+    public static HashSet<int> FindUdpPorts(int pid)
+    {
+        var ports = new HashSet<int>();
+        if (pid <= 0 || !OperatingSystem.IsWindows()) return ports;
+        foreach (var v6 in new[] { false, true })
+            foreach (var (_, port, owner) in ReadUdpTable(v6))
+                if (owner == pid) ports.Add(port);
+        return ports;
+    }
+
+    /// <summary>The process ID of the running Windows service <paramref name="name"/>, or 0 (not running, not found,
+    /// not Windows).</summary>
+    public static int FindServicePid(string name)
+    {
+        if (!OperatingSystem.IsWindows()) return 0;
+        var scm = OpenSCManagerW(null, null, SC_MANAGER_CONNECT);
+        if (scm == IntPtr.Zero) return 0;
+        try
+        {
+            var svc = OpenServiceW(scm, name, SERVICE_QUERY_STATUS);
+            if (svc == IntPtr.Zero) return 0;
+            try
+            {
+                var buf = new byte[36];   // SERVICE_STATUS_PROCESS
+                if (!QueryServiceStatusEx(svc, SC_STATUS_PROCESS_INFO, buf, buf.Length, out _)) return 0;
+                const int SERVICE_RUNNING = 4;
+                return BitConverter.ToInt32(buf, 4) == SERVICE_RUNNING ? BitConverter.ToInt32(buf, 28) : 0;
+            }
+            finally { CloseServiceHandle(svc); }
+        }
+        finally { CloseServiceHandle(scm); }
+    }
+
+    private const uint SC_MANAGER_CONNECT = 0x0001;
+    private const uint SERVICE_QUERY_STATUS = 0x0004;
+    private const int SC_STATUS_PROCESS_INFO = 0;
+
+    [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern IntPtr OpenSCManagerW(string? machine, string? database, uint access);
+
+    [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern IntPtr OpenServiceW(IntPtr scm, string name, uint access);
+
+    [DllImport("advapi32.dll", SetLastError = true)]
+    private static extern bool QueryServiceStatusEx(IntPtr service, int infoLevel, byte[] buffer, int size, out int needed);
+
+    [DllImport("advapi32.dll", SetLastError = true)]
+    private static extern bool CloseServiceHandle(IntPtr handle);
+
     public static string? GetProcessPath(int pid)
     {
         if (Backend is { } b) return b.GetProcessPath(pid);

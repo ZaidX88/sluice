@@ -130,6 +130,7 @@ static async Task<int> RunEngineAsync(string[] args)
         {
             // nftables + NFQUEUE (Sluice.Platform.Linux); process lookups read /proc.
             var linux = new Sluice.Platform.Linux.LinuxPlatform();
+            Sluice.Core.Platform.PlatformServices.Use(linux);   // the multi-targeted CLI does this for both OSes (#58)
             linux.OnAppStart();
             if (linux.CaptureUnavailableReason is { } why) { Console.Error.WriteLine(why); return 2; }
             if (!linux.HasCaptureRights) { Console.Error.WriteLine(linux.CaptureRightsHint); return 2; }

@@ -117,7 +117,8 @@ internal sealed class SingBoxSession : IBackendSession
             RunningHelpers[p.Id] = 0;
             var helperId = p.Id;
             p.Exited += (_, _) => RunningHelpers.TryRemove(helperId, out _);
-            Job.Assign(p);
+            Job.Assign(p);                                   // moves into WindowsPlatform.TieChildProcess (#56)
+            Platform.PlatformServices.Current.TieChildProcess(p);
             p.BeginOutputReadLine();
             p.BeginErrorReadLine();
             _process = p;

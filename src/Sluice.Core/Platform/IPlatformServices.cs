@@ -32,4 +32,19 @@ public interface IPlatformServices
 
     /// <summary>A new, not yet started capture feeding <paramref name="engine"/>.</summary>
     Sluice.Core.Interception.ITrafficCapture CreateCapture(Sluice.Core.Engine.RoutingEngine engine);
+
+    // ---------- the Core split (docs/architecture/platforms.md §6.2) ----------
+    // Default members, so a platform that doesn't implement one yet keeps building and behaves as before.
+
+    /// <summary>"Which app owns this connection" for this OS. Null: no lookups (connections have PID 0).</summary>
+    IProcessLookup? ProcessLookup => null;
+
+    /// <summary>Makes <paramref name="process"/> (a helper Sluice just started) end when Sluice ends, even on a crash.</summary>
+    void TieChildProcess(System.Diagnostics.Process process) { }
+
+    /// <summary>Drops the OS's cached DNS answers. Never throws.</summary>
+    void FlushDnsCache() { }
+
+    /// <summary>Protects secrets with the current OS account (Windows DPAPI). Null where there is none.</summary>
+    Sluice.Core.Profiles.ISecretProtector? SecretProtector => null;
 }

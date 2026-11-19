@@ -140,7 +140,12 @@ The button, the banner and the rules engine are the same code on both; only the 
 These names and signatures are **binding** for the parts of #46 (#53–#58) and for #59 / #60. A part that finds one
 doesn't fit stops and raises it on #46; the owner changes this section first. Every addition to an interface is a
 **default interface member** (doing nothing, or returning `null`), so the other platform keeps building until its own
-part lands; each part adds only the members it needs.
+part lands.
+
+**The Core side is in (#104):** `PlatformServices`, the four members of 6.2 and `ISecretProtector` exist in Core;
+`App` and the CLI call `PlatformServices.Use`; `SingBoxSession` calls `TieChildProcess` (it still assigns its own job
+object until #56) and `ProxifierPasswordCodec` uses `SecretProtector` when there is one (otherwise the DPAPI code still
+in Core, until #55). So each platform part changes only its own area's files.
 
 ### 6.1 Reaching the platform from Core: `PlatformServices`
 

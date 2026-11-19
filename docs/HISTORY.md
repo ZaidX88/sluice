@@ -79,3 +79,7 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
 - Coordination and syncing rules (2026-11-19): every split parent has a Coordination section the sub-issues follow;
   work starts from the latest `main` and is updated onto it before each push. Review follow-ups of PR #75 recorded as
   docs/linux/FIXES.md §3.
+- Shared IPv6 fallback tracker (2026-11-19, #29): `RoutingEngine.Ipv6Fallback` marks a tunnel or chain route that
+  can't reach IPv6 destinations (2 IPv6 addresses failing before they opened, while IPv4 works through it) for
+  10 minutes; the Linux (#30) and Windows (#31) captures will refuse IPv6 through it. `ProxyException` keeps the
+  SOCKS5 reply code.

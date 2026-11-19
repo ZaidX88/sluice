@@ -5,7 +5,11 @@ using Sluice.Core.Profiles;
 
 namespace Sluice.Core.Proxy;
 
-public sealed class ProxyException(string message) : IOException(message);
+public sealed class ProxyException(string message) : IOException(message)
+{
+    /// <summary>The SOCKS5 reply code when a SOCKS5 server refused the request (e.g. 0x01 general failure).</summary>
+    public byte? Socks5Reply { get; init; }
+}
 
 /// <summary>
 /// Client side of the proxy protocols. Each handshake runs over a stream that is
@@ -69,7 +73,10 @@ public static class ProxyHandshake
 
         var head = await ReadExactAsync(s, 4, ct);
         if (head[1] != 0x00)
-            throw new ProxyException("SOCKS5: " + (command == 0x03 && head[1] == 0x07 ? "the server does not support UDP" : Socks5Error(head[1])));
+            throw new ProxyException("SOCKS5: " + (command == 0x03 && head[1] == 0x07 ? "the server does not support UDP" : Socks5Error(head[1])))
+            {
+                Socks5Reply = head[1],
+            };
         string boundHost;
         switch (head[3])
         {

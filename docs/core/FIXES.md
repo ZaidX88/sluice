@@ -117,6 +117,13 @@ without a visible delay, or the limit is documented in QUICKSTART.
 **Parts:** #29 (Core: shared IPv6 fallback tracker with a narrow trigger) first; then #30 (Linux, PR #22) and #31
 (Windows), both blocked by #29.
 
+**Core part done (#29):** `RoutingEngine.Ipv6Fallback` marks a tunnel or chain route for 10 minutes when connections
+to at least 2 different IPv6 addresses failed before they opened with a SOCKS5 "general failure" / "network
+unreachable" / "host unreachable" reply within 60 s, while the same route opened an IPv4 or hostname connection in
+that time and no IPv6 one. sing-box and SSH.NET report the SSH "connect failed" of this issue as a general failure,
+so the reply code alone can't be narrower. The captures ask `ShouldRefuse(route)` for each new IPv6 flow; see
+[engine.md](../architecture/engine.md#ipv6-fallback-engineipv6fallbackcs).
+
 ## 7. Building on Linux needed `EnableWindowsTargeting` — fixed
 
 **Seen** ([issue #1](https://github.com/ZaidX88/sluice/issues/1)): on Linux, `dotnet build src/Sluice.Desktop -f

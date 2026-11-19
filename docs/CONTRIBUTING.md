@@ -262,6 +262,9 @@ the repository**:
 
 ## Rules for every change
 
+- **Licence:** Sluice is under GPL-3.0 ([LICENSE](../LICENSE)). By opening a pull request you agree that your
+  contribution is under the same licence (inbound = outbound). A new bundled component or NuGet package is added to
+  [THIRD-PARTY-NOTICES.md](../THIRD-PARTY-NOTICES.md) in the same pull request.
 - **No private data:** no real server addresses, credentials, profiles, share links, personal names or machine paths in
   code, tests, docs or commit messages. Use `example.com`, `ssh.example`, `alice`, and `192.0.2.x`, `198.51.100.x`,
   `203.0.113.x`, `2001:db8::/32`. (`198.18.0.0/15` is Sluice's fake-address range, not a placeholder.)

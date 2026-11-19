@@ -17,7 +17,8 @@ package yourself is in [BUILD.md](BUILD.md).
 
 ## 1. Requirements
 
-- **A 64-bit Intel/AMD PC** (x86-64). ARM computers (Raspberry Pi, ARM laptops) are not supported by this package.
+- **A 64-bit Intel/AMD PC** (x86-64). ARM computers (Raspberry Pi, ARM laptops) are not supported by this package, and
+  there is no plan to release an ARM64 build for now.
 - **A desktop with X11 or Wayland.** On Wayland, Sluice runs through XWayland, which is installed by default on
   GNOME, KDE and most other desktops.
 - **A distribution with apt, dnf, pacman or zypper** (Debian, Ubuntu, Mint, Pop!_OS, Fedora, RHEL-likes, Arch,

@@ -69,4 +69,10 @@ Not stored in this repository; downloaded by the build or the Linux installer:
 - [WinDivert](https://github.com/basil00/WinDivert), LGPL-3.0 / GPL-2.0;
 - [sing-box](https://github.com/SagerNet/sing-box), GPL-3.0, which runs as a separate helper process.
 
-NuGet packages (Avalonia, SSH.NET, …) come under their own licences.
+NuGet packages (Avalonia, SSH.NET, …) come under their own licences. Every bundled component, its version, licence and
+source: [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+
+## Licence
+
+Sluice is free software under the [GNU General Public License, version 3](LICENSE) (GPL-3.0-only). You may use,
+change and share it; versions you distribute must stay under the same licence, with their source.

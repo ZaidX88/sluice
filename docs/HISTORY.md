@@ -96,3 +96,5 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   with #29 and #30 this fixes #4.
 - One version for every build (2026-11-19, #91): `<Version>` in `Directory.Build.props` (`1.0.0-dev`), shown as
   `1.0.0-dev+abc1234` by `Sluice.Cli --version`, the CLI's first line and the first line of every log file.
+- Licence (2026-11-19, #92): Sluice is GPL-3.0-only (`LICENSE`); `THIRD-PARTY-NOTICES.md` lists sing-box, WinDivert,
+  the NuGet libraries and the font with their versions, licences and sources.

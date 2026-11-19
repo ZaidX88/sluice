@@ -24,7 +24,9 @@ output into WSL and run `dotnet Sluice.Desktop.dll`; it opens as a normal window
 
 ## Release package
 
-The packaging files (`scripts/package-linux.sh`, `packaging/linux/`) live on the `release/linux` branch, not on `main`.
+The packaging files (`scripts/package-linux.sh`, `packaging/linux/`) are on `main` and belong to the Linux area
+(decision of 2026-11-19, #93). Release packages are built from a release tag (`docs/CONTRIBUTING.md` → Releases) and
+are never committed.
 
 `sluice-linux-x64.tar.gz` holds only the app (framework-dependent, ~13 MB); `install.sh` installs everything else.
 

@@ -116,3 +116,5 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   behaviour change until the platform parts (#54–#57) fill them in.
 - Capture rights and autostart in the platform interface (2026-11-19, #68): `IPlatformServices.CanGrantCaptureRights`,
   `TryGrantCaptureRightsAsync`, `AutostartSupported`, `Autostart` as default members, for Linux (#69) and the UI (#70).
+- Fake DNS answers after capture stops (2026-11-19, #43): not reproduced; every stop path flushes the Windows DNS cache
+  and now logs it; real answers within 0.11 s of each stop (docs/windows/FIXES.md §2).

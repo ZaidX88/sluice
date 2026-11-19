@@ -4,6 +4,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using Sluice.Core.Profiles;
 using Sluice.Core.Proxy;
 using Sluice.Desktop.ViewModels;
@@ -21,7 +22,7 @@ internal static class ScreenshotMode
     public static async Task RunAsync(string dir, bool directOnly = false)
     {
         Directory.CreateDirectory(dir);
-        var settings = new AppSettings { SocksPort = 0, MinimizeToTray = false };   // never saved
+        var settings = new AppSettings { SocksPort = 0, MinimizeToTray = false, WriteNoFiles = true };   // never saved
         await using var host = new EngineHost(settings);
 
         var p = Profile.CreateDefault();
@@ -94,6 +95,12 @@ internal static class ScreenshotMode
             if (page is RulesViewModel rules) rules.Selected = rules.Rows.Skip(1).FirstOrDefault();
             await Pump(1300);
             Save(window, Path.Combine(dir, $"{page.Title.ToLowerInvariant()}.png"));
+            if (page is SettingsViewModel && window.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault(s => s.Extent.Height > s.Viewport.Height) is { } scroll)
+            {
+                scroll.ScrollToEnd();   // the app options (file log) are at the end
+                await Pump(500);
+                Save(window, Path.Combine(dir, "settings-end.png"));
+            }
         }
 
         // Dialogs (shown non-modally just to render them).

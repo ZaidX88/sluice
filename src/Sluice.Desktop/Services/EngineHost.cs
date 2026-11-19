@@ -346,10 +346,10 @@ public sealed class EngineHost : IAsyncDisposable
     {
         _fileLog?.Dispose();
         _fileLog = null;
-        if (!Settings.FileLogEnabled) return;
+        if (!Settings.FileLogEnabled || Settings.WriteNoFiles) return;
         try
         {
-            _fileLog = new FileLog(Tracker, Settings.LogDirectory, LogLevel.Verbose);
+            _fileLog = new FileLog(Tracker, Settings.LogDirectory, Settings.FileLogDetailed ? LogLevel.Verbose : LogLevel.Normal);
         }
         catch (Exception ex)
         {

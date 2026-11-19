@@ -10,7 +10,16 @@ public sealed class AppSettings
     public int SocksPort { get; set; } = 1080;
     public bool StartInterceptionOnLaunch { get; set; }
     public bool MinimizeToTray { get; set; } = true;
-    public bool FileLogEnabled { get; set; }
+    /// <summary>On for new settings files (#40), so there is a log to attach after a problem; an existing file keeps
+    /// what it says.</summary>
+    public bool FileLogEnabled { get; set; } = true;
+
+    /// <summary>The file log at Verbose (also every closed connection and relay statistics) instead of Normal.</summary>
+    public bool FileLogDetailed { get; set; }
+
+    /// <summary>Screenshot mode: show the settings, but write no log file. Never saved.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool WriteNoFiles { get; init; }
 
     /// <summary>Stop a tunnel nothing has used for this many minutes (0 = never).</summary>
     public int TunnelIdleMinutes { get; set; } = 10;
@@ -19,8 +28,27 @@ public sealed class AppSettings
     public bool TunnelNotifications { get; set; } = true;
     public string LogDirectory { get; set; } = Path.Combine(Folder, "Logs");
 
+    /// <summary><paramref name="path"/> for display: the user's folders shortened (%APPDATA%\…, ~/…), so the page
+    /// and its screenshots don't show the account name.</summary>
+    public static string ShortPath(string path)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData, Environment.SpecialFolderOption.DoNotVerify);
+            if (appData.Length > 0 && path.StartsWith(appData, StringComparison.OrdinalIgnoreCase))
+                return "%APPDATA%" + path[appData.Length..];
+        }
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        if (home.Length > 0 && path.StartsWith(home + Path.DirectorySeparatorChar, OperatingSystem.IsWindows()
+                ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
+            return "~" + path[home.Length..];
+        return path;
+    }
+
+    /// <summary>%APPDATA%\Sluice, ~/.config/Sluice. DoNotVerify: on Linux the folder is "" when ~/.config doesn't exist yet
+    /// (a fresh account), which would put settings and logs in the current folder.</summary>
     public static string Folder =>
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Sluice");
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData, Environment.SpecialFolderOption.DoNotVerify), "Sluice");
 
     public static string ProfilesFolder => Path.Combine(Folder, "Profiles");
 

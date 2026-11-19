@@ -89,3 +89,6 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   `RoutingEngine.Ipv6Fallback` marked get a TCP reset from the nft chain `refuse`, so apps fall back to IPv4 at once.
 - Log retention (2026-11-19, #39): `FileLog` keeps the last 7 days of `Sluice-yyyy-MM-dd.log` files (`RetainDays`;
   0 keeps everything), so the desktop app can turn the file log on by default (#40).
+- Windows refuses IPv6 through a marked route (2026-11-19, #31): new IPv6 SYNs for a tunnel or chain that
+  `RoutingEngine.Ipv6Fallback` marked are answered with an injected TCP reset, so apps fall back to IPv4 at once;
+  with #29 and #30 this fixes #4.

@@ -1,7 +1,9 @@
+using System.Buffers.Binary;
 using System.Collections.Concurrent;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Net;
+using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using Sluice.Core.Dns;
 using Sluice.Core.Engine;
@@ -74,6 +76,14 @@ public sealed class Interceptor : ITrafficCapture
     // Sluice reads them, how long Sluice holds each one, and how long a new connection waits for its decision.
     private readonly LatencyStats _queueWait = new(), _handling = new() { SlowMs = 0.5 }, _decisions = new() { SlowMs = 5 };
     private long _ownerFromSniff, _ownerFromTable;
+
+    // New IPv6 connections refused because their route can't reach IPv6 (RoutingEngine.Ipv6Fallback, #31): Decide
+    // notes the flow, and every SYN of it is answered with a TCP reset instead of being sent on. Not only the first:
+    // Windows retries a connect() that got a reset (two more SYNs about 0.5 s apart), and the reflector treats those
+    // as the same, already decided flow, so they would otherwise go out directly. Kept as long as the reflector
+    // treats a repeated SYN as the same flow (30 s), then swept.
+    private readonly ConcurrentDictionary<(IPEndPoint Local, IPEndPoint Remote), long> _refuse = new();
+    private long _refused;
 
     public LatencyStats QueueWait => _queueWait;
     public LatencyStats PacketHandling => _handling;
@@ -365,6 +375,15 @@ public sealed class Interceptor : ITrafficCapture
         var host = fake ? hostname : remote.Address.ToString();
         var match = _engine.Classify(new InboundRequest(host, remote.Port, pid, path));
         var redirect = fake || match.Action.Type != RuleActionType.Direct || _engine.Profile.Options.HandleDirectConnections;
+        if (redirect && !fake && ShouldRefuseIpv6(_engine, remote.Address, match.Action, out var via))
+        {
+            // Not redirected and not sent on: DecisionLoop answers the SYN with a reset, so the app's connect() fails
+            // at once and Happy Eyeballs uses the site's IPv4 address.
+            _refuse[(Norm(local), Norm(remote))] = DateTime.UtcNow.Ticks;
+            if (_engine.Tracker.Level >= LogLevel.Verbose)
+                _engine.Tracker.Write(LogLevel.Verbose, $"{Path.GetFileName(path) ?? "?"} ({pid}) - {remote} refused: IPv6 fails through {via}, so the app falls back to IPv4");
+            return (false, pid);
+        }
         if (redirect) Interlocked.Increment(ref _redirectedFlows);
         // Fake addresses are always captured; a real one must be added to the followers' filter before the SYN goes on.
         if (redirect && !fake) Follow(remote.Address);
@@ -374,6 +393,72 @@ public sealed class Interceptor : ITrafficCapture
         if (!redirect && level >= LogLevel.Verbose)
             _engine.Tracker.Write(LogLevel.Verbose, $"{Path.GetFileName(path) ?? "?"} ({pid}) - {remote} direct (rule {match.Rule.Name}, not intercepted)");
         return (redirect, pid);
+    }
+
+    /// <summary>
+    /// True to refuse a new connection to the real address <paramref name="remote"/>: it is IPv6 and the rule sends it
+    /// through a tunnel or chain that Core marked as unable to reach IPv6 (<see cref="RoutingEngine.Ipv6Fallback"/>).
+    /// Windows never marks a route; Core does. <paramref name="via"/> is the route as <see cref="RoutingEngine.Describe"/>
+    /// gives it.
+    /// </summary>
+    internal static bool ShouldRefuseIpv6(RoutingEngine engine, IPAddress remote, RuleAction action, out string via)
+    {
+        via = "";
+        if (remote.AddressFamily != AddressFamily.InterNetworkV6 || remote.IsIPv4MappedToIPv6) return false;
+        if (action.Type is not (RuleActionType.Tunnel or RuleActionType.Chain)) return false;
+        via = engine.Describe(action);
+        return engine.Ipv6Fallback.ShouldRefuse(via);
+    }
+
+    /// <summary>
+    /// The reset that refuses an outbound SYN: an IPv4 or IPv6 + TCP packet from the SYN's destination back to its
+    /// source, flags RST+ACK, acknowledging the SYN (seq + 1), so the app's stack fails the connect() at once.
+    /// Checksums are left for WinDivert to fill in. Null when <paramref name="syn"/> isn't a plain TCP SYN.
+    /// </summary>
+    internal static byte[]? BuildSynReset(ReadOnlySpan<byte> syn)
+    {
+        if (syn.Length < 20) return null;
+        int version = syn[0] >> 4, ipLen, tcpAt;
+        if (version == 4)
+        {
+            tcpAt = (syn[0] & 0x0F) * 4;
+            if (tcpAt < 20 || syn[9] != 6) return null;
+            ipLen = 20;
+        }
+        else if (version == 6)
+        {
+            if (syn.Length < 40 || syn[6] != 6) return null;  // extension headers aren't followed (as in TcpPacket)
+            tcpAt = ipLen = 40;
+        }
+        else return null;
+        if (syn.Length < tcpAt + 20 || (syn[tcpAt + 13] & 0x16) != 0x02) return null;   // a SYN without ACK or RST
+
+        var r = new byte[ipLen + 20];
+        if (version == 4)
+        {
+            r[0] = 0x45;
+            BinaryPrimitives.WriteUInt16BigEndian(r.AsSpan(2), (ushort)r.Length);
+            r[8] = 64;                                        // TTL
+            r[9] = 6;
+            syn.Slice(16, 4).CopyTo(r.AsSpan(12));             // source = the SYN's destination
+            syn.Slice(12, 4).CopyTo(r.AsSpan(16));
+        }
+        else
+        {
+            r[0] = 0x60;
+            BinaryPrimitives.WriteUInt16BigEndian(r.AsSpan(4), 20);   // payload length
+            r[6] = 6;
+            r[7] = 64;                                        // hop limit
+            syn.Slice(24, 16).CopyTo(r.AsSpan(8));
+            syn.Slice(8, 16).CopyTo(r.AsSpan(24));
+        }
+        var t = r.AsSpan(ipLen);
+        syn.Slice(tcpAt + 2, 2).CopyTo(t);                    // source port = the SYN's destination port
+        syn.Slice(tcpAt, 2).CopyTo(t[2..]);
+        BinaryPrimitives.WriteUInt32BigEndian(t[8..], BinaryPrimitives.ReadUInt32BigEndian(syn[(tcpAt + 4)..]) + 1);   // ack = seq + 1
+        t[12] = 5 << 4;                                       // data offset: 20 bytes, no options
+        t[13] = 0x14;                                         // RST + ACK
+        return r;
     }
 
     /// <summary>
@@ -408,6 +493,11 @@ public sealed class Interceptor : ITrafficCapture
                         addr.SetOutbound(false);
                         WinDivertNative.CalcChecksums(packet, (uint)packet.Length, ref addr, 0);
                         Interlocked.Increment(ref _reflected);
+                    }
+                    else if (TryRefuse(packet, packet.Length, original))
+                    {
+                        _decisions.Add(Stopwatch.GetTimestamp() - started);
+                        continue;                                 // the SYN is answered, not sent on
                     }
                     else Interlocked.Increment(ref _passed);
                 }
@@ -474,6 +564,25 @@ public sealed class Interceptor : ITrafficCapture
         }
     }
 
+    /// <summary>
+    /// If this is a SYN of a flow Decide refused (<see cref="_refuse"/>), injects the reset that answers it and returns
+    /// true: the caller then drops the SYN. Called for the first SYN (decision worker) and for the app's retries
+    /// (packet thread), which the reflector passes as an already decided flow.
+    /// </summary>
+    private bool TryRefuse(byte[] packet, int length, WinDivertNative.Address original)
+    {
+        if (_refuse.IsEmpty) return false;
+        var syn = packet.AsSpan(0, length);
+        var tcp = new TcpPacket(syn);
+        if (!tcp.IsValid || !tcp.Syn || tcp.Ack) return false;
+        var key = (Norm(new IPEndPoint(tcp.SrcAddr, tcp.SrcPort)), Norm(new IPEndPoint(tcp.DstAddr, tcp.DstPort)));
+        if (!_refuse.ContainsKey(key)) return false;
+        if (BuildSynReset(syn) is not { } reset) return false;
+        InjectInbound(reset, original);
+        Interlocked.Increment(ref _refused);
+        return true;
+    }
+
     private void HandlePacket(IntPtr handle, byte[] buf, uint len, ref WinDivertNative.Address addr)
     {
         if (DiagnosticPackets > 0 && Interlocked.Decrement(ref DiagnosticPackets) >= 0)
@@ -526,6 +635,7 @@ public sealed class Interceptor : ITrafficCapture
                 case PacketReflector.Verdict.Drop:
                     return;   // a repeated SYN while its decision is pending; the app sends it again
                 default:
+                    if (TryRefuse(buf, (int)len, addr)) return;   // the app's retry of a refused SYN
                     Interlocked.Increment(ref _passed);
                     break;
             }
@@ -557,7 +667,8 @@ public sealed class Interceptor : ITrafficCapture
             {
                 SaveFakeIps();
                 _engine.Tracker.Write(LogLevel.Debug,
-                    $"Interception stats: {PacketsReflected:N0} reflected, {PacketsPassed:N0} passed, {_reflector?.FlowCount ?? 0} flows, " +
+                    $"Interception stats: {PacketsReflected:N0} reflected, {PacketsPassed:N0} passed, " +
+                    $"{Interlocked.Read(ref _refused):N0} IPv6 refused, {_reflector?.FlowCount ?? 0} flows, " +
                     $"{DnsQueriesAnswered:N0} DNS answered, {_fakeIps.Count} fake IPs, {Interlocked.Read(ref _recvErrors)} recv errors" +
                     (_udp is null ? "" : $", UDP {_udp.FlowCount} flows / {_udp.DatagramsTunneled:N0} tunneled / {_udp.DatagramsDropped:N0} dropped"));
                 LogTimings();
@@ -569,6 +680,9 @@ public sealed class Interceptor : ITrafficCapture
                 var cutoff = DateTime.UtcNow - TimeSpan.FromMinutes(1);
                 foreach (var (k, v) in _socketPids)
                     if (v.At < cutoff) _socketPids.TryRemove(k, out _);
+                var refuseCutoff = DateTime.UtcNow.Ticks - TimeSpan.FromSeconds(30).Ticks;
+                foreach (var (k, at) in _refuse)
+                    if (at < refuseCutoff) _refuse.TryRemove(k, out _);
             }
         }
         catch (OperationCanceledException) { }

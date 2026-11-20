@@ -147,6 +147,8 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   `/opt/sluice/sluice` (C, `packaging/linux/launcher/`) is the only file `install.sh` grants capture rights to; it
   starts the desktop app or the CLI with a fixed environment and passes the rights on. Sluice clears them before
   starting any other program (docs/linux/BUILD.md → The launcher).
+- Avalonia's own file dialogs with capture rights on Linux (2026-11-20, #126): no portal and no GTK in the process
+  that holds the capture capabilities; the dialogs follow Sluice's theme.
 - After granting capture rights, the banner says how to start Sluice with them (2026-11-20, #129): the platform's
   hint (on Linux, through the launcher) instead of a fixed "open it again".
 - Capture rights and autostart on Linux (2026-11-20, #69): "Grant capture rights" runs `pkexec setcap` on the

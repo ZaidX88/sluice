@@ -116,9 +116,11 @@ it would reset every connection through it.
 5. `LinuxDnsServer` listens on **127.0.0.1:P and [::1]:P** (replies must leave from the redirect address for conntrack to
    translate them back), answers faked names, and forwards the rest to the real upstreams from
    `/run/systemd/resolve/resolv.conf` (falling back to `/etc/resolv.conf`), skipping loopback stubs.
-6. Rights: root, or `cap_net_admin,cap_setgid` (+ `cap_sys_ptrace,cap_dac_read_search` to see other users' processes) on
-   the binary. Under setcap, `NftRules` raises `CAP_NET_ADMIN` as an ambient capability so the `nft` child keeps it,
-   and lowers it again once `nft` has started (`Libc.LowerAmbient`), so nothing else Sluice starts gets it (#99).
+6. Rights: root, or `cap_net_admin,cap_setgid` (+ `cap_sys_ptrace,cap_dac_read_search` to see other users' processes)
+   on the launcher `/opt/sluice/sluice`, which passes them on to the app; Sluice clears the passed-on set before it
+   starts any other program (`Libc.ClearPassedOn`). `NftRules` raises `CAP_NET_ADMIN` alone as an ambient capability so
+   the `nft` child keeps it, and lowers it again once `nft` has started (`Libc.LowerAmbient`), so nothing else Sluice
+   starts gets it (#99).
 
 **sing-box helper** (`src/Sluice.Core/Tunnels/`): `SingBoxConfig` turns a tunnel into a sing-box config,
 `SingBoxSession` starts one helper per tunnel with a local SOCKS5 inbound. Configs hold secrets, so they are written to a

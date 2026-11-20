@@ -88,7 +88,7 @@ classes implement it; the rest of the app only sees `OsPlatform.Current`, typed 
 | `Notify(title, message, isError)` | A Windows toast under the app ID "Sluice"; errors use the "urgent" scenario | `notify-send --app-name=Sluice …` (freedesktop notifications); errors use "critical" urgency |
 | `CaptureUnavailableReason` | Always `null`: WinDivert ships with Sluice | "install nftables" when `nft` is missing |
 | `HasCaptureRights` | Running as administrator? | Root, **or** `CAP_NET_ADMIN` + `CAP_SETGID` in the effective set (read from `/proc/self/status`) |
-| `CaptureRightsHint` | "…needs administrator rights." | "…needs root, or these capabilities…" with the exact `setcap` command |
+| `CaptureRightsHint` | "…needs administrator rights." | "…needs root, or Sluice started through its launcher…" with the exact `setcap` command for the launcher |
 | `CanRestartElevated` | `true`: relaunch through UAC | `false`: a desktop app can't relaunch itself as root |
 | `CreateCapture(engine)` | `new Interceptor(engine)`: WinDivert | `new LinuxCapture(engine, …)`: nftables + NFQUEUE |
 

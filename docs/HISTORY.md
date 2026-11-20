@@ -136,3 +136,7 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   vulnerability reporting, linked from the README and CONTRIBUTING.
 - Sluice's own title bar on Windows (2026-11-20, #81): every window derives from `SluiceWindow`; white bar and 1 px
   black border in light, black bar in dark, following the theme; snapping and snap layouts kept.
+- Linux: Sluice starts through a small launcher that holds the capabilities (2026-11-20, contributor):
+  `/opt/sluice/sluice` (C, `packaging/linux/launcher/`) is the only file `install.sh` grants capture rights to; it
+  starts the desktop app or the CLI with a fixed environment and passes the rights on. Sluice clears them before
+  starting any other program (docs/linux/BUILD.md → The launcher).

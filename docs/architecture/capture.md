@@ -30,7 +30,7 @@ They follow the same model:
 | UDP | `UdpNat`: tunneled through SOCKS5 UDP associations | pass or drop only (tunneling planned, [REQUIRED.md §2](../REQUIRED.md#2-udp-through-tunnels-on-linux)) |
 | Self-exclusion | filters skip Sluice's PID; helpers by PID in `Classify` | Sluice switches to a private group (`SluiceGroup.Pick`, `setresgid`) inherited by helpers; nftables skips `meta skgid` |
 | Fail-open | WinDivert handles close with the process; packets with errors are re-sent unchanged | `queue … bypass`; on stop or start failure the table is removed first (`Cleanup`) |
-| Rights | administrator (`Environment.IsPrivilegedProcess`) | root, or `CAP_NET_ADMIN` + `CAP_SETGID` (setcap); `NftRules` raises `CAP_NET_ADMIN` as an ambient capability so the `nft` child keeps it, and lowers it once `nft` has started (#99) |
+| Rights | administrator (`Environment.IsPrivilegedProcess`) | root, or `CAP_NET_ADMIN` + `CAP_SETGID`, passed on by the launcher that holds them (setcap); `NftRules` raises `CAP_NET_ADMIN` as an ambient capability so the `nft` child keeps it, and lowers it once `nft` has started (#99) |
 
 ## Windows: `Interceptor`
 

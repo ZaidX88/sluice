@@ -36,16 +36,29 @@ dotnet publish src/Sluice.Cli             -r linux-x64 --self-contained false -c
 scripts/package-linux.sh out/app out/dist          # run on Linux or WSL (sets permissions, extracts the icon)
 ```
 
-Package layout and installer: `packaging/linux/` (`install.sh`, `uninstall.sh`, `sluice.desktop`, `README.txt`).
+Package layout and installer: `packaging/linux/` (`install.sh`, `uninstall.sh`, `sluice.desktop`, `README.txt`, and the
+launcher's source in `launcher/`). `package-linux.sh` compiles the launcher with the system C compiler (`cc`, or `$CC`)
+into `app/sluice`.
 `install.sh`:
 - installs missing packages with apt/dnf/yum/pacman/zypper: .NET 10 runtime, nftables, libcap, X11/ICE/SM, fontconfig,
   notify-send; falls back to Microsoft's `dotnet-install.sh` (into `/usr/share/dotnet`) where there's no .NET 10 package;
-- writes `/etc/dotnet/install_location_x64` when .NET is somewhere non-default, because the setcap'd app ignores
-  `DOTNET_ROOT`;
+- writes `/etc/dotnet/install_location_x64` when .NET is somewhere non-default, because the launcher doesn't pass
+  `DOTNET_ROOT` on;
 - downloads sing-box 1.14.4 (SHA-256 checked) or uses the archive placed next to it;
-- installs to `/opt/sluice` (root-owned, nothing writable by group/others: the binaries get capabilities) and runs
-  `setcap cap_net_admin,cap_setgid,cap_sys_ptrace,cap_dac_read_search+ep` on both binaries;
+- installs to `/opt/sluice` (root-owned, nothing writable by group/others: the launcher refuses to run otherwise) and
+  runs `setcap cap_net_admin,cap_setgid,cap_sys_ptrace,cap_dac_read_search+ep` on the launcher `/opt/sluice/sluice`
+  only; `sluice`, `sluice-cli` and the menu entry start Sluice through it (see "The launcher" below);
 - `--check` only reports what's missing.
+
+### The launcher
+
+`/opt/sluice/sluice` (`packaging/linux/launcher/sluice-launcher.c`) is the only file with capabilities. It starts
+`Sluice.Desktop`, or `Sluice.Cli` when called `sluice-cli`, from its own folder, and passes the four capabilities on as
+ambient capabilities; the .NET apps carry none. It passes on only a fixed list of environment variables (the session,
+the user's folders, language), resets `PATH`, turns off .NET's diagnostics (`DOTNET_EnableDiagnostics=0`), and refuses
+to run unless root alone can change its folder, the folders above it and everything in it. Sluice clears the passed-on
+capabilities at start-up and on the starting thread before it runs any other program (`Libc.ClearPassedOn`); `nft` alone
+gets `CAP_NET_ADMIN` (`NftRules`).
 
 ### Pitfalls already hit
 

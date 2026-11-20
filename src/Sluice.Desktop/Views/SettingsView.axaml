@@ -103,6 +103,8 @@
                     <TextBlock Text="Sluice on this computer" Classes="SectionTitle"/>
                     <CheckBox Theme="{StaticResource Switch}" Margin="0,12,0,0" IsChecked="{Binding StartInterceptionOnLaunch}"
                               Content="Start capturing traffic when Sluice opens"/>
+                    <CheckBox Theme="{StaticResource Switch}" Margin="0,14,0,0" IsChecked="{Binding StartAtLogin}"
+                              IsVisible="{Binding AutostartSupported}" Content="Start Sluice when I log in"/>
                     <CheckBox Theme="{StaticResource Switch}" Margin="0,14,0,0" IsChecked="{Binding MinimizeToTray}"
                               Content="Keep running in the tray when the window is closed"/>
                     <CheckBox Theme="{StaticResource Switch}" Margin="0,14,0,0" IsChecked="{Binding FileLog}">

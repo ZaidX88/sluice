@@ -5,6 +5,9 @@ using Avalonia.Controls;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using Sluice.Core.Engine;
+using Sluice.Core.Interception;
+using Sluice.Core.Platform;
 using Sluice.Core.Profiles;
 using Sluice.Core.Proxy;
 using Sluice.Desktop.ViewModels;
@@ -22,6 +25,7 @@ internal static class ScreenshotMode
     public static async Task RunAsync(string dir, bool directOnly = false)
     {
         Directory.CreateDirectory(dir);
+        OsPlatform.Current = new DemoPlatform(OsPlatform.Current);   // shows the grant button and the autostart switch
         var settings = new AppSettings { SocksPort = 0, MinimizeToTray = false, WriteNoFiles = true };   // never saved
         await using var host = new EngineHost(settings);
 
@@ -103,6 +107,13 @@ internal static class ScreenshotMode
             }
         }
 
+        // The capture-rights banner, as on a platform that can grant them (#70).
+        vm.CurrentPage = vm.Pages[0];
+        vm.ShowRightsBanner();
+        await Pump(700);
+        Save(window, Path.Combine(dir, "banner-rights.png"));
+        vm.DismissBannerCommand.Execute(null);
+
         // Dialogs (shown non-modally just to render them).
         foreach (var (name, dialog) in new (string, Window)[]
                  {
@@ -127,6 +138,26 @@ internal static class ScreenshotMode
         foreach (var c in open) c.Dispose();
         window.AllowClose = true;
         window.Close();
+    }
+
+    /// <summary>
+    /// The real platform, except that it offers what the screenshots should show: granting capture rights (without
+    /// having them) and starting at login. Never grants anything and changes no login items.
+    /// </summary>
+    private sealed class DemoPlatform(IPlatformServices real) : IPlatformServices
+    {
+        private bool _autostart = true;
+        public string Name => real.Name;
+        public void OnAppStart() { }
+        public void Notify(string title, string message, bool isError) { }
+        public string? CaptureUnavailableReason => null;
+        public bool HasCaptureRights => false;
+        public string CaptureRightsHint => "Capturing traffic needs rights this copy of Sluice doesn't have yet.";
+        public bool CanRestartElevated => false;
+        public ITrafficCapture CreateCapture(RoutingEngine engine) => throw new NotSupportedException("screenshots never capture");
+        public bool CanGrantCaptureRights => true;
+        public bool AutostartSupported => true;
+        public bool Autostart { get => _autostart; set => _autostart = value; }
     }
 
     private static async Task Pump(int ms)

@@ -70,8 +70,9 @@ warnings and antivirus complaints about the WinDivert driver.
   closed as not planned.
 - **`.deb` / AppImage** with the same layout (post-install = `install.sh` steps). Not Flatpak/Snap: a sandbox can't use
   nftables.
-- **"Grant capture rights" button** (pkexec + setcap) for people who run the app without the installer.
-- **Autostart entry** (`~/.config/autostart`) as a setting.
+- **"Grant capture rights" button** (pkexec + setcap) for people who run the app without the installer. The UI part is
+  done (#70): the banner shows it when the platform offers it; the Linux part is #69.
+- **Autostart entry** (`~/.config/autostart`) as a setting. The switch in Settings is done (#70); the Linux part is #69.
 - The installer's online paths (package-manager install, Microsoft's .NET installer, the GitHub download) have not been
   run on a machine with internet yet; test them on Ubuntu, Fedora and Arch.
 

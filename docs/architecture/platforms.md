@@ -289,8 +289,8 @@ bool Autostart { get => false; set { } }                               // start 
 | `CanGrantCaptureRights` / `TryGrantCaptureRightsAsync` | not offered (capture needs administrator; the banner offers a restart as administrator) | pkexec + setcap on the running binary (#69) |
 | `AutostartSupported` / `Autostart` | not offered yet | `~/.config/autostart/sluice.desktop` (#69) |
 
-The desktop app (#70) shows the button in the capture-rights banner and the switch in Settings only when the platform
-says it supports them.
+The desktop app (#70, done) shows the button ("Grant capture rights") in the capture-rights banner and the switch
+("Start Sluice when I log in", in Settings → Sluice on this computer) only when the platform says it supports them.
 
 ### 6.7 What stays in Core
 

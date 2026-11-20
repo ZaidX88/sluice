@@ -40,24 +40,29 @@ says that the last 7 days are kept and that the log lists the apps and sites Slu
 Found on the way: on Linux, .NET returns `""` for the config folder while `~/.config` doesn't exist (a fresh account),
 so settings and logs went to the current folder. `AppSettings.Folder` now asks with `DoNotVerify`.
 
-## 4. File dialogs with capture rights on Linux — high (UI part fixed)
+## 4. File dialogs with capture rights on Linux — fixed
 
-**Seen** ([issue #9](https://github.com/ZaidX88/sluice/issues/9)): with the `setcap` capabilities `install.sh` gives
-the app, Open profile, Save as, Export for Proxifier and Load key showed no dialog: the xdg-desktop-portal file chooser
-refuses a process it can't inspect ("Unable to open /proc/<pid>/root"; a process with file capabilities isn't
-dumpable). On Ubuntu 26.04 the failure ended the whole app; since #24 it shows a message instead (§5).
+**Seen** ([issue #9](https://github.com/ZaidX88/sluice/issues/9)): with the capture capabilities (given with `setcap`,
+since GHSA-qvhh-fmwh-wx3j passed on by the launcher), Open profile, Save as, Export for Proxifier and Load key showed
+no dialog: the xdg-desktop-portal file chooser refuses a process it can't inspect ("Unable to open /proc/<pid>/root").
+On Ubuntu 26.04 the failure ended the whole app; since #24 it shows a message instead (§5).
 
-**UI part fixed** ([issue #25](https://github.com/ZaidX88/sluice/issues/25)): with capture rights on Linux,
-`Program.BuildAvaloniaApp` sets `X11PlatformOptions { UseDBusFilePicker = false }`, so Avalonia's in-process GTK file
-dialog is used; without capture rights, and on Windows, nothing changes. The dialog follows the system theme, not the
-app's. The profile menu's items now run after the menu has closed, so it no longer stays on top of the dialog.
+**First fix** ([issue #25](https://github.com/ZaidX88/sluice/issues/25)): Avalonia's in-process GTK file dialog
+(`X11PlatformOptions { UseDBusFilePicker = false }`). It needed Linux changes to start at all under capture's group IDs
+and capabilities (#28, #99), and it put GTK, which loads modules named in the user's own GTK settings, inside the
+process that holds the capture capabilities.
 
-**Still open, Linux:** GTK 3 refuses to start while capture's group IDs differ (real and effective 377294, saved the
-user's: "running setuid or setgid", #28), and the ambient `CAP_NET_ADMIN` that `NftRules` raises for `nft` stays on
-that thread, so GTK's sandboxed image loader (`bwrap`) exits ("Unexpected capabilities but not setuid") and GTK aborts.
-Until both are fixed, the dialogs work only in a run where capture hasn't started.
+**Fixed** ([issue #126](https://github.com/ZaidX88/sluice/issues/126)): with capture rights on Linux,
+`Program.BuildAvaloniaApp` uses Avalonia's own managed file dialogs (`UseManagedSystemDialogs`, part of the Avalonia
+package): drawn by Avalonia in Sluice's theme and font, no portal, and GTK is never loaded in that process. Without
+capture rights the portal dialog is kept; Windows is unchanged. `SLUICE_MANAGED_DIALOGS=1` forces the managed dialogs
+for testing without capture rights (the launcher doesn't pass it on).
 
-**Fixed when:** with the app installed by `install.sh` and capture on, the four dialogs open and work.
+**Known limit of the managed dialog** (seen in the live check of #128): in Save as, a folder typed into the location
+bar isn't used for the result. Avalonia builds it as `Path.Combine(Location, FileName)` from the folder the dialog is
+showing, and the path came out relative, so it was resolved against Sluice's working folder (`/`) and the save was
+refused (nothing written, the error shown). Reaching the folder by clicking works. It's inside Avalonia's dialog, so the
+fix belongs upstream.
 
 ## 5. A failing file dialog closed the app; a crash could leave capture behind — fixed
 

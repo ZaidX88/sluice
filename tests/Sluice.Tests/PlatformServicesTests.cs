@@ -4,6 +4,8 @@ using Sluice.Core.Engine;
 using Sluice.Core.Interception;
 using Sluice.Core.Platform;
 using Sluice.Core.Profiles;
+using Sluice.Core.Proxy;
+using Sluice.Core.Tunnels;
 
 namespace Sluice.Tests;
 
@@ -52,6 +54,25 @@ public class PlatformServicesTests
         public IProcessLookup? ProcessLookup => lookup;
     }
 
+    /// <summary>Counts <see cref="IPlatformServices.PrepareHelperStart"/> calls and refuses each one.</summary>
+    private sealed class RefusingPlatform : IPlatformServices
+    {
+        public int Prepared;
+        public string Name => "refusing";
+        public void OnAppStart() { }
+        public void Notify(string title, string message, bool isError) { }
+        public string? CaptureUnavailableReason => null;
+        public bool HasCaptureRights => true;
+        public string CaptureRightsHint => "";
+        public bool CanRestartElevated => false;
+        public ITrafficCapture CreateCapture(RoutingEngine engine) => throw new NotSupportedException();
+        public void PrepareHelperStart()
+        {
+            Prepared++;
+            throw new InvalidOperationException("thread not ready");
+        }
+    }
+
     private static void Restoring(Action test)
     {
         var platform = PlatformServices.Current;
@@ -71,6 +92,7 @@ public class PlatformServicesTests
         Assert.Null(p.ProcessLookup);
         Assert.Null(p.SecretProtector);
         p.FlushDnsCache();                                  // no exception
+        p.PrepareHelperStart();                             // no exception
         using var self = Process.GetCurrentProcess();
         p.TieChildProcess(self);                            // no exception, nothing tied
     }
@@ -106,6 +128,33 @@ public class PlatformServicesTests
         PlatformServices.Use(new BarePlatform());
         Assert.Same(lookup, ProcessLookup.Backend);
     });
+
+    [Fact]
+    public async Task The_platform_prepares_the_thread_before_sing_box_starts_and_can_stop_it()
+    {
+        var previous = PlatformServices.Current;
+        var exe = Path.GetTempFileName();                   // exists, so StartAsync gets as far as starting it
+        var platform = new RefusingPlatform();
+        try
+        {
+            PlatformServices.Use(platform);
+            var tunnel = new Tunnel { Id = 1, Type = TunnelType.Shadowsocks, Address = "127.0.0.1", Port = 8388 };
+            var session = new SingBoxSession(tunnel, "test", exe, null, _ => { }, (_, _) => "{}");
+            var helpersBefore = SingBoxSession.RunningHelpers.Count;
+
+            var ex = await Assert.ThrowsAsync<ProxyException>(() => session.StartAsync(CancellationToken.None));
+
+            Assert.Equal(1, platform.Prepared);
+            Assert.Contains("thread not ready", ex.Message);
+            Assert.Null(session.ProcessId);                 // never started
+            Assert.Equal(helpersBefore, SingBoxSession.RunningHelpers.Count);
+        }
+        finally
+        {
+            PlatformServices.Use(previous);
+            File.Delete(exe);
+        }
+    }
 
     [Fact]
     public void Use_rejects_null() =>

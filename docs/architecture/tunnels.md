@@ -90,7 +90,8 @@ Decision record: sing-box (GPL-3.0) runs as a **separate process, one per tunnel
      because it holds passwords and keys. Not the temp folder: users empty it, and a folder deleted under a running
      Sluice broke every later tunnel start. The folder is recreated before each start, the config is deleted once
      sing-box listens, and leftovers older than 10 minutes (from a crash) are removed;
-  3. runs `sing-box run -c <config> --disable-color`, records the PID in `SingBoxSession.RunningHelpers` before
+  3. lets the platform prepare the starting thread (`PlatformServices.Current.PrepareHelperStart`, on the same thread
+     right before `Process.Start`; an exception stops the start), runs `sing-box run -c <config> --disable-color`, records the PID in `SingBoxSession.RunningHelpers` before
      anything else (its own traffic must never be captured), and ties it to Sluice
      (`PlatformServices.Current.TieChildProcess`): on Windows a kill-on-close **job object**, so it dies with Sluice
      even after a crash; on Linux SIGTERM when Sluice exits, and the next Sluice ends the helpers of one that was

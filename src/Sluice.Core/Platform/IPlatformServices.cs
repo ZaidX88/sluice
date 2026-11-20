@@ -42,6 +42,13 @@ public interface IPlatformServices
     /// <summary>Makes <paramref name="process"/> (a helper Sluice just started) end when Sluice ends, even on a crash.</summary>
     void TieChildProcess(System.Diagnostics.Process process) { }
 
+    /// <summary>
+    /// Called on the thread that is about to start a helper program (sing-box), right before <c>Process.Start</c> and
+    /// with nothing awaited in between, so the platform can set up state that the new process takes from the thread
+    /// that starts it. Throwing stops the start: the helper isn't started and the tunnel fails with the message.
+    /// </summary>
+    void PrepareHelperStart() { }
+
     /// <summary>Drops the OS's cached DNS answers. Never throws.</summary>
     void FlushDnsCache() { }
 

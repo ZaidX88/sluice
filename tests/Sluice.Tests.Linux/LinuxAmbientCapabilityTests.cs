@@ -86,6 +86,23 @@ public class LinuxAmbientCapabilityTests
     {
         if (CanRaise) Libc.RaiseAmbient(Libc.CAP_NET_ADMIN, out _);
         Libc.ClearPassedOn(out _);
+        AssertChildHasNoCapabilities();
+    });
+
+    /// <summary>The hook Core calls right before starting sing-box (#120): the helper gets no capabilities.</summary>
+    [LinuxFact]
+    public void PrepareHelperStart_keeps_the_capabilities_from_the_helper() => OnOwnThread(() =>
+    {
+        var platform = new Sluice.Platform.Linux.LinuxPlatform();   // its constructor clears this thread too: raise after
+        if (CanRaise) Assert.True(Libc.RaiseAmbient(Libc.CAP_NET_ADMIN, out var problem), problem);
+        platform.PrepareHelperStart();
+        Assert.False(Libc.IsAmbient(Libc.CAP_NET_ADMIN));
+        AssertChildHasNoCapabilities();
+    });
+
+    /// <summary>Starts a program on this thread; it reads its own capability sets, which must all be empty.</summary>
+    private static void AssertChildHasNoCapabilities()
+    {
         var psi = new System.Diagnostics.ProcessStartInfo("cat", "/proc/self/status") { RedirectStandardOutput = true, UseShellExecute = false };
         using var p = System.Diagnostics.Process.Start(psi)!;
         var status = p.StandardOutput.ReadToEnd();
@@ -93,7 +110,7 @@ public class LinuxAmbientCapabilityTests
         if (Environment.IsPrivilegedProcess) return;                // root's children are privileged anyway
         foreach (var set in new[] { "CapInh", "CapPrm", "CapEff", "CapAmb" })
             Assert.Contains($"{set}:\t0000000000000000", status);
-    });
+    }
 
     [LinuxFact]
     public void Running_nft_leaves_nothing_behind_for_later_threads() => OnOwnThread(() =>

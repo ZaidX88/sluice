@@ -57,8 +57,9 @@ into `app/sluice`.
 ambient capabilities; the .NET apps carry none. It passes on only a fixed list of environment variables (the session,
 the user's folders, language), resets `PATH`, turns off .NET's diagnostics (`DOTNET_EnableDiagnostics=0`), and refuses
 to run unless root alone can change its folder, the folders above it and everything in it. Sluice clears the passed-on
-capabilities at start-up and on the starting thread before it runs any other program (`Libc.ClearPassedOn`); `nft` alone
-gets `CAP_NET_ADMIN` (`NftRules`).
+capabilities at start-up and on the starting thread before it runs any other program (`Libc.ClearPassedOn`; for
+sing-box through `PrepareHelperStart`), and doesn't start the program if that fails; `nft` alone gets `CAP_NET_ADMIN`
+(`NftRules`).
 
 ### Pitfalls already hit
 

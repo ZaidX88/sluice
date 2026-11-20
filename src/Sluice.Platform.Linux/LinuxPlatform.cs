@@ -61,6 +61,16 @@ public sealed class LinuxPlatform : IPlatformServices
         process.Exited += (_, _) => ties.Untie(pid);
     }
 
+    /// <summary>
+    /// Right before a helper (sing-box) starts on this thread: clears the capabilities the launcher passed on, so the
+    /// helper gets none. Throws when they can't be cleared, so the helper isn't started with them.
+    /// </summary>
+    public void PrepareHelperStart()
+    {
+        if (!Native.Libc.ClearPassedOn(out var problem))
+            throw new InvalidOperationException($"Sluice's capabilities could not be kept from it ({problem}).");
+    }
+
     /// <summary>On SIGTERM, SIGINT and SIGHUP (kill, logout, Ctrl+C), an unhandled exception, or an exit that didn't stop
     /// the tunnels first, the tied helpers get SIGTERM. The signal then ends Sluice as usual.</summary>
     private static void HookExit(HelperTies ties)
@@ -93,7 +103,7 @@ public sealed class LinuxPlatform : IPlatformServices
             psi.ArgumentList.Add("--icon=network-vpn");
             psi.ArgumentList.Add(title);
             psi.ArgumentList.Add(message);
-            Native.Libc.ClearPassedOn(out _);   // notify-send gets no capabilities
+            if (!Native.Libc.ClearPassedOn(out _)) return;   // notify-send gets no capabilities, or doesn't start
             using var p = Process.Start(psi);
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)

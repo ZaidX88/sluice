@@ -107,7 +107,8 @@ visible page (`PageViewModel.Refresh`) and updates rates and status. `TunnelsVie
   - capture rights missing → `CaptureRightsHint` (`ShowRightsBanner`), plus "Restart as administrator" only when
     `CanRestartElevated`, and "Grant capture rights" only when `CanGrantCaptureRights` (#70). Granting runs
     `TryGrantCaptureRightsAsync` (the OS's password prompt); afterwards capture starts if the rights already apply,
-    otherwise the banner asks to reopen Sluice;
+    otherwise the banner shows the platform's `CaptureRightsHint`, which says how to start Sluice with them (Linux:
+    through the launcher, #129);
   - capture impossible (Linux without `nft`) → `CaptureUnavailableReason`;
   - `FirewallBlocked` (from `RelayUnreachable`) → "Allow" button running `AllowThroughFirewall`;
   - neutral notices (`ShowInfo`), e.g. "imported from Proxifier".

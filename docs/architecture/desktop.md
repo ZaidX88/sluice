@@ -44,14 +44,20 @@ Program.cs ──▶ App (App.axaml.cs)
    Otherwise listen on that pipe (`ListenForShowRequestsAsync`) and show the window on each request.
 3. `OsPlatform.Current.OnAppStart()` (Windows: Start Menu shortcut and app ID for notifications; Linux: `/proc` process
    lookup).
-4. Create `EngineHost`, `MainViewModel`, `MainWindow`, `AppTray`; route `EngineHost.TunnelNotice` to
-   `OsPlatform.Current.Notify`.
+4. Create `EngineHost` and install `CrashGuard` on it (below), then `MainViewModel`, `MainWindow`, `AppTray`; route
+   `EngineHost.TunnelNotice` to `OsPlatform.Current.Notify`.
 5. Open the profile from `--profile` or `AppSettings.LastProfilePath` (asking for a master password if needed).
 6. `--log-file DIR` (a Debug-level log for this run only), start the local SOCKS5 listener, and turn capture on with
    `--intercept` or `StartInterceptionOnLaunch`.
 
 `ShutdownMode` is explicit: closing the window only hides it when tray mode is on. `ExitApp` (tray "Exit", or closing
 without tray mode) closes the window, removes the tray icon, stops the pipe listener and disposes `EngineHost`.
+
+**After an unexpected error** (`Services/CrashGuard.cs`, #24): an exception nothing caught, on the UI thread or any
+other, is logged, capture is stopped off the UI thread (`EngineHost.StopInterceptionForCrash`, at most 5 s), the tray
+icon is removed (Avalonia removes it in its next pass of UI work, which is run before exiting; otherwise Windows keeps a
+dead icon until the mouse passes over it), and the app exits. Unobserved task exceptions are only logged. `--crash-test ui|thread|task` raises such an error 15 s after
+start, for testing. File pickers that fail show a message instead (`Dialogs.PickFile`).
 
 ## `EngineHost`: the bridge
 

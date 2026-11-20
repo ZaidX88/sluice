@@ -13,6 +13,8 @@
     <RootNamespace>Sluice.Desktop</RootNamespace>
     <ApplicationIcon>Assets\Sluice.ico</ApplicationIcon>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <!-- Ignore DOTNET_STARTUP_HOOKS: the runtime must not load assemblies named by whoever starts Sluice. -->
+    <StartupHookSupport>false</StartupHookSupport>
   </PropertyGroup>
 
   <ItemGroup>

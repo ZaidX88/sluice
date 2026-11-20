@@ -11,6 +11,8 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <!-- Ignore DOTNET_STARTUP_HOOKS: the runtime must not load assemblies named by whoever starts Sluice. -->
+    <StartupHookSupport>false</StartupHookSupport>
   </PropertyGroup>
 
 </Project>

@@ -119,7 +119,86 @@ public sealed class LinuxPlatform : IPlatformServices
 
     public bool HasCaptureRights => CheckCaptureRights();
 
-    public string CaptureRightsHint => RightsHint;
+    public string CaptureRightsHint
+    {
+        get
+        {
+            if (HasCaptureRights || AppBinary is null) return RightsHint;
+            if (Launcher is not { } launcher)
+                return "Capturing traffic needs Sluice's launcher (the \"sluice\" file next to Sluice.Desktop), which this copy doesn't have. " +
+                    "Install Sluice with the Linux package's install.sh.";
+            if (LinuxCaptureRights.HasFileCapabilities(launcher))
+                return $"This copy of Sluice has capture rights: start it with {launcher} to use them.";
+            if (CanGrantCaptureRights)
+                return $"Capturing traffic needs capture rights for this copy of Sluice. Grant them (this asks for an administrator password), then start Sluice with {launcher}.";
+            if (ChangeablePath is { } path)
+                return $"Capturing traffic needs capture rights, and this copy of Sluice can't get them from here: {path} can be changed without " +
+                    "administrator rights, so anything running as you could change what gets them. Install Sluice with the Linux package's install.sh.";
+            return RightsHint;
+        }
+    }
+
+    // ---------- capture rights and autostart (#69, platforms.md §6.6) ----------
+
+    /// <summary>This copy's own binary (null when Sluice runs through <c>dotnet Sluice.Desktop.dll</c>).</summary>
+    private static readonly string? AppBinary = LinuxCaptureRights.AppBinary(Environment.ProcessPath, AppContext.BaseDirectory);
+
+    /// <summary>The launcher next to it, which gets the capabilities (null: this copy has none).</summary>
+    private static readonly string? Launcher = AppBinary is { } b ? LinuxCaptureRights.Launcher(b) : null;
+
+    /// <summary>
+    /// The first path someone other than root could change, where the launcher would then refuse to run: in this copy's
+    /// folder, or in the .NET folder the app loads. Read once: neither changes owner while Sluice runs.
+    /// </summary>
+    private static readonly Lazy<string?> ChangeableAppPath = new(() =>
+    {
+        if (Launcher is not { } launcher) return null;
+        return LinuxCaptureRights.FirstChangeablePath(Path.GetDirectoryName(launcher)!, LinuxCaptureRights.ReadOwner)
+            ?? LinuxCaptureRights.FirstChangeablePath(LinuxCaptureRights.RuntimeFolder(LinuxCaptureRights.FirstLine), LinuxCaptureRights.ReadOwner);
+    });
+
+    private static string? ChangeablePath => ChangeableAppPath.Value;
+
+    /// <summary>
+    /// True when this copy has no capture rights yet and can get them safely: it runs from its own binary, the launcher
+    /// is next to it, root alone can change its folder and the .NET folder, and pkexec and setcap exist.
+    /// </summary>
+    public bool CanGrantCaptureRights =>
+        !HasCaptureRights && Launcher is { } launcher && ChangeablePath is null
+        && LinuxCaptureRights.FindTool("pkexec") is not null && LinuxCaptureRights.FindTool("setcap") is not null
+        && !LinuxCaptureRights.HasFileCapabilities(launcher);
+
+    /// <summary>
+    /// <c>pkexec setcap</c> on the launcher, and <c>-r</c> on the apps if they still carry capabilities. Sluice must be
+    /// started again through the launcher to use them. Never throws.
+    /// </summary>
+    public Task<bool> TryGrantCaptureRightsAsync()
+    {
+        try
+        {
+            if (!CanGrantCaptureRights || AppBinary is not { } binary || Launcher is not { } launcher
+                || LinuxCaptureRights.FindTool("pkexec") is not { } pkexec || LinuxCaptureRights.FindTool("setcap") is not { } setcap)
+                return Task.FromResult(false);
+            var clear = LinuxCaptureRights.AppsWithCapabilities(binary, LinuxCaptureRights.HasAnyFileCapabilities);
+            return LinuxCaptureRights.GrantAsync(pkexec, setcap, launcher, LinuxCaptureRights.SetcapArguments(launcher, clear));
+        }
+        catch (SystemException) { return Task.FromResult(false); }
+    }
+
+    /// <summary>The entry starts the launcher when there is one, so Sluice has its capture rights after login.</summary>
+    private static readonly LinuxAutostart Login = new(
+        LinuxAutostart.EntryPathFor(Environment.GetEnvironmentVariable("XDG_CONFIG_HOME"),
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)),
+        Launcher ?? AppBinary);
+
+    /// <summary>Start at login through <c>~/.config/autostart/sluice.desktop</c>, when Sluice runs from its own binary.</summary>
+    public bool AutostartSupported => Login.Supported;
+
+    public bool Autostart
+    {
+        get => Login.Enabled;
+        set => Login.Enabled = value;
+    }
 
     /// <summary>A GUI cannot simply relaunch itself as root on Linux (sudo needs a terminal, and root apps lose the desktop session).</summary>
     public bool CanRestartElevated => false;

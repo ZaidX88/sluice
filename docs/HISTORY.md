@@ -147,3 +147,6 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   `/opt/sluice/sluice` (C, `packaging/linux/launcher/`) is the only file `install.sh` grants capture rights to; it
   starts the desktop app or the CLI with a fixed environment and passes the rights on. Sluice clears them before
   starting any other program (docs/linux/BUILD.md → The launcher).
+- Capture rights and autostart on Linux (2026-11-20, #69): "Grant capture rights" runs `pkexec setcap` on the
+  launcher next to the running copy (and removes any capabilities from the apps), only when root alone can change that
+  folder; "Start Sluice when I log in" writes `~/.config/autostart/sluice.desktop`, which starts the launcher.

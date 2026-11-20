@@ -56,6 +56,15 @@ internal static partial class Libc
     [LibraryImport("libc", SetLastError = true, StringMarshalling = StringMarshalling.Utf8)]
     public static partial int statx(int dirFd, string path, int flags, uint mask, byte[] buffer);
 
+    public const int AT_SYMLINK_NOFOLLOW = 0x100;
+
+    /// <summary>realpath(3) with a buffer it allocates (free it with <see cref="free"/>); 0 when the path can't be resolved.</summary>
+    [LibraryImport("libc", EntryPoint = "realpath", SetLastError = true, StringMarshalling = StringMarshalling.Utf8)]
+    public static partial nint realpath(string path, nint resolved);
+
+    [LibraryImport("libc")]
+    public static partial void free(nint pointer);
+
     [LibraryImport("libc")]
     public static partial int close(int fd);
 

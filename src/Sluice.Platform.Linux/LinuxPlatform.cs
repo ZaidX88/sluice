@@ -147,21 +147,21 @@ public sealed class LinuxPlatform : IPlatformServices
     private static readonly string? Launcher = AppBinary is { } b ? LinuxCaptureRights.Launcher(b) : null;
 
     /// <summary>
-    /// The first path someone other than root could change, where the launcher would then refuse to run: in this copy's
-    /// folder, or in the .NET folder the app loads. Read once: neither changes owner while Sluice runs.
+    /// The first path someone other than root could change, where the launcher would then refuse to run (the launcher
+    /// itself, its folder, the folders above it, the .NET folder: <see cref="LinuxCaptureRights.FirstChangeablePath"/>).
+    /// Read once for the banner; <see cref="TryGrantCaptureRightsAsync"/> checks again right before the prompt.
     /// </summary>
-    private static readonly Lazy<string?> ChangeableAppPath = new(() =>
-    {
-        if (Launcher is not { } launcher) return null;
-        return LinuxCaptureRights.FirstChangeablePath(Path.GetDirectoryName(launcher)!, LinuxCaptureRights.ReadOwner)
-            ?? LinuxCaptureRights.FirstChangeablePath(LinuxCaptureRights.RuntimeFolder(LinuxCaptureRights.FirstLine), LinuxCaptureRights.ReadOwner);
-    });
+    private static readonly Lazy<string?> ChangeableAppPath = new(() => Launcher is { } launcher ? FirstChangeable(launcher) : null);
+
+    private static string? FirstChangeable(string launcher) =>
+        LinuxCaptureRights.FirstChangeablePath(launcher, LinuxCaptureRights.FirstLine, LinuxCaptureRights.FileSystemView.Real);
 
     private static string? ChangeablePath => ChangeableAppPath.Value;
 
     /// <summary>
     /// True when this copy has no capture rights yet and can get them safely: it runs from its own binary, the launcher
-    /// is next to it, root alone can change its folder and the .NET folder, and pkexec and setcap exist.
+    /// is next to it (not a link), root alone can change its folder, the folders above it and the .NET folder, and pkexec
+    /// and setcap exist.
     /// </summary>
     public bool CanGrantCaptureRights =>
         !HasCaptureRights && Launcher is { } launcher && ChangeablePath is null
@@ -169,8 +169,8 @@ public sealed class LinuxPlatform : IPlatformServices
         && !LinuxCaptureRights.HasFileCapabilities(launcher);
 
     /// <summary>
-    /// <c>pkexec setcap</c> on the launcher, and <c>-r</c> on the apps if they still carry capabilities. Sluice must be
-    /// started again through the launcher to use them. Never throws.
+    /// <c>pkexec setcap</c> on the launcher's real path, and <c>-r</c> on the apps if they still carry capabilities, after
+    /// checking the folders again. Sluice must be started again through the launcher to use them. Never throws.
     /// </summary>
     public Task<bool> TryGrantCaptureRightsAsync()
     {
@@ -179,8 +179,13 @@ public sealed class LinuxPlatform : IPlatformServices
             if (!CanGrantCaptureRights || AppBinary is not { } binary || Launcher is not { } launcher
                 || LinuxCaptureRights.FindTool("pkexec") is not { } pkexec || LinuxCaptureRights.FindTool("setcap") is not { } setcap)
                 return Task.FromResult(false);
-            var clear = LinuxCaptureRights.AppsWithCapabilities(binary, LinuxCaptureRights.HasAnyFileCapabilities);
-            return LinuxCaptureRights.GrantAsync(pkexec, setcap, launcher, LinuxCaptureRights.SetcapArguments(launcher, clear));
+            // Again, right before the prompt: the banner can stay up for a long time. Once root alone can change every
+            // folder on the way, nothing can be swapped between this check and setcap, which gets the real paths.
+            if (FirstChangeable(launcher) is not null || LinuxCaptureRights.ResolveRealPath(launcher) is not { } real)
+                return Task.FromResult(false);
+            var clear = LinuxCaptureRights.AppsWithCapabilities(Path.Combine(Path.GetDirectoryName(real)!, Path.GetFileName(binary)),
+                LinuxCaptureRights.HasAnyFileCapabilities);
+            return LinuxCaptureRights.GrantAsync(pkexec, setcap, real, LinuxCaptureRights.SetcapArguments(real, clear));
         }
         catch (SystemException) { return Task.FromResult(false); }
     }

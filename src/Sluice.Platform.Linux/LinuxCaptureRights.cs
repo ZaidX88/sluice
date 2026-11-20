@@ -6,8 +6,9 @@ namespace Sluice.Platform.Linux;
 /// Gives a copy of Sluice that runs without the installer the capabilities capture needs (#69): <c>pkexec setcap</c> on
 /// the launcher next to it (<c>sluice</c>, docs/linux/BUILD.md → The launcher), the same as <c>install.sh</c> does, and
 /// <c>setcap -r</c> on the apps if an older install left capabilities on them. Offered only where the launcher would
-/// then run: root alone can change its folder (and everything in it) and the .NET folder the app loads; otherwise anything
-/// running as the user could change what gets the capabilities.
+/// then run: root alone can change the launcher's folder, every folder above it and everything in it, and the same for
+/// the .NET folder the app loads; otherwise anything running as the user could swap what gets the capabilities, even
+/// while the password prompt is open.
 /// </summary>
 internal static class LinuxCaptureRights
 {
@@ -68,6 +69,9 @@ internal static class LinuxCaptureRights
 
     // ---------- the .NET folder, found as the app host (and the launcher) finds it ----------
 
+    /// <summary>The files that name the .NET folder, in the order the app host reads them.</summary>
+    private static readonly string[] LocationFiles = ["/etc/dotnet/install_location_x64", "/etc/dotnet/install_location"];
+
     /// <summary>
     /// The .NET folder the app will load: the first line of <c>/etc/dotnet/install_location_x64</c>, then of
     /// <c>/etc/dotnet/install_location</c>, otherwise <c>/usr/share/dotnet</c>. The launcher refuses to run unless root
@@ -75,7 +79,7 @@ internal static class LinuxCaptureRights
     /// </summary>
     public static string RuntimeFolder(Func<string, string?> firstLine)
     {
-        foreach (var file in new[] { "/etc/dotnet/install_location_x64", "/etc/dotnet/install_location" })
+        foreach (var file in LocationFiles)
             if (firstLine(file) is { Length: > 0 } folder) return folder;
         return "/usr/share/dotnet";
     }
@@ -87,46 +91,133 @@ internal static class LinuxCaptureRights
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return null; }
     }
 
-    // ---------- who can change a folder ----------
+    // ---------- who can change what the launcher runs (the launcher's own rules: check_up, check_folder) ----------
 
-    /// <summary>One file's owner and permissions, following symbolic links; null when it can't be read.</summary>
-    public readonly record struct FileOwner(uint Uid, UnixFileMode Mode);
+    /// <summary>One file's owner, permissions and type; null when it can't be read.</summary>
+    public readonly record struct FileOwner(uint Uid, UnixFileMode Mode, FileKind Kind = FileKind.File);
+
+    public enum FileKind { File, Directory, Link, Other }
 
     /// <summary>
-    /// The first path in <paramref name="folder"/> (the folder itself first, then everything in it) that someone other
-    /// than root could change: not owned by root, or writable by its group or others. Null when there is none.
+    /// How the checks see the file system: <see cref="Stat"/> follows links, <see cref="Lstat"/> doesn't,
+    /// <see cref="RealPath"/> resolves every link (null when it can't), <see cref="Entries"/> lists a folder.
     /// </summary>
-    public static string? FirstChangeablePath(string folder, Func<string, FileOwner?> owner)
+    public sealed record FileSystemView(
+        Func<string, FileOwner?> Stat,
+        Func<string, FileOwner?> Lstat,
+        Func<string, string?> RealPath,
+        Func<string, IEnumerable<string>> Entries)
     {
-        if (!IsRootOnly(owner(folder))) return folder;
-        try
+        public static readonly FileSystemView Real = new(
+            p => ReadOwner(p, follow: true), p => ReadOwner(p, follow: false), ResolveRealPath, ListFolder);
+    }
+
+    /// <summary>
+    /// The first path someone other than root could change, so that the launcher would refuse to run or what gets the
+    /// capabilities could be swapped: the launcher itself being a link; the launcher's folder, every folder above it (as
+    /// written and as its real path) and everything inside it, with no links; <c>/etc/dotnet</c> and its location files;
+    /// the .NET folder, the folders above it and everything inside it, with links only to safe files inside it. Null when
+    /// root alone can change all of it. The same rules as the launcher (docs/linux/BUILD.md → The launcher).
+    /// </summary>
+    public static string? FirstChangeablePath(string launcher, Func<string, string?> firstLine, FileSystemView fs)
+    {
+        if (fs.Lstat(launcher) is not { Kind: FileKind.File }) return launcher;     // a link, or not a file at all
+        return FirstChangeableInFolder(Path.GetDirectoryName(launcher)!, allowLinks: false, fs)
+            ?? FirstChangeableRuntimePath(firstLine, fs);
+    }
+
+    /// <summary>The launcher's <c>check_runtime</c>: /etc/dotnet and both location files, then the .NET folder.</summary>
+    public static string? FirstChangeableRuntimePath(Func<string, string?> firstLine, FileSystemView fs)
+    {
+        if (fs.Stat("/etc/dotnet") is not null && FirstChangeableUp("/etc/dotnet", fs) is { } etc) return etc;
+        foreach (var file in LocationFiles)
+            if (fs.Stat(file) is { } f && (f.Kind != FileKind.File || !IsRootOnly(f))) return file;
+        var folder = RuntimeFolder(firstLine);
+        return Path.IsPathRooted(folder) ? FirstChangeableInFolder(folder, allowLinks: true, fs) : folder;
+    }
+
+    /// <summary>
+    /// The launcher's <c>check_folder</c>: <paramref name="folder"/> and every folder above it, both as written and as its
+    /// real path, then everything inside it without following links. A link inside is refused, or with
+    /// <paramref name="allowLinks"/> allowed when it leads to a root-only file inside the folder.
+    /// </summary>
+    public static string? FirstChangeableInFolder(string folder, bool allowLinks, FileSystemView fs)
+    {
+        if (fs.RealPath(folder) is not { } real) return folder;
+        if ((FirstChangeableUp(folder, fs) ?? FirstChangeableUp(real, fs)) is { } up) return up;
+        return FirstChangeableInside(real, real, allowLinks, fs);
+    }
+
+    /// <summary>The launcher's <c>check_up</c>: <paramref name="path"/> and every folder above it, up to <c>/</c>.</summary>
+    public static string? FirstChangeableUp(string path, FileSystemView fs)
+    {
+        for (var p = Path.TrimEndingDirectorySeparator(path); ; p = Path.GetDirectoryName(p) ?? "/")
         {
-            foreach (var path in Directory.EnumerateFileSystemEntries(folder, "*", new EnumerationOptions
-                     { RecurseSubdirectories = true, IgnoreInaccessible = false, AttributesToSkip = 0 }))
-                if (!IsRootOnly(owner(path))) return path;
+            if (p.Length == 0) p = "/";
+            if (!IsRootOnly(fs.Stat(p))) return p;
+            if (p == "/") return null;
         }
+    }
+
+    private static string? FirstChangeableInside(string folder, string root, bool allowLinks, FileSystemView fs)
+    {
+        IEnumerable<string> entries;
+        try { entries = fs.Entries(folder); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return folder; }
+        foreach (var path in entries)
+        {
+            var entry = fs.Lstat(path);
+            if (entry is { Kind: FileKind.Link })
+            {
+                if (allowLinks && fs.RealPath(path) is { } target && IsInside(target, root) && IsRootOnly(fs.Stat(target))) continue;
+                return path;
+            }
+            if (!IsRootOnly(entry)) return path;
+            if (entry is { Kind: FileKind.Directory } && FirstChangeableInside(path, root, allowLinks, fs) is { } inside) return inside;
+        }
         return null;
     }
+
+    private static bool IsInside(string path, string root) =>
+        path == root || path.StartsWith(root == "/" ? root : root + "/", StringComparison.Ordinal);
 
     private static bool IsRootOnly(FileOwner? f) =>
         f is { Uid: 0 } o && (o.Mode & (UnixFileMode.GroupWrite | UnixFileMode.OtherWrite)) == 0;
 
-    /// <summary>The real owner and permissions of <paramref name="path"/> (statx, following links).</summary>
-    public static FileOwner? ReadOwner(string path)
+    private static IEnumerable<string> ListFolder(string folder) =>
+        Directory.EnumerateFileSystemEntries(folder, "*", new EnumerationOptions
+            { RecurseSubdirectories = false, IgnoreInaccessible = false, AttributesToSkip = 0 });
+
+    /// <summary>The real owner, permissions and type of <paramref name="path"/> (statx; links followed or not).</summary>
+    public static FileOwner? ReadOwner(string path, bool follow = true)
     {
         try
         {
             var buffer = new byte[256];
-            if (Native.Libc.statx(Native.Libc.AT_FDCWD, path, 0, Native.Libc.STATX_UID | StatxMode, buffer) != 0) return null;
+            if (Native.Libc.statx(Native.Libc.AT_FDCWD, path, follow ? 0 : Native.Libc.AT_SYMLINK_NOFOLLOW,
+                    Native.Libc.STATX_UID | StatxType | StatxMode, buffer) != 0) return null;
             var uid = BitConverter.ToUInt32(buffer, 20);
             var mode = BitConverter.ToUInt16(buffer, 28);   // stx_mode: type bits and permissions
-            return new FileOwner(uid, (UnixFileMode)(mode & 0xFFF));
+            var kind = (mode & 0xF000) switch { 0x8000 => FileKind.File, 0x4000 => FileKind.Directory, 0xA000 => FileKind.Link, _ => FileKind.Other };
+            return new FileOwner(uid, (UnixFileMode)(mode & 0xFFF), kind);
         }
         catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException) { return null; }
     }
 
-    private const uint StatxMode = 0x2;   // STATX_MODE
+    /// <summary>realpath(3): every link resolved; null when the path doesn't exist or can't be resolved.</summary>
+    public static string? ResolveRealPath(string path)
+    {
+        try
+        {
+            var p = Native.Libc.realpath(path, 0);
+            if (p == 0) return null;
+            try { return System.Runtime.InteropServices.Marshal.PtrToStringUTF8(p); }
+            finally { Native.Libc.free(p); }
+        }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException) { return null; }
+    }
+
+    private const uint StatxType = 0x1, StatxMode = 0x2;   // STATX_TYPE, STATX_MODE
 
     // ---------- getcap, pkexec setcap ----------
 

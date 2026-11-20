@@ -72,7 +72,7 @@ warnings and antivirus complaints about the WinDivert driver.
   nftables.
 - **"Grant capture rights" button** (pkexec + setcap) for people who run the app without the installer. Done: the
   banner button (#70) and the Linux part (#69: `setcap` on the launcher next to the running copy, only when root alone
-  can change that folder).
+  can change that folder and every folder above it).
 - **Autostart entry** (`~/.config/autostart`) as a setting. Done: the switch in Settings (#70) and the Linux part
   (#69: an XDG autostart entry that starts the launcher).
 - The installer's online paths (package-manager install, Microsoft's .NET installer, the GitHub download) have not been

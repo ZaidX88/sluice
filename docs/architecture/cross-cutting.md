@@ -83,7 +83,8 @@ headers (`Interceptor.DiagnosticPackets`). Helper output (sing-box) is logged li
   before it starts, lowered right after). Sluice changes its own group with
   `setresgid` while capturing (real, effective and saved group alike) and restores all three on stop. A copy run
   without the installer can get the same rights from the app (#69): `pkexec setcap` on the launcher next to it, only
-  when root alone can change that folder (the launcher refuses to run otherwise). Never through
+  when root alone can change that folder and every folder above it (the launcher refuses to run otherwise, and
+  nothing can be swapped while the password prompt is open). Never through
   `dotnet Sluice.Desktop.dll`, which would put them on `dotnet` itself.
 - **Fail-open capture.** If Sluice exits or crashes, WinDivert's handles close and the nft queue rule has `bypass`, so
   the machine keeps its connectivity; the price is that traffic which rules sent through tunnels then goes **direct**.

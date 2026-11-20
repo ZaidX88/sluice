@@ -151,4 +151,5 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   hint (on Linux, through the launcher) instead of a fixed "open it again".
 - Capture rights and autostart on Linux (2026-11-20, #69): "Grant capture rights" runs `pkexec setcap` on the
   launcher next to the running copy (and removes any capabilities from the apps), only when root alone can change that
-  folder; "Start Sluice when I log in" writes `~/.config/autostart/sluice.desktop`, which starts the launcher.
+  folder, every folder above it and the .NET folder (checked again right before the prompt); "Start Sluice when I log
+  in" writes `~/.config/autostart/sluice.desktop`, which starts the launcher.

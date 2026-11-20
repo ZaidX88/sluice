@@ -155,3 +155,6 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   launcher next to the running copy (and removes any capabilities from the apps), only when root alone can change that
   folder, every folder above it and the .NET folder (checked again right before the prompt); "Start Sluice when I log
   in" writes `~/.config/autostart/sluice.desktop`, which starts the launcher.
+- Changelog (2026-11-20, #94): `CHANGELOG.md` at the root for users (Keep a Changelog: `Unreleased`, then a drafted
+  `1.0.0` with its known limitations). A pull request with a change users would notice adds a line; it is a shared
+  file in the rules and the area check, and the release notes come from it.

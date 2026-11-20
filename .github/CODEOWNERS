@@ -23,6 +23,7 @@
 
 /docs/*.md
 /docs/architecture/
+/CHANGELOG.md
 
 # Rules and settled decisions stay with the owner, although they are in docs/.
 /AGENTS.md                          @ZaidX88

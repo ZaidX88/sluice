@@ -1,6 +1,6 @@
 # One area per pull request (docs/CONTRIBUTING.md → Areas): fails a pull request whose changed files belong to more
-# than one area. Shared docs (docs/*.md and docs/architecture/, except the UI's desktop.md) belong to every area and
-# don't count. The repository owner's pull requests pass with the list of areas, for changes that are meant to span
+# than one area. Shared docs (docs/*.md, docs/architecture/ except the UI's desktop.md, and CHANGELOG.md) belong to
+# every area and don't count. The repository owner's pull requests pass with the list of areas, for changes that are meant to span
 # areas (rules, renames).
 #
 # pull_request_target runs in this repository's context so it works for pull requests from forks; it only reads the
@@ -42,7 +42,7 @@ jobs:
               src/Sluice.Desktop/*|src/Sluice.App/*|docs/ui/*|docs/architecture/desktop.md) echo ui ;;
               docs/architecture/*) echo shared ;;
               docs/*/*) echo core ;;
-              docs/*.md) echo shared ;;
+              docs/*.md|CHANGELOG.md) echo shared ;;
               *) echo core ;;
             esac
           }

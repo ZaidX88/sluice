@@ -286,8 +286,8 @@ bool Autostart { get => false; set { } }                               // start 
 
 | Member | Windows | Linux |
 |---|---|---|
-| `CanGrantCaptureRights` / `TryGrantCaptureRightsAsync` | not offered (capture needs administrator; the banner offers a restart as administrator) | pkexec + setcap on the running binary (#69) |
-| `AutostartSupported` / `Autostart` | not offered yet | `~/.config/autostart/sluice.desktop` (#69) |
+| `CanGrantCaptureRights` / `TryGrantCaptureRightsAsync` | not offered (capture needs administrator; the banner offers a restart as administrator) | pkexec + setcap on the launcher next to the running copy (`sluice`), plus `setcap -r` on the apps if they still carry capabilities, in one password prompt; offered only when the launcher is there and isn't a link, and root alone can change its folder, every folder above it (as written and as its real path) and everything in it, and the same for the .NET folder (links there only to root-only files inside it): the launcher's own rules, so the grant is never offered where the launcher would refuse to run, and nothing can be swapped while the password prompt is open. Checked again right before `pkexec`; `setcap` gets the real paths. Sluice is then started through the launcher (`LinuxCaptureRights`, #69) |
+| `AutostartSupported` / `Autostart` | not offered yet | `$XDG_CONFIG_HOME/autostart/sluice.desktop` (default `~/.config/autostart/`) starting the launcher (or the running binary in a copy without one), so Sluice has its capture rights after login (`LinuxAutostart`, #69) |
 
 The desktop app (#70, done) shows the button ("Grant capture rights") in the capture-rights banner and the switch
 ("Start Sluice when I log in", in Settings → Sluice on this computer) only when the platform says it supports them.

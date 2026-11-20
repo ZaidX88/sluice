@@ -54,8 +54,9 @@ Program.cs ──▶ App (App.axaml.cs)
 without tray mode) closes the window, removes the tray icon, stops the pipe listener and disposes `EngineHost`.
 
 **After an unexpected error** (`Services/CrashGuard.cs`, #24): an exception nothing caught, on the UI thread or any
-other, is logged, capture is stopped off the UI thread (`EngineHost.StopInterceptionForCrash`, at most 5 s), and the
-app exits. Unobserved task exceptions are only logged. `--crash-test ui|thread|task` raises such an error 15 s after
+other, is logged, capture is stopped off the UI thread (`EngineHost.StopInterceptionForCrash`, at most 5 s), the tray
+icon is removed (Avalonia removes it in its next pass of UI work, which is run before exiting; otherwise Windows keeps a
+dead icon until the mouse passes over it), and the app exits. Unobserved task exceptions are only logged. `--crash-test ui|thread|task` raises such an error 15 s after
 start, for testing. File pickers that fail show a message instead (`Dialogs.PickFile`).
 
 ## `EngineHost`: the bridge

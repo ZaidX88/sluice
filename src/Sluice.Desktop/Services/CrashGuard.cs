@@ -30,9 +30,14 @@ internal static class CrashGuard
         {
             e.Handled = true;   // exit in order below instead of tearing down the UI loop
             Handle(e.Exception, "on the UI thread");
+            RemoveTrayIcon();
             Environment.Exit(1);
         };
-        AppDomain.CurrentDomain.UnhandledException += (_, e) => Handle(e.ExceptionObject as Exception, "in the background");
+        AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+        {
+            Handle(e.ExceptionObject as Exception, "in the background");
+            RemoveTrayIcon();
+        };
         TaskScheduler.UnobservedTaskException += (_, e) =>
         {
             Log(LogLevel.Error, $"A background task failed and nothing handled it: {e.Exception.GetBaseException().Message}");
@@ -49,6 +54,27 @@ internal static class CrashGuard
         Log(LogLevel.Normal, host.StopInterceptionForCrash(TimeSpan.FromSeconds(5))
             ? "Capture stopped before closing."
             : "Capture could not be stopped in time; its rules may be left behind.");
+    }
+
+    /// <summary>
+    /// The app ends without <c>ExitApp</c>, which would remove the tray icon: on Windows a dead icon would stay in the
+    /// notification area until the mouse passes over it. The icon belongs to the UI thread, and Avalonia removes it in
+    /// its next pass of pending UI work, so that pass is run here before the app ends. From another thread this waits
+    /// at most a second.
+    /// </summary>
+    private static void RemoveTrayIcon()
+    {
+        static void Remove()
+        {
+            AppTray.Current?.Dispose();
+            Dispatcher.UIThread.RunJobs();
+        }
+        try
+        {
+            if (Dispatcher.UIThread.CheckAccess()) Remove();
+            else Dispatcher.UIThread.InvokeAsync(Remove).GetTask().Wait(TimeSpan.FromSeconds(1));
+        }
+        catch (Exception) { /* closing anyway */ }
     }
 
     private static void Log(LogLevel level, string message)

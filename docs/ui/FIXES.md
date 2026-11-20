@@ -58,6 +58,12 @@ package): drawn by Avalonia in Sluice's theme and font, no portal, and GTK is ne
 capture rights the portal dialog is kept; Windows is unchanged. `SLUICE_MANAGED_DIALOGS=1` forces the managed dialogs
 for testing without capture rights (the launcher doesn't pass it on).
 
+**Known limit of the managed dialog** (seen in the live check of #128): in Save as, a folder typed into the location
+bar isn't used for the result. Avalonia builds it as `Path.Combine(Location, FileName)` from the folder the dialog is
+showing, and the path came out relative, so it was resolved against Sluice's working folder (`/`) and the save was
+refused (nothing written, the error shown). Reaching the folder by clicking works. It's inside Avalonia's dialog, so the
+fix belongs upstream.
+
 ## 5. A failing file dialog closed the app; a crash could leave capture behind — fixed
 
 **Seen** ([issue #24](https://github.com/ZaidX88/sluice/issues/24), part of #9): any exception from a file picker (Open

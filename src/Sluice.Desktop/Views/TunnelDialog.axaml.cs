@@ -162,17 +162,35 @@ public partial class TunnelDialog : SluiceWindow
     }
 
 
+    // async void (an event handler): anything it throws would close the app, so every failure is shown here (#24).
     private async void OnLoadKey(object? sender, RoutedEventArgs e)
     {
-        var ssh = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".ssh");
-        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        string? path;
+        try
         {
-            Title = "Choose a private key",
-            FileTypeFilter = [new FilePickerFileType("Private keys") { Patterns = ["id_*", "*.pem", "*.key"] }, FilePickerFileTypes.All],
-            SuggestedStartLocation = Directory.Exists(ssh) ? await StorageProvider.TryGetFolderFromPathAsync(ssh) : null,
-        });
-        if (files.Count == 0 || files[0].TryGetLocalPath() is not { } path) return;
-        var text = await File.ReadAllTextAsync(path);
+            var ssh = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".ssh");
+            var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+            {
+                Title = "Choose a private key",
+                FileTypeFilter = [new FilePickerFileType("Private keys") { Patterns = ["id_*", "*.pem", "*.key"] }, FilePickerFileTypes.All],
+                SuggestedStartLocation = Directory.Exists(ssh) ? await StorageProvider.TryGetFolderFromPathAsync(ssh) : null,
+            });
+            path = files.Count > 0 ? files[0].TryGetLocalPath() : null;
+        }
+        catch (OperationCanceledException) { return; }
+        catch (Exception ex)
+        {
+            ShowError($"The file dialog couldn't open: {ex.Message}");
+            return;
+        }
+        if (path is null) return;
+        string text;
+        try { text = await File.ReadAllTextAsync(path); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            ShowError($"Could not read the key: {ex.Message}");
+            return;
+        }
         if (text.Contains("PuTTY-User-Key-File", StringComparison.Ordinal))
         {
             ShowError("PuTTY .ppk keys are not supported; export the key in OpenSSH format (PuTTYgen → Conversions → Export OpenSSH key).");

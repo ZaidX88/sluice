@@ -6,7 +6,7 @@ open an issue).
 | Date | Decision | Why |
 |---|---|---|
 | 2026-11-10 | C# / .NET 10; **WinDivert** for Windows capture, not a custom WFP driver | No driver signing or WDK needed |
-| 2026-11-10 | Keep **Proxifier 4 `.ppx`** import/export byte-compatible (incl. password encryption) | Easy migration from Proxifier |
+| 2026-11-10 | Keep **Proxifier 4 `.ppx`** import/export byte-compatible (incl. password encryption) (replaced on 2026-11-20: `.ppx` import/export dropped, the password encryption kept) | Easy migration from Proxifier |
 | 2026-11-10 | Outbounds are called **tunnels**, never "proxies" (UI and code); native format `.sluice` (JSON) | Owner's terminology, like HTTP Injector |
 | 2026-11-10 | Tunnel roadmap: native SSH (payload, TLS+SNI) → sing-box sidecar for SS/VMess/VLESS/REALITY/Trojan/Hysteria2/TUIC → share links/subscriptions → UDP | Covers what users of such apps expect |
 | 2026-11-10 | sing-box as a **separate helper process** (GPL-3.0), one per tunnel with a local SOCKS5 inbound | Mature protocol implementations without linking GPL code |
@@ -33,6 +33,7 @@ open an issue).
 | 2026-11-19 | **No ARM64 release for now:** v1.0.0 ships for x86-64 (Windows and Linux) only; the ARM64 package (#66) is closed as not planned and kept in REQUIRED §5 | No plan to release for ARM64 for the time being; revisit after 1.0 |
 | 2026-11-19 | Sluice is licensed under **GPL-3.0-only** (`LICENSE`); bundled components are listed in `THIRD-PARTY-NOTICES.md`; contributions are under the same licence (#92) | Keeps Sluice and any redistributed fork open source, the same family as sing-box (GPL-3.0) and comparable clients; a 1.0 release needs a licence |
 | 2026-11-19 | **Packaging scripts live on `main`; releases are built from tags.** Packaging scripts are code: `packaging/linux/**` and `scripts/package-linux.sh` (Linux area), `packaging/windows/**` and `scripts/package-windows.ps1` (Windows area). Built packages are never committed; CI builds them from a tag `vX.Y.Z` or `vX.Y.Z-rc.N` on `main` that matches `<Version>`. After 1.0, patch releases come from a `release/X.Y` branch cut from the tag. `release/linux` and `release/windows` are retired (#93) | Packaging couldn't be reviewed or fixed through pull requests, and a tag on `main` couldn't build a release (#74) |
+| 2026-11-20 | **No Proxifier `.ppx` import or export** (replaces the 2026-11-10 `.ppx` decision): Sluice opens and saves `.sluice` profiles only, in the app and the CLI. The profile password encryption (disabled / basic / account / master) stays as it is, so existing `.sluice` files still open (#133) | Owner's request before 1.0.0: `.ppx` can't hold most of Sluice's tunnels (SSH, VLESS, Trojan…), so export left them out, and import and export are more to keep correct; no released Sluice ever read `.ppx` files, so nobody loses them |
 
 Considered, not decided: an own **WFP connect-redirect driver** for Windows capture (as Proxifier does) instead of
 per-packet WinDivert. Measurements show it isn't needed for now (docs/windows/FIXES.md §3); it would reverse the 2026-11-10

@@ -1,10 +1,11 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Sluice.Core.Profiles;
+using Sluice.Desktop.Controls;
 
 namespace Sluice.Desktop.Views;
 
-public partial class RuleDialog : Window
+public partial class RuleDialog : SluiceWindow
 {
     private sealed record ActionChoice(string Text, RuleAction Action)
     {

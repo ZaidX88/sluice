@@ -1,5 +1,6 @@
-<Window xmlns="https://github.com/avaloniaui"
+<c:SluiceWindow xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:c="using:Sluice.Desktop.Controls"
         x:Class="Sluice.Desktop.Views.RuleDialog"
         Title="Rule" Width="520" SizeToContent="Height" CanResize="False"
         WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
@@ -35,4 +36,4 @@
             <Button Content="Save" Theme="{StaticResource PrimaryButton}" IsDefault="True" Click="OnSave" MinWidth="90" Margin="10,0,0,0"/>
         </StackPanel>
     </StackPanel>
-</Window>
+</c:SluiceWindow>

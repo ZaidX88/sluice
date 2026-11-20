@@ -32,6 +32,7 @@ Program.cs ──▶ App (App.axaml.cs)
 | `Views/` | The pages (`ConnectionsView`, `StatisticsView`, `LogView`, `TunnelsView`, `RulesView`, `SettingsView`; code-behind in `PageViews.axaml.cs`) and dialogs (`TunnelDialog`, `RuleDialog`, `ImportDialog`, `PasswordDialog`) |
 | `Mvvm/ObservableObject.cs` | A minimal MVVM kit: `ObservableObject`, `RelayCommand`, `AsyncCommand` (no MVVM library) |
 | `Controls/IconView.cs` | Line icons drawn from vector paths (the WPF app's Segoe Fluent Icons font does not exist on Linux) |
+| `Controls/SluiceWindow.cs`, `Controls/TitleBar.cs` | Every window derives from `SluiceWindow` (#44). On Windows (a Win32 window handle) it turns the system title bar off (`ExtendClientAreaToDecorationsHint`, `WindowDecorations.BorderOnly`) and draws `TitleBar` (icon, title, minimise / maximise / close; close only when the window can't be resized) with a 1 px `WindowBorder`; Windows keeps the resize edges, shadow, rounded corners and snapping. Each part has its window role (`WindowDecorationProperties.ElementRole`): the bar is the caption (move, double-click to maximise, Aero Snap), the maximise button gives Windows 11's snap layouts. The bar's height is added to the window's height, so the content keeps its space. Colours: `TitleBarBg`, `TitleBarText`, `TitleBarButtonHover`, `WindowBorder` in `Palette.axaml`. Other window systems keep their own title bar until #84 |
 | `Theme/` | `Palette.axaml` (light/dark colours), `Controls.axaml`, `Styles.axaml` |
 
 ## Start-up and shutdown: `App`

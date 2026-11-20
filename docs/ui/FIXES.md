@@ -17,7 +17,6 @@ Status; shorten the header to "Share"; add `--screenshot DIR --size 1040x650` to
 
 ## 2. Avalonia UI gaps (small)
 
-- **Dark title bar on Windows** (the WPF app used DWM `DWMWA_USE_IMMERSIVE_DARK_MODE`): add it via `IPlatformServices`.
 - **Screenshot mode** renders at 1× because `RenderTargetBitmap` mis-scales DataGrid content above 100% DPI (screenshots
   only; `SLUICE_SHOT_SCALE` overrides). For real-window captures use `PrintWindow` with `PW_RENDERFULLCONTENT` from a
   DPI-aware process.

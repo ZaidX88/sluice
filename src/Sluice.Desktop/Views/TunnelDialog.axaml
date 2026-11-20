@@ -1,5 +1,6 @@
-<Window xmlns="https://github.com/avaloniaui"
+<c:SluiceWindow xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:c="using:Sluice.Desktop.Controls"
         x:Class="Sluice.Desktop.Views.TunnelDialog"
         Title="Tunnel" Width="560" SizeToContent="Height" MaxHeight="860" CanResize="False"
         WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
@@ -246,4 +247,4 @@
             </StackPanel>
         </ScrollViewer>
     </DockPanel>
-</Window>
+</c:SluiceWindow>

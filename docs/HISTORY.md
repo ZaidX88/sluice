@@ -134,3 +134,5 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   folder (docs/core/FIXES.md §8).
 - Security policy (2026-11-20): `.github/SECURITY.md`; security problems are reported through GitHub's private
   vulnerability reporting, linked from the README and CONTRIBUTING.
+- Sluice's own title bar on Windows (2026-11-20, #81): every window derives from `SluiceWindow`; white bar and 1 px
+  black border in light, black bar in dark, following the theme; snapping and snap layouts kept.

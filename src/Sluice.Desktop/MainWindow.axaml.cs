@@ -1,10 +1,11 @@
 using Avalonia.Controls;
 using Sluice.Desktop.Services;
 using Sluice.Desktop.ViewModels;
+using Sluice.Desktop.Controls;
 
 namespace Sluice.Desktop;
 
-public partial class MainWindow : Window
+public partial class MainWindow : SluiceWindow
 {
     private readonly AppSettings? _settings;
 

@@ -6,6 +6,7 @@ using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Sluice.Core.Profiles;
 using Sluice.Desktop.Views;
+using Sluice.Desktop.Controls;
 
 namespace Sluice.Desktop.Services;
 
@@ -128,7 +129,7 @@ public static class Dialogs
 }
 
 /// <summary>Themed replacement for the WPF MessageBox.</summary>
-public sealed class MessageDialog : Window
+public sealed class MessageDialog : SluiceWindow
 {
     private MessageDialog(string title, string message, string[] buttons, int primary)
     {

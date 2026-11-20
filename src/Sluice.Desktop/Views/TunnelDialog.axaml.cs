@@ -3,10 +3,11 @@ using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using Sluice.Core.Profiles;
 using Sluice.Core.Tunnels;
+using Sluice.Desktop.Controls;
 
 namespace Sluice.Desktop.Views;
 
-public partial class TunnelDialog : Window
+public partial class TunnelDialog : SluiceWindow
 {
     private readonly Dictionary<string, string> _settings;
     private readonly string _originalAddress;

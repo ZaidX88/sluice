@@ -21,10 +21,11 @@ Program.cs ──▶ App (App.axaml.cs)
 |---|---|
 | `Program.cs` | Avalonia set-up; on Linux with capture rights, the in-process file dialog instead of the portal ([ui/FIXES §4](../ui/FIXES.md)) |
 | `App.axaml(.cs)` | Start-up and shutdown, command-line options, single instance, clipboard and folder helpers |
-| `MainWindow.axaml(.cs)` | The shell: sidebar navigation, top bar (capture button, search, rates sparkline), banner, current page; closing hides to the tray when `MinimizeToTray` is on |
+| `MainWindow.axaml(.cs)` | The shell: sidebar navigation, top bar (capture button, search, rates sparkline), banner, current page; closing hides to the tray when `MinimizeToTray` is on and a tray is there (`TrayHost`), otherwise quits |
 | `Services/EngineHost.cs` | The bridge between UI and engine (below) |
 | `Services/Platform.cs` | `OsPlatform.Current`, chosen with `#if WINDOWS` |
 | `Services/AppSettings.cs` | Per-user settings ([profiles.md](profiles.md#app-settings-and-the-settings-folder)) |
+| `Services/TrayHost.cs` | Whether a tray can show Sluice's icon (#45): always on Windows; on Linux a `org.kde.StatusNotifierWatcher` with `IsStatusNotifierHostRegistered`, asked over the session bus (`Tmds.DBus.Protocol`, which Avalonia already uses) when the window is closed |
 | `Services/AppTray.cs` | Tray icon: open, "Capture traffic" toggle, exit; tooltip with status and rates; icon changes with capture state (`AppIcon`) |
 | `Services/Dialogs.cs` | Modal dialogs (`MessageDialog`, tunnel / rule / import / password dialogs, file pickers) |
 | `Services/ScreenshotMode.cs` | `--screenshot DIR`: a demo profile in memory, real traffic through the app's own SOCKS5 listener, every page rendered to PNG (plus the capture-rights banner); touches no user files, never captures. It replaces `OsPlatform.Current` with a demo platform that offers granting rights and autostart, so both show in the images |
@@ -50,7 +51,8 @@ Program.cs ──▶ App (App.axaml.cs)
 6. `--log-file DIR` (a Debug-level log for this run only), start the local SOCKS5 listener, and turn capture on with
    `--intercept` or `StartInterceptionOnLaunch`.
 
-`ShutdownMode` is explicit: closing the window only hides it when tray mode is on. `ExitApp` (tray "Exit", or closing
+`ShutdownMode` is explicit: closing the window only hides it when tray mode is on and `TrayHost` finds a tray (stock
+GNOME has none without the AppIndicator extension: there, closing quits). `ExitApp` (tray "Exit", or closing
 without tray mode) closes the window, removes the tray icon, stops the pipe listener and disposes `EngineHost`.
 
 ## `EngineHost`: the bridge

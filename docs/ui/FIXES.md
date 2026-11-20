@@ -45,7 +45,7 @@ so settings and logs went to the current folder. `AppSettings.Folder` now asks w
 **Seen** ([issue #9](https://github.com/ZaidX88/sluice/issues/9)): with the `setcap` capabilities `install.sh` gives
 the app, Open profile, Save as, Export for Proxifier and Load key showed no dialog: the xdg-desktop-portal file chooser
 refuses a process it can't inspect ("Unable to open /proc/<pid>/root"; a process with file capabilities isn't
-dumpable). On Ubuntu 26.04 the failure ends the whole app (#24 catches such errors).
+dumpable). On Ubuntu 26.04 the failure ended the whole app; since #24 it shows a message instead (§5).
 
 **UI part fixed** ([issue #25](https://github.com/ZaidX88/sluice/issues/25)): with capture rights on Linux,
 `Program.BuildAvaloniaApp` sets `X11PlatformOptions { UseDBusFilePicker = false }`, so Avalonia's in-process GTK file
@@ -58,3 +58,23 @@ that thread, so GTK's sandboxed image loader (`bwrap`) exits ("Unexpected capabi
 Until both are fixed, the dialogs work only in a run where capture hasn't started.
 
 **Fixed when:** with the app installed by `install.sh` and capture on, the four dialogs open and work.
+
+## 5. A failing file dialog closed the app; a crash could leave capture behind — fixed
+
+**Seen** ([issue #24](https://github.com/ZaidX88/sluice/issues/24), part of #9): any exception from a file picker (Open
+profile, Save as, Export for Proxifier, Load key) closed the whole app, and an unexpected error during capture ended it
+without stopping capture, which on Linux could leave the nftables table behind.
+
+**Fixed:** `Dialogs.PickFile` runs the three profile pickers and shows "The file dialog couldn't open: …" when one
+fails, as if cancelled; `TunnelDialog.OnLoadKey` (an `async void` handler) shows the picker's or the key file's error in
+the dialog. `CrashGuard` is the last resort: an error on the UI thread (`Dispatcher.UnhandledException`) or any other
+thread (`AppDomain.UnhandledException`) is logged, capture is stopped off the UI thread
+(`EngineHost.StopInterceptionForCrash`, at most 5 s; on Linux it removes the table), and the app exits (code 1 from the
+UI thread; on other threads .NET ends the process). A task whose failure nobody observed
+(`TaskScheduler.UnobservedTaskException`) is only logged: .NET ignores it and the app keeps working. Note: Avalonia
+swallows exceptions thrown in a `DispatcherTimer` callback, so they never reach `CrashGuard`.
+
+Checked on Linux with the test-only `--crash-test ui|thread|task` (an error 15 s after start): with capture on, both
+`ui` and `thread` log the error, "Capture stopped" and "Capture stopped before closing"; name lookups and direct
+connections work right after the crash and no sing-box is left. `task` is logged and the app keeps running. A failing
+Open profile (its folder couldn't be created) shows the message and the app keeps running.

@@ -122,6 +122,8 @@ internal static class ScreenshotMode
                      ("dialog-tunnel-vless", new Views.TunnelDialog(p.Tunnels[3])),
                      ("dialog-rule", new Views.RuleDialog(p.Rules[1], p)),
                      ("dialog-password", new Views.PasswordDialog("Work", confirmNew: true)),
+                     ("dialog-file-error", MessageDialog.Create(Dialogs.FileDialogFailedTitle,
+                         Dialogs.FileDialogFailedText("the system's file chooser didn't answer."), ["OK"], primary: 0)),
                      ("dialog-import", new Views.ImportDialog(Profile.CreateDefault(), null,
                          "vless://b831381d-6324-4d53-ad4f-8cda48b30811@edge.example:443?security=reality&pbk=PUB&sni=www.microsoft.com#Edge\ntrojan://secret@tr.example:443#Trojan")),
                  })

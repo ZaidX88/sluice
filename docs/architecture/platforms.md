@@ -183,6 +183,10 @@ public interface IPlatformServices
     /// <summary>Makes <paramref name="process"/> (a helper Sluice just started) end when Sluice ends, even on a crash.</summary>
     void TieChildProcess(System.Diagnostics.Process process) { }
 
+    /// <summary>Called on the thread about to start a helper (sing-box), right before Process.Start, with nothing
+    /// awaited in between. Throwing stops the start.</summary>
+    void PrepareHelperStart() { }
+
     /// <summary>Drops the OS's cached DNS answers (after capture started or stopped, after DNS settings changed).
     /// Never throws; a failure is logged by the caller's log if it passes one, otherwise ignored.</summary>
     void FlushDnsCache() { }
@@ -196,6 +200,7 @@ public interface IPlatformServices
 |---|---|---|---|
 | `ProcessLookup` | `WindowsProcessLookup` (iphlpapi + kernel32, moved out of `ProcessLookup.cs`, #54) | `LinuxProcessLookup` (sock_diag + `/proc`; this property since #57, no longer set in `OnAppStart`) | `PlatformServices.Use` sets `ProcessLookup.Backend` |
 | `TieChildProcess` | the kill-on-close job object, moved out of `SingBoxSession` (#56) | ends helpers on exit signals and cleans up helpers left by a crashed run (`HelperTies`, #57) | `SingBoxSession`, right after `Process.Start` |
+| `PrepareHelperStart` | nothing | to be filled in by the Linux area | `SingBoxSession`, on the same thread right before `Process.Start`; an exception stops the start |
 | `FlushDnsCache` | `DnsFlushResolverCache` (dnsapi), moved out of `Interceptor` (#56) | `resolvectl flush-caches` (`LinuxCapture.FlushResolverCache`, which the capture calls too, #57) | each capture, where it flushes today |
 | `SecretProtector` | `WindowsSecretProtector` (DPAPI, moved from `Profiles/Dpapi.cs`, #55) | `null` | `ProxifierPasswordCodec` |
 

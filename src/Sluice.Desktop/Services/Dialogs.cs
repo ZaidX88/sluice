@@ -83,7 +83,29 @@ public static class Dialogs
     private static readonly FilePickerFileType SluiceProfiles = new("Sluice profile") { Patterns = ["*.sluice"] };
     private static readonly FilePickerFileType ProxifierProfiles = new("Proxifier profile") { Patterns = ["*.ppx", "*.prx"] };
 
-    public static string? OpenProfile() => Wait(OpenProfileAsync());
+    public static string? OpenProfile() => PickFile(OpenProfileAsync);
+
+    internal const string FileDialogFailedTitle = "File dialog";
+
+    /// <summary>The message shown when a file picker fails (#24).</summary>
+    internal static string FileDialogFailedText(string reason) =>
+        $"The file dialog couldn't open: {reason}\n\nNothing was opened or saved. Sluice keeps running.";
+
+    /// <summary>
+    /// Runs a file picker. Any failure of the picker itself (the system's file chooser missing or refusing Sluice, a
+    /// folder it can't show…) is shown as a message instead of closing the app (#24); the result is then null, as if the
+    /// user had cancelled.
+    /// </summary>
+    private static string? PickFile(Func<Task<string?>> pick)
+    {
+        try { return Wait(pick()); }
+        catch (OperationCanceledException) { return null; }
+        catch (Exception ex)
+        {
+            Info(FileDialogFailedTitle, FileDialogFailedText(ex.Message));
+            return null;
+        }
+    }
 
     private static async Task<string?> OpenProfileAsync()
     {
@@ -103,9 +125,9 @@ public static class Dialogs
         return files.Count > 0 ? files[0].TryGetLocalPath() : null;
     }
 
-    public static string? SaveProfile(string name) => Wait(SaveAsync("Save profile as", name, ".sluice", SluiceProfiles));
+    public static string? SaveProfile(string name) => PickFile(() => SaveAsync("Save profile as", name, ".sluice", SluiceProfiles));
 
-    public static string? ExportProxifier(string name) => Wait(SaveAsync("Export for Proxifier", name, ".ppx", ProxifierProfiles));
+    public static string? ExportProxifier(string name) => PickFile(() => SaveAsync("Export for Proxifier", name, ".ppx", ProxifierProfiles));
 
     private static async Task<string?> SaveAsync(string title, string name, string extension, FilePickerFileType type)
     {
@@ -170,7 +192,11 @@ public sealed class MessageDialog : SluiceWindow
     /// <returns>Index of the button pressed, or the last one (Cancel) when the window is closed.</returns>
     public static int Show(string title, string message, string[] buttons, int primary)
     {
-        var d = new MessageDialog(title, message, buttons, primary) { Tag = buttons.Length - 1 };
+        var d = Create(title, message, buttons, primary);
         return Dialogs.ShowModal<int?>(d) ?? buttons.Length - 1;
     }
+
+    /// <summary>The dialog without showing it (also for <see cref="ScreenshotMode"/>).</summary>
+    internal static MessageDialog Create(string title, string message, string[] buttons, int primary) =>
+        new(title, message, buttons, primary) { Tag = buttons.Length - 1 };
 }

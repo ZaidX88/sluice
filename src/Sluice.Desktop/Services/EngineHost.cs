@@ -333,6 +333,19 @@ public sealed class EngineHost : IAsyncDisposable
         StateChanged?.Invoke();
     }
 
+    /// <summary>
+    /// The last resort after an unexpected error (<see cref="CrashGuard"/>): stops capture like
+    /// <see cref="StopInterceptionAsync"/> (on Linux that removes the nftables table), but off the UI thread, without
+    /// telling the UI, and waiting at most <paramref name="timeout"/>. False when it didn't finish in time or failed.
+    /// Never throws.
+    /// </summary>
+    internal bool StopInterceptionForCrash(TimeSpan timeout)
+    {
+        if (Interlocked.Exchange(ref _interceptor, null) is not { } i) return true;
+        try { return Task.Run(async () => await i.DisposeAsync()).Wait(timeout); }
+        catch (Exception) { return false; }
+    }
+
     /// <summary>Extra diagnostic log file for this run only (--log-file DIR); not saved in settings.</summary>
     public void StartDiagnosticLog(string directory)
     {

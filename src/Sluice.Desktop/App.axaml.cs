@@ -58,6 +58,7 @@ public partial class App : Application
 
         var settings = AppSettings.Load();
         _host = new EngineHost(settings);
+        CrashGuard.Install(_host);   // from here an unexpected error stops capture before the app exits (#24)
         var vm = new MainViewModel(_host);
         _window = new MainWindow(vm, settings);
         desktop.MainWindow = _window;
@@ -81,7 +82,24 @@ public partial class App : Application
         if (Arg(args, "--log-file") is { } diagDir) _host.StartDiagnosticLog(diagDir);
         _host.StartSocks();
         if (args.Contains("--intercept") || settings.StartInterceptionOnLaunch) vm.TurnOn();
+        if (Arg(args, "--crash-test") is { } where) CrashTest(where);
     }
+
+    /// <summary>
+    /// Test only: an unexpected error 15 s after start (time to check capture is on), to see <see cref="CrashGuard"/>
+    /// stop capture before the app exits. <c>ui</c>: on the UI thread; <c>thread</c>: on a thread of its own;
+    /// <c>task</c>: a failed task nobody looks at (logged, the app keeps running).
+    /// </summary>
+    private static void CrashTest(string where) => DispatcherTimer.RunOnce(() =>
+    {
+        var error = new InvalidOperationException($"crash test ({where})");
+        switch (where)
+        {
+            case "thread": new Thread(() => throw error) { IsBackground = true }.Start(); break;
+            case "task": _ = Task.Run(() => throw error); Task.Delay(500).ContinueWith(_ => { GC.Collect(); GC.WaitForPendingFinalizers(); }); break;
+            default: Dispatcher.UIThread.Post(() => throw error); break;   // a dispatcher operation, like a click handler
+        }
+    }, TimeSpan.FromSeconds(15));
 
     private static async Task<bool> SignalRunningInstanceAsync()
     {

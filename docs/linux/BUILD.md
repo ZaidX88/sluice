@@ -42,7 +42,8 @@ into `app/sluice`, after building and running its tests (`launcher/launcher-test
 `install.sh`:
 - installs missing packages with apt/dnf/yum/pacman/zypper: .NET 10 runtime, nftables, libcap, X11/ICE/SM, fontconfig,
   notify-send; falls back to Microsoft's `dotnet-install.sh` (into `/usr/share/dotnet`) where there's no .NET 10 package;
-- uses only a .NET folder that root alone can change (it, the folders above it, everything in it); a runtime anywhere
+- uses only a .NET folder that root alone can change (it, the folders above it, everything in it, and links only to
+  files inside it, as the launcher requires); a runtime anywhere
   else (for example a `~/.dotnet` found through `sudo`'s `PATH`) is skipped, and .NET is installed instead;
 - makes `/etc/dotnet/install_location*` lead to that folder (writes `install_location_x64` when they don't), because
   the launcher doesn't pass `DOTNET_ROOT` on, and keeps `/etc/dotnet` and those files root's;

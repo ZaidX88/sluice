@@ -139,11 +139,22 @@ up_root_only() {
     done
 }
 
-# Root alone can change the .NET folder $1: it, the folders above it (also through links) and everything in it.
-# Sluice's launcher refuses to start the app with any other runtime.
+# Every link in folder $1 leads to a file or folder inside it that root alone can change (distribution packages link
+# between their own files; the launcher refuses any other link).
+links_inside() {
+    targets=$(find "$1" -type l -exec readlink -e -- {} + 2>/dev/null) || return 1   # a dangling link fails too
+    [ -z "$targets" ] && return 0
+    printf '%s\n' "$targets" | awk -v p="$1/" 'index($0, p) != 1 { bad = 1 } END { exit bad }' || return 1
+    printf '%s\n' "$targets" | tr '\n' '\0' | xargs -0 stat -c '%u %a' |
+        awk '$1 != 0 || int(substr($2, length($2) - 1, 1)) % 4 >= 2 || int(substr($2, length($2), 1)) % 4 >= 2 { bad = 1 } END { exit bad }'
+}
+
+# Root alone can change the .NET folder $1: it, the folders above it (also through links) and everything in it, and
+# its links stay inside it. Sluice's launcher checks the same and refuses to start the app with any other runtime.
 root_only() {
     real=$(readlink -f "$1" 2>/dev/null) && [ -d "$real" ] && up_root_only "$1" && up_root_only "$real" &&
-        [ -z "$(find "$real" ! -type l \( ! -user root -o -perm -g+w -o -perm -o+w \) -print -quit 2>/dev/null)" ]
+        [ -z "$(find "$real" ! -type l \( ! -user root -o -perm -g+w -o -perm -o+w \) -print -quit 2>/dev/null)" ] &&
+        links_inside "$real"
 }
 
 # A .NET with the runtime Sluice needs, in a folder root alone can change.
@@ -153,7 +164,7 @@ dotnet_root_with_runtime() {
                 "$(dirname "$(readlink -f "$(command -v dotnet 2>/dev/null || echo /nonexistent)")")"; do
         [ -n "$root" ] && ls -d "$root"/shared/Microsoft.NETCore.App/$DOTNET_CHANNEL.* >/dev/null 2>&1 || continue
         if root_only "$root"; then echo "$root"; return 0; fi
-        say "Not using the .NET in $root: users other than root can change it" >&2
+        say "Not using the .NET in $root: users other than root can change it, or it links to files outside it" >&2
     done
     return 1
 }

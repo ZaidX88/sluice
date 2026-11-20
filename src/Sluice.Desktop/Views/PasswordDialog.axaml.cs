@@ -1,9 +1,10 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using Sluice.Desktop.Controls;
 
 namespace Sluice.Desktop.Views;
 
-public partial class PasswordDialog : Window
+public partial class PasswordDialog : SluiceWindow
 {
     private readonly bool _confirmNew;
 

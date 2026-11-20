@@ -3,11 +3,12 @@ using Avalonia.Interactivity;
 using Avalonia.Media;
 using Sluice.Core.Profiles;
 using Sluice.Core.Tunnels;
+using Sluice.Desktop.Controls;
 
 namespace Sluice.Desktop.Views;
 
 /// <summary>Adds tunnels to the profile from pasted share links or a subscription URL.</summary>
-public partial class ImportDialog : Window
+public partial class ImportDialog : SluiceWindow
 {
     private readonly Profile _profile;
     private readonly TunnelTransport.Resolver? _resolve;

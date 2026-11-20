@@ -1,4 +1,4 @@
-<Window xmlns="https://github.com/avaloniaui"
+<c:SluiceWindow xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:Sluice.Desktop.ViewModels"
         xmlns:v="using:Sluice.Desktop.Views"
@@ -7,21 +7,21 @@
         x:DataType="vm:MainViewModel"
         Title="Sluice" Width="1280" Height="800" MinWidth="1040" MinHeight="620"
         WindowStartupLocation="CenterScreen">
-    <Window.DataTemplates>
+    <c:SluiceWindow.DataTemplates>
         <DataTemplate DataType="vm:ConnectionsViewModel"><v:ConnectionsView/></DataTemplate>
         <DataTemplate DataType="vm:StatisticsViewModel"><v:StatisticsView/></DataTemplate>
         <DataTemplate DataType="vm:LogViewModel"><v:LogView/></DataTemplate>
         <DataTemplate DataType="vm:TunnelsViewModel"><v:TunnelsView/></DataTemplate>
         <DataTemplate DataType="vm:RulesViewModel"><v:RulesView/></DataTemplate>
         <DataTemplate DataType="vm:SettingsViewModel"><v:SettingsView/></DataTemplate>
-    </Window.DataTemplates>
+    </c:SluiceWindow.DataTemplates>
 
-    <Window.Styles>
+    <c:SluiceWindow.Styles>
         <Style Selector="Border.Banner"><Setter Property="Background" Value="{DynamicResource AccentSoft}"/></Style>
         <Style Selector="Border.Banner.Error"><Setter Property="Background" Value="{DynamicResource DangerSoft}"/></Style>
         <Style Selector="c|IconView.BannerIcon"><Setter Property="Kind" Value="info"/><Setter Property="Foreground" Value="{DynamicResource Text}"/></Style>
         <Style Selector="c|IconView.BannerIcon.Error"><Setter Property="Kind" Value="warning"/><Setter Property="Foreground" Value="{DynamicResource Danger}"/></Style>
-    </Window.Styles>
+    </c:SluiceWindow.Styles>
 
     <Grid Background="{DynamicResource Bg}" ColumnDefinitions="232,*" RowDefinitions="64,*,80">
 
@@ -197,4 +197,4 @@
             </Grid>
         </Border>
     </Grid>
-</Window>
+</c:SluiceWindow>

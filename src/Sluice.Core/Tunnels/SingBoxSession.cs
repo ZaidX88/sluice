@@ -113,6 +113,9 @@ internal sealed class SingBoxSession : IBackendSession
             {
                 if (!_closing) _log($"sing-box {_tunnel}: helper exited (code {SafeExitCode(p)})");
             };
+            // Same thread as Start, nothing awaited in between: the new process takes some state from this thread.
+            try { Platform.PlatformServices.Current.PrepareHelperStart(); }
+            catch (Exception ex) when (ex is not ProxyException) { throw new ProxyException($"sing-box was not started: {ex.Message}"); }
             if (!p.Start()) throw new ProxyException("sing-box could not be started");
             RunningHelpers[p.Id] = 0;
             var helperId = p.Id;

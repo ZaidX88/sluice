@@ -241,7 +241,8 @@ public sealed class MainViewModel : ObservableObject
     }
 
     /// <summary>The OS's own password prompt (Linux: pkexec). The running app usually can't use new rights until it
-    /// starts again; if it already can, capture starts at once.</summary>
+    /// starts again; if it already can, capture starts at once. Otherwise the platform's hint says how to start it with
+    /// them: through the launcher on Linux, which reopening the app directly doesn't do (#129).</summary>
     private async Task GrantRightsAsync()
     {
         var platform = OsPlatform.Current;
@@ -251,7 +252,9 @@ public sealed class MainViewModel : ObservableObject
             return;
         }
         if (platform.HasCaptureRights) TurnOn();
-        else ShowInfo("Capture rights granted. Quit Sluice and open it again to start capturing.");
+        else ShowInfo(platform.CaptureRightsHint is { Length: > 0 } how
+            ? how                                                    // e.g. "…start it with /opt/sluice/sluice" (#129)
+            : "Capture rights granted. Quit Sluice and open it again to start capturing.");
     }
 
     private void ShowBanner(string text, bool offerElevation = false, bool offerGrant = false)

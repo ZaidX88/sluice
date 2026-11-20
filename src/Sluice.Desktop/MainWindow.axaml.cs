@@ -28,11 +28,34 @@ public partial class MainWindow : SluiceWindow
         if (!AllowClose && _settings is { MinimizeToTray: true })
         {
             e.Cancel = true;
-            Hide();
-            AppTray.Current?.ShowHiddenHint();
+            if (!_deciding) _ = HideOrQuitAsync();
             return;
         }
         base.OnClosing(e);
+    }
+
+    private bool _deciding;
+
+    /// <summary>
+    /// Hides to the tray only when there is one to come back from (#45): stock GNOME has none, and a hidden window
+    /// could then only be reached by killing Sluice. Without a tray, closing quits.
+    /// </summary>
+    private async Task HideOrQuitAsync()
+    {
+        _deciding = true;
+        try
+        {
+            if (await TrayHost.IsAvailableAsync(TimeSpan.FromSeconds(2)))
+            {
+                Hide();
+                AppTray.Current?.ShowHiddenHint();
+            }
+            else
+            {
+                App.Exit();
+            }
+        }
+        finally { _deciding = false; }
     }
 
     protected override void OnClosed(EventArgs e)

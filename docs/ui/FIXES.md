@@ -20,8 +20,10 @@ Status; shorten the header to "Share"; add `--screenshot DIR --size 1040x650` to
 - **Screenshot mode** renders at 1× because `RenderTargetBitmap` mis-scales DataGrid content above 100% DPI (screenshots
   only; `SLUICE_SHOT_SCALE` overrides). For real-window captures use `PrintWindow` with `PW_RENDERFULLCONTENT` from a
   DPI-aware process.
-- **Linux tray:** Avalonia uses StatusNotifierItem; GNOME needs the AppIndicator extension. Without a tray, closing the
-  window hides the app with no way back except relaunching. Detect a missing tray and quit on close instead.
+- **Linux tray — fixed** ([issue #45](https://github.com/ZaidX88/sluice/issues/45)): Avalonia uses StatusNotifierItem;
+  GNOME needs the AppIndicator extension. Without a tray, closing the window hid the app with no way back except
+  relaunching. Now closing asks the session bus whether a tray is there (`TrayHost`: a `org.kde.StatusNotifierWatcher`
+  with a host registered) and quits when there is none, or no answer within 2 s.
 
 ## 3. No log file unless "file log" is turned on — fixed
 

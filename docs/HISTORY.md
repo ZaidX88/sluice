@@ -138,6 +138,8 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   black border in light, black bar in dark, following the theme; snapping and snap layouts kept.
 - "Grant capture rights" and "Start Sluice when I log in" in the desktop app (2026-11-20, #70): shown only where the
   platform offers them (Linux, with #69); hidden on Windows.
+- Closing the window quits when there is no tray (2026-11-20, #45): on stock GNOME the hidden window had no way
+  back; Sluice now asks the session bus for a StatusNotifier host when the window is closed.
 - A failing file dialog no longer closes the app, and a crash stops capture first (2026-11-20, #24, contributor): the
   pickers show "The file dialog couldn't open: …"; `CrashGuard` logs an unexpected error, stops capture (on Linux the
   nftables table is removed) and exits (docs/ui/FIXES.md §5).

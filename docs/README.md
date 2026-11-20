@@ -14,5 +14,6 @@
 | [linux/WORK.md](linux/WORK.md) | Linux area: verifying on a real machine and the open Linux items |
 | [windows/BUILD.md](windows/BUILD.md) | Building, running and testing on Windows |
 
-Settled decisions: [DECISIONS.md](DECISIONS.md). What was built, in order: [HISTORY.md](HISTORY.md). Rules for AI coding
+Settled decisions: [DECISIONS.md](DECISIONS.md). What changed for users, per version: [../CHANGELOG.md](../CHANGELOG.md).
+What was built, in order: [HISTORY.md](HISTORY.md). Rules for AI coding
 agents: [../AGENTS.md](../AGENTS.md).

@@ -13,7 +13,7 @@ requests don't conflict. Contributors may work in any area, one claimed issue at
 | **Windows** | `src/Sluice.Platform.Windows/`, `docs/windows/`, the Windows-only files still in Core (listed in `AGENTS.md`), `scripts/*.ps1` (including `scripts/package-windows.ps1`), `packaging/windows/`, `tests/Sluice.Tests.Windows/` | WinDivert capture, Windows integration, the Windows installer |
 | **UI** | `src/Sluice.Desktop/` (legacy `src/Sluice.App/`), `docs/ui/`, `docs/architecture/desktop.md` | the Avalonia app on both OSes |
 | **Core** (owner; `help wanted` issues: anyone) | everything else (`src/Sluice.Core/` shared engine, `src/Sluice.Cli/`, shared tests `tests/Sluice.Tests/` and `tests/Sluice.Tests.Support/`, `docs/core/`, `.github/`, build files) | the repository owner |
-| **Shared docs** | `docs/*.md` (`STATUS.md`, `REQUIRED.md`, `ARCHITECTURE.md`, `HISTORY.md`, …) and `docs/architecture/` | every area, in the pull request whose change they describe |
+| **Shared docs** | `docs/*.md` (`STATUS.md`, `REQUIRED.md`, `ARCHITECTURE.md`, `HISTORY.md`, …), `docs/architecture/` and `CHANGELOG.md` | every area, in the pull request whose change they describe |
 
 **Who works where:**
 - **The area belongs to the issue, not to the person.** Claim any `ready` issue; its `area:` label decides which files
@@ -38,6 +38,7 @@ requests don't conflict. Contributors may work in any area, one claimed issue at
 | `docs/linux/WORK.md`, `docs/<area>/BUILD.md` | how to work on, build and test the area | that area |
 | `docs/REQUIRED.md` | must-do work for everyone, in order | every area |
 | `docs/STATUS.md`, `ARCHITECTURE.md`, `architecture/`, `HISTORY.md`, `QUICKSTART.md` | how Sluice stands and works, what was built | every area |
+| `CHANGELOG.md` (at the root) | what changed for users, per version; the source of the release notes | every area |
 | `docs/CONTRIBUTING.md`, `docs/DECISIONS.md`, `AGENTS.md` | the rules and settled decisions | every area, **with the owner's agreement first** |
 
 `<area>` is `core`, `linux`, `windows` or `ui`. Every area keeps the shared docs true for its own changes: a pull
@@ -63,7 +64,11 @@ Every fix, feature or required item: **an issue, triaged by the owner, then one 
    - your area's `FIXES.md` / `FEATURES.md`: add an entry when the cause, evidence or reproduction is worth keeping
      after the fix, or mark the existing entry **fixed** (with the issue and PR numbers) or remove it;
    - the shared docs the change affects (`STATUS.md`, `REQUIRED.md`, an architecture page) and one line in
-     [HISTORY.md](HISTORY.md).
+     [HISTORY.md](HISTORY.md);
+   - for a change users would notice (a feature, a fixed bug they could hit, a changed behaviour or setting), one line
+     in [CHANGELOG.md](../CHANGELOG.md) under `Unreleased`, in Added, Changed, Fixed, Removed or Security, with the
+     issue number. Written for users: what they see, not how it was built. Internal work (refactoring, tests, CI,
+     docs) gets no line.
 
 **A docs pull request comes first only for a decision**, so it is agreed before anyone builds on it: changing a settled
 decision ([DECISIONS.md](DECISIONS.md)), a new interface several areas will use (for example a Core class that the
@@ -189,7 +194,7 @@ with #5 for the Windows part and #12 for the Linux part.
      Windows (see the known environment-only failures below);
    - you checked the change for real (live capture run, or `--screenshot` images in light and dark for UI);
    - you updated the docs the change affects (your area's `FIXES.md` / `FEATURES.md`, shared docs, a `HISTORY.md`
-     line).
+     line, and a `CHANGELOG.md` line if users would notice the change).
 7. Open the pull request against the owner's `main`. Title starts with the area (`[Linux] Bind the relay to loopback`).
    Description: what changed and why, the issue it fixes (`Fixes #N`, so the issue closes on merge), how you tested it with the commands and their output, and anything that needs a change
    in another area (with the issue you opened for it).
@@ -287,6 +292,9 @@ the repository**:
 - **A release tag** `vX.Y.Z` (or `vX.Y.Z-rc.N`) on `main` must match `<Version>`; release CI (#74) checks that and
   builds the packages, whose file names take the version (`sluice-1.0.0-linux-x64.tar.gz`). Built packages are never
   committed.
+- **Release notes** are the version's section of [CHANGELOG.md](../CHANGELOG.md), plus the install links. Before
+  tagging, the owner turns `Unreleased` into that section (with the date) and checks its known limitations; release CI
+  (#74) can copy the section into the GitHub Release.
 - **Packaging scripts are code on `main`**, reviewed like any other change: `packaging/linux/` and
   `scripts/package-linux.sh` belong to the Linux area, `packaging/windows/` and `scripts/package-windows.ps1` to the
   Windows area. Packages are built only from a clean checkout of a tag.

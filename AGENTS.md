@@ -18,7 +18,7 @@ the area isn't clear, **ask before editing anything**. You may change only the f
 | **UI** | `src/Sluice.Desktop/**` (and the legacy `src/Sluice.App/**`), `docs/ui/**`, `docs/architecture/desktop.md` | repository owner |
 | **Core** (owner; contributors only on `help wanted` issues) | everything else: `src/Sluice.Core/**` (shared engine), `src/Sluice.Cli/**`, the shared tests `tests/Sluice.Tests/**` and `tests/Sluice.Tests.Support/**`, `build/**`,
 `Sluice.slnx`, `Sluice.*.slnf`, `docs/core/**`, `.github/**`, `README.md`, `AGENTS.md`, `CLAUDE.md`, `.gitignore`, `.gitattributes` | — |
-| **Shared docs** (every area) | `docs/*.md` (`STATUS.md`, `REQUIRED.md`, `ARCHITECTURE.md`, `HISTORY.md`, `QUICKSTART.md`, …) and `docs/architecture/**`, for what your change affects | — |
+| **Shared docs** (every area) | `docs/*.md` (`STATUS.md`, `REQUIRED.md`, `ARCHITECTURE.md`, `HISTORY.md`, `QUICKSTART.md`, …), `docs/architecture/**` and `CHANGELOG.md`, for what your change affects | — |
 
 - **Strict.** If the task needs a change outside your area, even one line in shared code or the UI, **stop**. Don't make
   it. Tell the person what is needed, where and why, so the area's owner can make it (a GitHub issue is the usual way).
@@ -38,7 +38,8 @@ the area isn't clear, **ask before editing anything**. You may change only the f
   without asking: its pull request can't be merged until the blocker is closed (the required "Blocked issues" check).
 - **Docs:** every area has its own `docs/<area>/FIXES.md` (known bugs) and `FEATURES.md` (ideas, performance work);
   Core's are in `docs/core/`. The shared docs (`docs/*.md`, `docs/architecture/**`) may be changed by every area in the
-  pull request whose change they describe: `STATUS.md`, `REQUIRED.md`, the architecture pages, a `HISTORY.md` line.
+  pull request whose change they describe: `STATUS.md`, `REQUIRED.md`, the architecture pages, a `HISTORY.md` line,
+  and a `CHANGELOG.md` line under `Unreleased` for a change users would notice.
   Changes to the rules (`docs/CONTRIBUTING.md`, `AGENTS.md`) and to settled decisions (`docs/DECISIONS.md`) need the
   owner's agreement first.
 - Don't reformat, rename or "tidy" files you weren't asked to change.

@@ -11,7 +11,7 @@
 #   2. downloads sing-box (encrypted tunnels) from GitHub and verifies its checksum; offline, put
 #      sing-box-1.14.4-linux-amd64.tar.gz next to this script and it is used instead
 #   3. copies Sluice to /opt/sluice, adds "sluice" / "sluice-cli" commands and a menu entry
-#   4. grants the capture rights (setcap), so Sluice does not need to run as root
+#   4. grants the capture rights (setcap) to Sluice's launcher, so Sluice does not need to run as root
 # Undo with: sudo /opt/sluice/uninstall.sh
 set -eu
 
@@ -40,7 +40,7 @@ case "$(uname -m)" in
 esac
 
 HERE=$(cd "$(dirname "$0")" && pwd)
-[ -f "$HERE/app/Sluice.Desktop" ] || die "app/Sluice.Desktop not found next to install.sh; run it from the unpacked Sluice folder"
+[ -f "$HERE/app/Sluice.Desktop" ] && [ -f "$HERE/app/sluice" ] || die "app/Sluice.Desktop not found next to install.sh; run it from the unpacked Sluice folder"
 
 # ---------------------------------------------------------------- package manager
 
@@ -117,12 +117,54 @@ fi
 
 # ---------------------------------------------------------------- .NET 10 runtime
 
-# Where an app like Sluice looks for .NET: /etc/dotnet/install_location*, then /usr/share/dotnet.
+# The first line of an /etc/dotnet/install_location* file, without trailing blanks.
+location_file() { head -n 1 "$1" 2>/dev/null | tr -d '\r' | sed 's/[[:space:]]*$//'; }
+
+# Where an app like Sluice finds .NET: install_location_x64, then install_location, then /usr/share/dotnet.
+host_location() {
+    for f in /etc/dotnet/install_location_x64 /etc/dotnet/install_location; do
+        l=$(location_file "$f"); [ -n "$l" ] && { echo "$l"; return; }
+    done
+    echo /usr/share/dotnet
+}
+
+# $1 and every folder above it are owned by root and not writable by group or others.
+up_root_only() {
+    d=$1
+    while :; do
+        [ "$(stat -L -c %u "$d" 2>/dev/null)" = 0 ] || return 1
+        [ $(( 0$(stat -L -c %a "$d") & 022 )) -eq 0 ] || return 1
+        [ "$d" = / ] && return 0
+        d=$(dirname "$d")
+    done
+}
+
+# Every link in folder $1 leads to a file or folder inside it that root alone can change (distribution packages link
+# between their own files; the launcher refuses any other link).
+links_inside() {
+    targets=$(find "$1" -type l -exec readlink -e -- {} + 2>/dev/null) || return 1   # a dangling link fails too
+    [ -z "$targets" ] && return 0
+    printf '%s\n' "$targets" | awk -v p="$1/" 'index($0, p) != 1 { bad = 1 } END { exit bad }' || return 1
+    printf '%s\n' "$targets" | tr '\n' '\0' | xargs -0 stat -c '%u %a' |
+        awk '$1 != 0 || int(substr($2, length($2) - 1, 1)) % 4 >= 2 || int(substr($2, length($2), 1)) % 4 >= 2 { bad = 1 } END { exit bad }'
+}
+
+# Root alone can change the .NET folder $1: it, the folders above it (also through links) and everything in it, and
+# its links stay inside it. Sluice's launcher checks the same and refuses to start the app with any other runtime.
+root_only() {
+    real=$(readlink -f "$1" 2>/dev/null) && [ -d "$real" ] && up_root_only "$1" && up_root_only "$real" &&
+        [ -z "$(find "$real" ! -type l \( ! -user root -o -perm -g+w -o -perm -o+w \) -print -quit 2>/dev/null)" ] &&
+        links_inside "$real"
+}
+
+# A .NET with the runtime Sluice needs, in a folder root alone can change.
 dotnet_root_with_runtime() {
-    for root in "$(cat /etc/dotnet/install_location_x64 2>/dev/null)" "$(cat /etc/dotnet/install_location 2>/dev/null)" \
+    for root in "$(location_file /etc/dotnet/install_location_x64)" "$(location_file /etc/dotnet/install_location)" \
                 /usr/share/dotnet /usr/lib/dotnet /usr/lib64/dotnet /opt/dotnet \
                 "$(dirname "$(readlink -f "$(command -v dotnet 2>/dev/null || echo /nonexistent)")")"; do
-        [ -n "$root" ] && ls -d "$root"/shared/Microsoft.NETCore.App/$DOTNET_CHANNEL.* >/dev/null 2>&1 && { echo "$root"; return 0; }
+        [ -n "$root" ] && ls -d "$root"/shared/Microsoft.NETCore.App/$DOTNET_CHANNEL.* >/dev/null 2>&1 || continue
+        if root_only "$root"; then echo "$root"; return 0; fi
+        say "Not using the .NET in $root: users other than root can change it, or it links to files outside it" >&2
     done
     return 1
 }
@@ -136,6 +178,9 @@ else
     p=$(pkg_name dotnet)
     if [ -n "$p" ]; then pkg_install "$p" || say "No $p package here; using Microsoft's installer instead."; fi
     if ! root=$(dotnet_root_with_runtime); then
+        if [ -e /usr/share/dotnet ] && ! root_only /usr/share/dotnet; then
+            die "/usr/share/dotnet can be changed by users other than root. Make it root's (sudo chown -R root:root /usr/share/dotnet; sudo chmod -R go-w /usr/share/dotnet) or remove it, then run install.sh again"
+        fi
         say "Installing .NET $DOTNET_CHANNEL with Microsoft's official script (dot.net/v1/dotnet-install.sh)"
         tmp=$(mktemp -d)
         curl -fsSL --retry 3 https://dot.net/v1/dotnet-install.sh -o "$tmp/dotnet-install.sh" \
@@ -148,12 +193,17 @@ else
     fi
     say ".NET $DOTNET_CHANNEL runtime: $root"
 fi
-# Sluice runs with capabilities, so it ignores DOTNET_ROOT: tell it where .NET is if that is not a default place.
-if [ "$CHECK_ONLY" -eq 0 ] && [ -n "${root:-}" ] && [ "$root" != /usr/share/dotnet ] && \
-   [ "$(cat /etc/dotnet/install_location_x64 2>/dev/null)" != "$root" ] && [ "$(cat /etc/dotnet/install_location 2>/dev/null)" != "$root" ]; then
-    mkdir -p /etc/dotnet
-    echo "$root" > /etc/dotnet/install_location_x64
-    say "Registered $root in /etc/dotnet/install_location_x64"
+# Sluice's launcher doesn't pass DOTNET_ROOT on, so Sluice finds .NET through /etc/dotnet: make that lead to the
+# runtime chosen above, and make sure root alone can change it (the launcher checks the same).
+if [ "$CHECK_ONLY" -eq 0 ] && [ -n "${root:-}" ]; then
+    if [ "$(host_location)" != "$root" ]; then
+        mkdir -p /etc/dotnet
+        echo "$root" > /etc/dotnet/install_location_x64
+        say "Registered $root in /etc/dotnet/install_location_x64"
+    fi
+    for f in /etc/dotnet /etc/dotnet/install_location /etc/dotnet/install_location_x64; do
+        if [ -e "$f" ]; then chown root:root "$f"; chmod go-w "$f"; fi
+    done
 fi
 
 # ---------------------------------------------------------------- 2. sing-box
@@ -196,15 +246,17 @@ cp "$HERE/uninstall.sh" "$HERE/README.txt" "$DEST/"
 [ -f "$work/sing-box.keep" ] && cp "$work/sing-box.keep" "$DEST/sing-box"
 [ -f "$work/sing-box-LICENSE.txt" ] && cp "$work/sing-box-LICENSE.txt" "$DEST/"
 rm -rf "$work"
-# The binaries get capabilities below: everything they load must be owned by root and not writable by others.
+# The launcher gets capabilities below and refuses to run unless everything here is owned by root and not writable
+# by others.
 chown -R root:root "$DEST"
 find "$DEST" -type d -exec chmod 755 {} +
 find "$DEST" -type f -exec chmod 644 {} +
-chmod 755 "$DEST/Sluice.Desktop" "$DEST/Sluice.Cli" "$DEST/uninstall.sh"
+chmod 755 "$DEST/sluice" "$DEST/Sluice.Desktop" "$DEST/Sluice.Cli" "$DEST/uninstall.sh"
 [ -f "$DEST/sing-box" ] && chmod 755 "$DEST/sing-box"
 
-ln -sf "$DEST/Sluice.Desktop" /usr/local/bin/sluice
-ln -sf "$DEST/Sluice.Cli" /usr/local/bin/sluice-cli
+# Both commands go through the launcher; it starts Sluice.Cli when called "sluice-cli".
+ln -sf "$DEST/sluice" /usr/local/bin/sluice
+ln -sf "$DEST/sluice" /usr/local/bin/sluice-cli
 mkdir -p /usr/share/icons/hicolor/256x256/apps /usr/share/applications
 install -m 644 "$HERE/sluice.png" /usr/share/icons/hicolor/256x256/apps/sluice.png
 install -m 644 "$HERE/sluice.desktop" /usr/share/applications/sluice.desktop
@@ -217,11 +269,13 @@ command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database -q
 #   cap_setgid           Sluice's private network group (its own traffic is never captured)
 #   cap_sys_ptrace,
 #   cap_dac_read_search  see which app (of any user) owns a connection, for rules by application
+# Only the launcher gets them; it passes them on to the app it starts. The apps themselves carry none.
 step "Granting capture rights"
 SETCAP=$(command -v setcap || ls /usr/sbin/setcap /sbin/setcap 2>/dev/null | head -1 || true)
 if [ -n "$SETCAP" ]; then
-    "$SETCAP" "$CAPS" "$DEST/Sluice.Desktop"
-    "$SETCAP" "$CAPS" "$DEST/Sluice.Cli"
+    "$SETCAP" "$CAPS" "$DEST/sluice"
+    "$SETCAP" -r "$DEST/Sluice.Desktop" 2>/dev/null || true
+    "$SETCAP" -r "$DEST/Sluice.Cli" 2>/dev/null || true
     say "Done (setcap)."
 else
     warn "setcap is not available; capture will need: sudo sluice"
@@ -230,7 +284,7 @@ fi
 # ---------------------------------------------------------------- final check
 
 step "Checking the installation"
-if "$DEST/Sluice.Cli" --help >/dev/null 2>&1; then say "Sluice starts."; else warn "Sluice did not start: run $DEST/Sluice.Cli --help to see why"; fi
+if /usr/local/bin/sluice-cli --help >/dev/null 2>&1; then say "Sluice starts."; else warn "Sluice did not start: run sluice-cli --help to see why"; fi
 command -v nft >/dev/null 2>&1 || warn "nftables is missing: capturing traffic will not work until it is installed"
 [ -f "$DEST/sing-box" ] || warn "sing-box is missing: only SSH, SOCKS and HTTP tunnels work"
 

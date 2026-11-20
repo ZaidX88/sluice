@@ -423,6 +423,7 @@ public sealed class LinuxCapture : ITrafficCapture
     {
         try
         {
+            if (!Native.Libc.ClearPassedOn(out _)) return;   // resolvectl gets no capabilities, or doesn't start
             using var p = Process.Start(new ProcessStartInfo("resolvectl", "flush-caches") { UseShellExecute = false, RedirectStandardError = true, RedirectStandardOutput = true });
             p?.WaitForExit(3000);
         }

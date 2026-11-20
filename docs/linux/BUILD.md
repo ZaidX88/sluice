@@ -36,16 +36,37 @@ dotnet publish src/Sluice.Cli             -r linux-x64 --self-contained false -c
 scripts/package-linux.sh out/app out/dist          # run on Linux or WSL (sets permissions, extracts the icon)
 ```
 
-Package layout and installer: `packaging/linux/` (`install.sh`, `uninstall.sh`, `sluice.desktop`, `README.txt`).
+Package layout and installer: `packaging/linux/` (`install.sh`, `uninstall.sh`, `sluice.desktop`, `README.txt`, and the
+launcher's source in `launcher/`). `package-linux.sh` compiles the launcher with the system C compiler (`cc`, or `$CC`)
+into `app/sluice`, after building and running its tests (`launcher/launcher-test.c`).
 `install.sh`:
 - installs missing packages with apt/dnf/yum/pacman/zypper: .NET 10 runtime, nftables, libcap, X11/ICE/SM, fontconfig,
   notify-send; falls back to Microsoft's `dotnet-install.sh` (into `/usr/share/dotnet`) where there's no .NET 10 package;
-- writes `/etc/dotnet/install_location_x64` when .NET is somewhere non-default, because the setcap'd app ignores
-  `DOTNET_ROOT`;
+- uses only a .NET folder that root alone can change (it, the folders above it, everything in it, and links only to
+  files inside it, as the launcher requires); a runtime anywhere
+  else (for example a `~/.dotnet` found through `sudo`'s `PATH`) is skipped, and .NET is installed instead;
+- makes `/etc/dotnet/install_location*` lead to that folder (writes `install_location_x64` when they don't), because
+  the launcher doesn't pass `DOTNET_ROOT` on, and keeps `/etc/dotnet` and those files root's;
 - downloads sing-box 1.14.4 (SHA-256 checked) or uses the archive placed next to it;
-- installs to `/opt/sluice` (root-owned, nothing writable by group/others: the binaries get capabilities) and runs
-  `setcap cap_net_admin,cap_setgid,cap_sys_ptrace,cap_dac_read_search+ep` on both binaries;
+- installs to `/opt/sluice` (root-owned, nothing writable by group/others: the launcher refuses to run otherwise) and
+  runs `setcap cap_net_admin,cap_setgid,cap_sys_ptrace,cap_dac_read_search+ep` on the launcher `/opt/sluice/sluice`
+  only; `sluice`, `sluice-cli` and the menu entry start Sluice through it (see "The launcher" below);
 - `--check` only reports what's missing.
+
+### The launcher
+
+`/opt/sluice/sluice` (`packaging/linux/launcher/sluice-launcher.c`) is the only file with capabilities. It starts
+`Sluice.Desktop`, or `Sluice.Cli` when called `sluice-cli`, from its own folder, and passes the four capabilities on as
+ambient capabilities; the .NET apps carry none. It passes on only a fixed list of environment variables (the session,
+the user's folders, language; language and time-zone values that are paths are dropped), resets `PATH`, turns off
+.NET's diagnostics (`DOTNET_EnableDiagnostics=0`), and refuses to run unless root alone can change its folder and the
+.NET folder the app will load, each with the folders above it and everything in it, plus `/etc/dotnet` and its
+`install_location` files. It finds the .NET folder as the app does: `install_location_x64`, then `install_location`,
+otherwise `/usr/share/dotnet`; links inside it (distribution packages have them) must lead to root-only files inside
+it. Sluice clears the passed-on
+capabilities at start-up and on the starting thread before it runs any other program (`Libc.ClearPassedOn`; for
+sing-box through `PrepareHelperStart`), and doesn't start the program if that fails; `nft` alone gets `CAP_NET_ADMIN`
+(`NftRules`).
 
 ### Pitfalls already hit
 

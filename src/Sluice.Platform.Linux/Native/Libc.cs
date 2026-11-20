@@ -87,8 +87,29 @@ internal static partial class Libc
     private static partial int prctl(int option, nuint arg2, nuint arg3, nuint arg4, nuint arg5);
 
     private const int LinuxCapabilityVersion3 = 0x20080522;
-    private const int PR_CAP_AMBIENT = 47, PR_CAP_AMBIENT_IS_SET = 1, PR_CAP_AMBIENT_RAISE = 2, PR_CAP_AMBIENT_LOWER = 3;
-    public const int CAP_NET_ADMIN = 12;
+    private const int PR_CAP_AMBIENT = 47, PR_CAP_AMBIENT_IS_SET = 1, PR_CAP_AMBIENT_RAISE = 2, PR_CAP_AMBIENT_LOWER = 3,
+        PR_CAP_AMBIENT_CLEAR_ALL = 4;
+    public const int CAP_NET_ADMIN = 12, CAP_SETGID = 6, CAP_SYS_PTRACE = 19, CAP_DAC_READ_SEARCH = 2;
+
+    /// <summary>
+    /// Clears the calling thread's ambient and inheritable sets, so the programs it starts next get no capabilities
+    /// from Sluice. The launcher passes the capture capabilities to Sluice as ambient capabilities, and every thread
+    /// created from a thread that has them has them too. Call it on the starting thread right before every program
+    /// start; nft then gets <see cref="CAP_NET_ADMIN"/> alone through <see cref="RaiseAmbient"/>. Sluice's own
+    /// (permitted, effective) capabilities stay. Harmless without capabilities and for root.
+    /// </summary>
+    public static unsafe bool ClearPassedOn(out string? problem)
+    {
+        problem = null;
+        if (prctl(PR_CAP_AMBIENT, PR_CAP_AMBIENT_CLEAR_ALL, 0, 0, 0) != 0) { problem = $"ambient clear: {Error(Marshal.GetLastPInvokeError())}"; return false; }
+        var header = stackalloc int[2] { LinuxCapabilityVersion3, 0 };
+        var data = stackalloc int[6];                              // 2 x { effective, permitted, inheritable }
+        if (capget(header, data) != 0) { problem = $"capget: {Error(Marshal.GetLastPInvokeError())}"; return false; }
+        if (data[2] == 0 && data[5] == 0) return true;            // nothing inheritable
+        data[2] = data[5] = 0;
+        if (capset(header, data) != 0) { problem = $"capset: {Error(Marshal.GetLastPInvokeError())}"; return false; }
+        return true;
+    }
 
     /// <summary>
     /// Lets programs this thread starts next keep <paramref name="cap"/>. Capabilities given to Sluice with setcap are

@@ -59,6 +59,60 @@ public class LinuxAmbientCapabilityTests
     });
 
     [LinuxFact]
+    public void Clearing_without_anything_passed_on_is_harmless() => OnOwnThread(() =>
+    {
+        Assert.True(Libc.ClearPassedOn(out var problem), problem);
+        Assert.False(Libc.IsAmbient(Libc.CAP_NET_ADMIN));
+        Assert.False(Libc.IsInheritable(Libc.CAP_NET_ADMIN));
+    });
+
+    /// <summary>What the launcher hands over (ambient + inheritable) is gone after clearing; Sluice's own stays.</summary>
+    [LinuxFact]
+    public void Clearing_removes_what_the_launcher_passed_on() => OnOwnThread(() =>
+    {
+        if (!CanRaise) return;
+        Assert.True(Libc.RaiseAmbient(Libc.CAP_NET_ADMIN, out var problem), problem);   // as the launcher leaves it
+
+        Assert.True(Libc.ClearPassedOn(out problem), problem);
+        Assert.False(Libc.IsAmbient(Libc.CAP_NET_ADMIN));
+        Assert.False(Libc.IsInheritable(Libc.CAP_NET_ADMIN));
+        Assert.True(Libc.IsPermitted(Libc.CAP_NET_ADMIN));
+        Assert.False(OnNewThread(() => Libc.IsAmbient(Libc.CAP_NET_ADMIN)));
+    });
+
+    /// <summary>A program started right after clearing has no capabilities at all (CapInh, CapPrm, CapEff, CapAmb 0).</summary>
+    [LinuxFact]
+    public void A_program_started_after_clearing_gets_no_capabilities() => OnOwnThread(() =>
+    {
+        if (CanRaise) Libc.RaiseAmbient(Libc.CAP_NET_ADMIN, out _);
+        Libc.ClearPassedOn(out _);
+        AssertChildHasNoCapabilities();
+    });
+
+    /// <summary>The hook Core calls right before starting sing-box (#120): the helper gets no capabilities.</summary>
+    [LinuxFact]
+    public void PrepareHelperStart_keeps_the_capabilities_from_the_helper() => OnOwnThread(() =>
+    {
+        var platform = new Sluice.Platform.Linux.LinuxPlatform();   // its constructor clears this thread too: raise after
+        if (CanRaise) Assert.True(Libc.RaiseAmbient(Libc.CAP_NET_ADMIN, out var problem), problem);
+        platform.PrepareHelperStart();
+        Assert.False(Libc.IsAmbient(Libc.CAP_NET_ADMIN));
+        AssertChildHasNoCapabilities();
+    });
+
+    /// <summary>Starts a program on this thread; it reads its own capability sets, which must all be empty.</summary>
+    private static void AssertChildHasNoCapabilities()
+    {
+        var psi = new System.Diagnostics.ProcessStartInfo("cat", "/proc/self/status") { RedirectStandardOutput = true, UseShellExecute = false };
+        using var p = System.Diagnostics.Process.Start(psi)!;
+        var status = p.StandardOutput.ReadToEnd();
+        p.WaitForExit();
+        if (Environment.IsPrivilegedProcess) return;                // root's children are privileged anyway
+        foreach (var set in new[] { "CapInh", "CapPrm", "CapEff", "CapAmb" })
+            Assert.Contains($"{set}:\t0000000000000000", status);
+    }
+
+    [LinuxFact]
     public void Running_nft_leaves_nothing_behind_for_later_threads() => OnOwnThread(() =>
     {
         if (!CanRaise || NftRules.FindNft() is null) return;

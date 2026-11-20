@@ -1,7 +1,7 @@
 #!/bin/bash
-# Builds the shareable Linux package sluice-linux-x64.tar.gz: the app only (it uses the system's .NET 10 runtime)
-# plus install.sh, which installs the missing dependencies, downloads sing-box and grants the capture rights.
-# Run on Linux or WSL.
+# Builds the shareable Linux package sluice-linux-x64.tar.gz: the app only (it uses the system's .NET 10 runtime),
+# the launcher (packaging/linux/launcher, the only file that gets the capture rights) and install.sh, which installs
+# the missing dependencies, downloads sing-box and grants the capture rights. Run on Linux or WSL; needs a C compiler.
 #
 #   scripts/package-linux.sh <publish dir> <output dir>
 #
@@ -23,6 +23,12 @@ if [ -f "$PUB/libcoreclr.so" ]; then echo "$PUB is a self-contained publish; use
 cp -a "$PUB/." "$STAGE/app/"
 # Windows-only files that Sluice.Core copies to every output, sing-box (install.sh downloads it), debug symbols.
 rm -f "$STAGE/app/WinDivert.dll" "$STAGE/app/WinDivert64.sys" "$STAGE/app/sing-box.exe" "$STAGE/app/sing-box-LICENSE.txt" "$STAGE"/app/*.pdb
+# The launcher, installed as /opt/sluice/sluice: starts Sluice.Desktop (or Sluice.Cli as "sluice-cli") with the rights.
+# Its tests (folder checks, environment filter) run first.
+"${CC:-cc}" -O2 -Wall -Wextra -Werror -o "$WORK/launcher-test" "$REPO/packaging/linux/launcher/launcher-test.c"
+"$WORK/launcher-test" > "$WORK/launcher-test.log" || { cat "$WORK/launcher-test.log" >&2; echo "launcher tests failed" >&2; exit 1; }
+"${CC:-cc}" -O2 -Wall -Wextra -Werror -D_FORTIFY_SOURCE=3 -fstack-protector-strong -fPIE -pie -Wl,-z,relro,-z,now \
+    -o "$STAGE/app/sluice" "$REPO/packaging/linux/launcher/sluice-launcher.c"
 
 cp "$REPO/packaging/linux/install.sh" "$REPO/packaging/linux/uninstall.sh" \
    "$REPO/packaging/linux/sluice.desktop" "$REPO/packaging/linux/README.txt" "$STAGE/"
@@ -43,11 +49,11 @@ open(sys.argv[2], "wb").write(best[1])
 PY
 
 sed -i 's/\r$//' "$STAGE"/*.sh "$STAGE"/*.txt "$STAGE"/*.desktop
-# Permissions matter: the installed binaries get capabilities, so nothing in the package may be writable by
-# group/others (files copied from a Windows drive arrive as 777).
+# Permissions matter: the installed launcher gets capabilities and refuses to run if anything next to it is writable
+# by group/others (files copied from a Windows drive arrive as 777).
 find "$STAGE" -type d -exec chmod 755 {} +
 find "$STAGE" -type f -exec chmod 644 {} +
-chmod 755 "$STAGE"/*.sh "$STAGE/app/Sluice.Desktop" "$STAGE/app/Sluice.Cli"
+chmod 755 "$STAGE"/*.sh "$STAGE/app/sluice" "$STAGE/app/Sluice.Desktop" "$STAGE/app/Sluice.Cli"
 
 tar -czf "$OUT/$NAME.tar.gz" --owner=0 --group=0 -C "$WORK" "$NAME"
 (cd "$OUT" && sha256sum "$NAME.tar.gz" > "$NAME.tar.gz.sha256")

@@ -141,3 +141,7 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
 - A failing file dialog no longer closes the app, and a crash stops capture first (2026-11-20, #24, contributor): the
   pickers show "The file dialog couldn't open: …"; `CrashGuard` logs an unexpected error, stops capture (on Linux the
   nftables table is removed) and exits (docs/ui/FIXES.md §5).
+- Linux: Sluice starts through a small launcher that holds the capabilities (2026-11-20, contributor):
+  `/opt/sluice/sluice` (C, `packaging/linux/launcher/`) is the only file `install.sh` grants capture rights to; it
+  starts the desktop app or the CLI with a fixed environment and passes the rights on. Sluice clears them before
+  starting any other program (docs/linux/BUILD.md → The launcher).

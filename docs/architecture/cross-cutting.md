@@ -76,9 +76,11 @@ headers (`Interceptor.DiagnosticPackets`). Helper output (sing-box) is logged li
   (`HelperConfigFolder`; 0700, files 0600 on Linux), never the shared or temp folder, and deleted as soon as sing-box
   is listening.
 - **Elevation.** Windows: the whole app runs as administrator to capture (relaunch through UAC). Linux: no root; the
-  installer grants `cap_net_admin,cap_setgid` (plus optional caps to see other users' processes) with `setcap`, and
-  `CAP_NET_ADMIN` is passed on as an ambient capability only to the `nft` child (raised right before it starts, lowered
-  right after). Sluice changes its own group with
+  installer grants `cap_net_admin,cap_setgid` (plus optional caps to see other users' processes) with `setcap` to a
+  small launcher (`/opt/sluice/sluice`), which starts the app with a fixed set of environment variables and passes the
+  capabilities on as ambient ones; the .NET apps carry none (docs/linux/BUILD.md → The launcher). Sluice clears the
+  passed-on set before it starts any program, and `CAP_NET_ADMIN` is passed on only to the `nft` child (raised right
+  before it starts, lowered right after). Sluice changes its own group with
   `setresgid` while capturing (real, effective and saved group alike) and restores all three on stop.
 - **Fail-open capture.** If Sluice exits or crashes, WinDivert's handles close and the nft queue rule has `bypass`, so
   the machine keeps its connectivity; the price is that traffic which rules sent through tunnels then goes **direct**.

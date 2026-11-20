@@ -91,7 +91,11 @@ internal static class NftRules
         // Under setcap (not root) nft would start without CAP_NET_ADMIN: hand it on explicitly, for nft only. Lowered
         // again as soon as nft has started (it keeps its copy): left raised, every thread and program this thread starts
         // later would get it too, and GTK's sandboxed image loader (bwrap) refuses to run with it (#99).
+        // Under the launcher this thread may still have every passed-on capability: clear them first, so nft gets
+        // CAP_NET_ADMIN alone; if that fails, nft isn't started.
         EnsureSignalThread();
+        if (!Native.Libc.ClearPassedOn(out var clearProblem))
+            throw new InvalidOperationException($"Could not run nft: Sluice's other capabilities could not be kept from it ({clearProblem}).");
         Native.Libc.RaiseAmbient(Native.Libc.CAP_NET_ADMIN, out var capProblem);
         Process? started;
         try { started = Process.Start(psi); }

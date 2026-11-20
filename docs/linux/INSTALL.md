@@ -61,7 +61,8 @@ The installer:
    SSH, and checks its SHA-256 against the official release;
 3. copies Sluice to **`/opt/sluice`** (replacing an older copy) and adds the commands **`sluice`** and **`sluice-cli`**;
 4. adds **Sluice** to your applications menu, with its icon;
-5. grants Sluice the rights to capture traffic (`setcap`), so **you don't need to run it as root**.
+5. grants Sluice's launcher (`/opt/sluice/sluice`, which the `sluice` command and the menu entry start) the rights to
+   capture traffic (`setcap`), so **you don't need to run it as root**.
 
 It ends with `Done.`, after checking that Sluice starts. Any problem is printed as a `WARNING:` line saying what to do.
 
@@ -130,9 +131,16 @@ programs may use them.
 
 ## Troubleshooting
 
+**"sluice: refusing to run: only root may be able to change: …"**
+Sluice holds the capture rights only if nothing it loads can be changed by other users: its own folder
+(`/opt/sluice`) and the .NET folder (named in `/etc/dotnet/install_location*`, otherwise `/usr/share/dotnet`), with
+every folder above them. The message names what failed. Run `sudo ./install.sh` again: it installs .NET into a
+root-only folder if needed.
+
 **"Capturing traffic needs root, or these capabilities…"**
-The capture rights are missing, usually because Sluice was started from the unpacked folder instead of the
-installed copy, or `setcap` wasn't available during install. Install `libcap2-bin` (Debian/Ubuntu) or `libcap`, then
+The capture rights are missing, usually because Sluice was started from the unpacked folder or as
+`/opt/sluice/Sluice.Desktop` instead of through the `sluice` command or the menu entry, or `setcap` wasn't available
+during install. Install `libcap2-bin` (Debian/Ubuntu) or `libcap`, then
 run `sudo ./install.sh` again. As a one-off alternative, run `sudo sluice`; notifications may not appear then.
 
 **"nftables is not installed"**

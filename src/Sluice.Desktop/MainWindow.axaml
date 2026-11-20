@@ -129,6 +129,8 @@
                     <Button DockPanel.Dock="Right" Theme="{StaticResource IconButton}" Command="{Binding DismissBannerCommand}" Height="28">
                         <c:IconView Kind="close" Size="11"/>
                     </Button>
+                    <Button DockPanel.Dock="Right" Theme="{StaticResource PrimaryButton}" Content="Grant capture rights" Margin="12,0,6,0"
+                            Command="{Binding GrantRightsCommand}" IsVisible="{Binding BannerOffersGrant}"/>
                     <Button DockPanel.Dock="Right" Theme="{StaticResource PrimaryButton}" Content="Restart as administrator" Margin="12,0,6,0"
                             Command="{Binding RestartElevatedCommand}" IsVisible="{Binding BannerOffersElevation}"/>
                     <Button DockPanel.Dock="Right" Theme="{StaticResource PrimaryButton}" Content="Allow in Windows Firewall" Margin="12,0,6,0"

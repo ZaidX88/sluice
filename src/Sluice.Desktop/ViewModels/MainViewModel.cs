@@ -70,6 +70,7 @@ public sealed class MainViewModel : ObservableObject
         ExportProxifierCommand = new RelayCommand(AfterMenuCloses(ExportProxifier));
         NewCommand = new RelayCommand(AfterMenuCloses(New));
         DismissBannerCommand = new RelayCommand(() => Banner = null);
+        GrantRightsCommand = new AsyncCommand(GrantRightsAsync);
         RestartElevatedCommand = new RelayCommand(() =>
         {
             EngineHost.RestartElevated("--intercept");
@@ -191,6 +192,8 @@ public sealed class MainViewModel : ObservableObject
     public ICommand NewCommand { get; }
     public ICommand DismissBannerCommand { get; }
     public ICommand RestartElevatedCommand { get; }
+    public ICommand GrantRightsCommand { get; }
+    public bool BannerOffersGrant { get; private set; }
     public ICommand AllowFirewallCommand { get; private set; } = null!;
     public bool BannerOffersFirewall { get; private set; }
 
@@ -204,7 +207,7 @@ public sealed class MainViewModel : ObservableObject
         }
         if (!EngineHost.IsElevated)
         {
-            ShowBanner(OsPlatform.Current.CaptureRightsHint, offerElevation: OsPlatform.Current.CanRestartElevated);
+            ShowRightsBanner();
             Raise(nameof(Intercepting));
             return;
         }
@@ -230,8 +233,31 @@ public sealed class MainViewModel : ObservableObject
         UpdateStatus();
     }
 
-    private void ShowBanner(string text, bool offerElevation = false)
+    /// <summary>Capture rights are missing: the platform's hint, with what this platform can do about it (#70).</summary>
+    internal void ShowRightsBanner(string? before = null)
     {
+        var platform = OsPlatform.Current;
+        ShowBanner(before + platform.CaptureRightsHint, offerElevation: platform.CanRestartElevated, offerGrant: platform.CanGrantCaptureRights);
+    }
+
+    /// <summary>The OS's own password prompt (Linux: pkexec). The running app usually can't use new rights until it
+    /// starts again; if it already can, capture starts at once.</summary>
+    private async Task GrantRightsAsync()
+    {
+        var platform = OsPlatform.Current;
+        if (!await platform.TryGrantCaptureRightsAsync())
+        {
+            ShowRightsBanner("Capture rights were not granted. ");
+            return;
+        }
+        if (platform.HasCaptureRights) TurnOn();
+        else ShowInfo("Capture rights granted. Quit Sluice and open it again to start capturing.");
+    }
+
+    private void ShowBanner(string text, bool offerElevation = false, bool offerGrant = false)
+    {
+        BannerOffersGrant = offerGrant;
+        Raise(nameof(BannerOffersGrant));
         BannerOffersFirewall = false;
         Raise(nameof(BannerOffersFirewall));
         BannerOffersElevation = offerElevation;
@@ -244,6 +270,8 @@ public sealed class MainViewModel : ObservableObject
     /// <summary>Neutral notice (e.g. "imported from Proxifier") rather than an error.</summary>
     public void ShowInfo(string text)
     {
+        BannerOffersGrant = false;
+        Raise(nameof(BannerOffersGrant));
         BannerOffersFirewall = false;
         Raise(nameof(BannerOffersFirewall));
         BannerOffersElevation = false;

@@ -136,3 +136,5 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   vulnerability reporting, linked from the README and CONTRIBUTING.
 - Sluice's own title bar on Windows (2026-11-20, #81): every window derives from `SluiceWindow`; white bar and 1 px
   black border in light, black bar in dark, following the theme; snapping and snap layouts kept.
+- "Grant capture rights" and "Start Sluice when I log in" in the desktop app (2026-11-20, #70): shown only where the
+  platform offers them (Linux, with #69); hidden on Windows.

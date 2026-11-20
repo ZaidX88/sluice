@@ -27,7 +27,7 @@ Program.cs ──▶ App (App.axaml.cs)
 | `Services/AppSettings.cs` | Per-user settings ([profiles.md](profiles.md#app-settings-and-the-settings-folder)) |
 | `Services/AppTray.cs` | Tray icon: open, "Capture traffic" toggle, exit; tooltip with status and rates; icon changes with capture state (`AppIcon`) |
 | `Services/Dialogs.cs` | Modal dialogs (`MessageDialog`, tunnel / rule / import / password dialogs, file pickers) |
-| `Services/ScreenshotMode.cs` | `--screenshot DIR`: a demo profile in memory, real traffic through the app's own SOCKS5 listener, every page rendered to PNG; touches no user files, never captures |
+| `Services/ScreenshotMode.cs` | `--screenshot DIR`: a demo profile in memory, real traffic through the app's own SOCKS5 listener, every page rendered to PNG (plus the capture-rights banner); touches no user files, never captures. It replaces `OsPlatform.Current` with a demo platform that offers granting rights and autostart, so both show in the images |
 | `ViewModels/` | `MainViewModel` and one `PageViewModel` per page |
 | `Views/` | The pages (`ConnectionsView`, `StatisticsView`, `LogView`, `TunnelsView`, `RulesView`, `SettingsView`; code-behind in `PageViews.axaml.cs`) and dialogs (`TunnelDialog`, `RuleDialog`, `ImportDialog`, `PasswordDialog`) |
 | `Mvvm/ObservableObject.cs` | A minimal MVVM kit: `ObservableObject`, `RelayCommand`, `AsyncCommand` (no MVVM library) |
@@ -96,7 +96,10 @@ visible page (`PageViewModel.Refresh`) and updates rates and status. `TunnelsVie
   (`AppTray.ShowHiddenHint`).
 - **The banner** at the top of the content area (`MainViewModel.Banner`) shows errors and notices, with optional
   actions:
-  - capture rights missing → `CaptureRightsHint`, plus "Restart as administrator" only when `CanRestartElevated`;
+  - capture rights missing → `CaptureRightsHint` (`ShowRightsBanner`), plus "Restart as administrator" only when
+    `CanRestartElevated`, and "Grant capture rights" only when `CanGrantCaptureRights` (#70). Granting runs
+    `TryGrantCaptureRightsAsync` (the OS's password prompt); afterwards capture starts if the rights already apply,
+    otherwise the banner asks to reopen Sluice;
   - capture impossible (Linux without `nft`) → `CaptureUnavailableReason`;
   - `FirewallBlocked` (from `RelayUnreachable`) → "Allow" button running `AllowThroughFirewall`;
   - neutral notices (`ShowInfo`), e.g. "imported from Proxifier".

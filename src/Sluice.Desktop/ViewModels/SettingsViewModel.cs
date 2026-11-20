@@ -132,6 +132,15 @@ public sealed class SettingsViewModel : PageViewModel
         set { Host.Settings.MinimizeToTray = value; Host.Settings.Save(); Raise(); }
     }
 
+    /// <summary>Shown only where the platform can start Sluice at login (#70; Linux: #69).</summary>
+    public bool AutostartSupported => OsPlatform.Current.AutostartSupported;
+
+    public bool StartAtLogin
+    {
+        get => OsPlatform.Current.Autostart;
+        set { OsPlatform.Current.Autostart = value; Raise(); }   // read back: the platform may not have managed it
+    }
+
     public bool FileLog
     {
         get => Host.Settings.FileLogEnabled;

@@ -117,12 +117,43 @@ fi
 
 # ---------------------------------------------------------------- .NET 10 runtime
 
-# Where an app like Sluice looks for .NET: /etc/dotnet/install_location*, then /usr/share/dotnet.
+# The first line of an /etc/dotnet/install_location* file, without trailing blanks.
+location_file() { head -n 1 "$1" 2>/dev/null | tr -d '\r' | sed 's/[[:space:]]*$//'; }
+
+# Where an app like Sluice finds .NET: install_location_x64, then install_location, then /usr/share/dotnet.
+host_location() {
+    for f in /etc/dotnet/install_location_x64 /etc/dotnet/install_location; do
+        l=$(location_file "$f"); [ -n "$l" ] && { echo "$l"; return; }
+    done
+    echo /usr/share/dotnet
+}
+
+# $1 and every folder above it are owned by root and not writable by group or others.
+up_root_only() {
+    d=$1
+    while :; do
+        [ "$(stat -L -c %u "$d" 2>/dev/null)" = 0 ] || return 1
+        [ $(( 0$(stat -L -c %a "$d") & 022 )) -eq 0 ] || return 1
+        [ "$d" = / ] && return 0
+        d=$(dirname "$d")
+    done
+}
+
+# Root alone can change the .NET folder $1: it, the folders above it (also through links) and everything in it.
+# Sluice's launcher refuses to start the app with any other runtime.
+root_only() {
+    real=$(readlink -f "$1" 2>/dev/null) && [ -d "$real" ] && up_root_only "$1" && up_root_only "$real" &&
+        [ -z "$(find "$real" ! -type l \( ! -user root -o -perm -g+w -o -perm -o+w \) -print -quit 2>/dev/null)" ]
+}
+
+# A .NET with the runtime Sluice needs, in a folder root alone can change.
 dotnet_root_with_runtime() {
-    for root in "$(cat /etc/dotnet/install_location_x64 2>/dev/null)" "$(cat /etc/dotnet/install_location 2>/dev/null)" \
+    for root in "$(location_file /etc/dotnet/install_location_x64)" "$(location_file /etc/dotnet/install_location)" \
                 /usr/share/dotnet /usr/lib/dotnet /usr/lib64/dotnet /opt/dotnet \
                 "$(dirname "$(readlink -f "$(command -v dotnet 2>/dev/null || echo /nonexistent)")")"; do
-        [ -n "$root" ] && ls -d "$root"/shared/Microsoft.NETCore.App/$DOTNET_CHANNEL.* >/dev/null 2>&1 && { echo "$root"; return 0; }
+        [ -n "$root" ] && ls -d "$root"/shared/Microsoft.NETCore.App/$DOTNET_CHANNEL.* >/dev/null 2>&1 || continue
+        if root_only "$root"; then echo "$root"; return 0; fi
+        say "Not using the .NET in $root: users other than root can change it" >&2
     done
     return 1
 }
@@ -136,6 +167,9 @@ else
     p=$(pkg_name dotnet)
     if [ -n "$p" ]; then pkg_install "$p" || say "No $p package here; using Microsoft's installer instead."; fi
     if ! root=$(dotnet_root_with_runtime); then
+        if [ -e /usr/share/dotnet ] && ! root_only /usr/share/dotnet; then
+            die "/usr/share/dotnet can be changed by users other than root. Make it root's (sudo chown -R root:root /usr/share/dotnet; sudo chmod -R go-w /usr/share/dotnet) or remove it, then run install.sh again"
+        fi
         say "Installing .NET $DOTNET_CHANNEL with Microsoft's official script (dot.net/v1/dotnet-install.sh)"
         tmp=$(mktemp -d)
         curl -fsSL --retry 3 https://dot.net/v1/dotnet-install.sh -o "$tmp/dotnet-install.sh" \
@@ -148,12 +182,17 @@ else
     fi
     say ".NET $DOTNET_CHANNEL runtime: $root"
 fi
-# Sluice's launcher doesn't pass DOTNET_ROOT on: tell Sluice where .NET is if that is not a default place.
-if [ "$CHECK_ONLY" -eq 0 ] && [ -n "${root:-}" ] && [ "$root" != /usr/share/dotnet ] && \
-   [ "$(cat /etc/dotnet/install_location_x64 2>/dev/null)" != "$root" ] && [ "$(cat /etc/dotnet/install_location 2>/dev/null)" != "$root" ]; then
-    mkdir -p /etc/dotnet
-    echo "$root" > /etc/dotnet/install_location_x64
-    say "Registered $root in /etc/dotnet/install_location_x64"
+# Sluice's launcher doesn't pass DOTNET_ROOT on, so Sluice finds .NET through /etc/dotnet: make that lead to the
+# runtime chosen above, and make sure root alone can change it (the launcher checks the same).
+if [ "$CHECK_ONLY" -eq 0 ] && [ -n "${root:-}" ]; then
+    if [ "$(host_location)" != "$root" ]; then
+        mkdir -p /etc/dotnet
+        echo "$root" > /etc/dotnet/install_location_x64
+        say "Registered $root in /etc/dotnet/install_location_x64"
+    fi
+    for f in /etc/dotnet /etc/dotnet/install_location /etc/dotnet/install_location_x64; do
+        if [ -e "$f" ]; then chown root:root "$f"; chmod go-w "$f"; fi
+    done
 fi
 
 # ---------------------------------------------------------------- 2. sing-box

@@ -24,6 +24,9 @@ cp -a "$PUB/." "$STAGE/app/"
 # Windows-only files that Sluice.Core copies to every output, sing-box (install.sh downloads it), debug symbols.
 rm -f "$STAGE/app/WinDivert.dll" "$STAGE/app/WinDivert64.sys" "$STAGE/app/sing-box.exe" "$STAGE/app/sing-box-LICENSE.txt" "$STAGE"/app/*.pdb
 # The launcher, installed as /opt/sluice/sluice: starts Sluice.Desktop (or Sluice.Cli as "sluice-cli") with the rights.
+# Its tests (folder checks, environment filter) run first.
+"${CC:-cc}" -O2 -Wall -Wextra -Werror -o "$WORK/launcher-test" "$REPO/packaging/linux/launcher/launcher-test.c"
+"$WORK/launcher-test" > "$WORK/launcher-test.log" || { cat "$WORK/launcher-test.log" >&2; echo "launcher tests failed" >&2; exit 1; }
 "${CC:-cc}" -O2 -Wall -Wextra -Werror -D_FORTIFY_SOURCE=3 -fstack-protector-strong -fPIE -pie -Wl,-z,relro,-z,now \
     -o "$STAGE/app/sluice" "$REPO/packaging/linux/launcher/sluice-launcher.c"
 

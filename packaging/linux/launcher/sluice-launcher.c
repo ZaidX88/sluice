@@ -6,11 +6,12 @@
  * doesn't treat them as privileged binaries and .NET's own start-up isn't trusted with the capabilities:
  *
  *   - Only a fixed list of environment variables is passed on; everything else (DOTNET_*, COREHOST_*, COMPlus_*,
- *     LD_* …) is dropped. PATH is reset. DOTNET_EnableDiagnostics=0 keeps the runtime from opening its diagnostics
- *     socket.
+ *     LD_* …) is dropped, and so are language and time-zone values that are paths. PATH is reset.
+ *     DOTNET_EnableDiagnostics=0 keeps the runtime from opening its diagnostics socket.
  *   - The app is an absolute path in the launcher's own folder, never taken from the arguments or the environment.
  *     The name it was started under only chooses between the two fixed apps.
- *   - It refuses to run unless root alone can change its folder, every folder above it, and everything in it.
+ *   - It refuses to run unless root alone can change its folder and the .NET runtime folder the app will load (each
+ *     with every folder above it and everything in it), /etc/dotnet and its install_location files.
  *
  * Sluice clears the passed-on capabilities before it starts any other program (Sluice.Platform.Linux).
  *
@@ -47,18 +48,29 @@ static const char *const KEEP[] = {
     NULL,
 };
 
-static void die(const char *what, const char *detail)
+__attribute__((noreturn)) static void die(const char *what, const char *detail)
 {
     fprintf(stderr, "sluice: %s%s%s\n", what, detail ? ": " : "", detail ? detail : "");
     exit(126);
 }
 
+/* Language and time-zone values that are paths make glibc read locale or zone data from wherever they point: drop
+ * them. Normal values (en_US.UTF-8, Europe/London, :Europe/London) pass. */
+static int path_value(const char *entry)
+{
+    const char *v = strchr(entry, '=') + 1;
+    if (strncmp(entry, "TZ=", 3) == 0) return v[0] == '/' || strncmp(v, ":/", 2) == 0 || strstr(v, "..") != NULL;
+    return strchr(v, '/') != NULL;   /* LANG, LANGUAGE, LC_* */
+}
+
 static int kept(const char *entry)
 {
-    if (strncmp(entry, "LC_", 3) == 0) return 1;
+    if (!strchr(entry, '=')) return 0;
+    if (strncmp(entry, "LC_", 3) == 0) return !path_value(entry);
     for (const char *const *k = KEEP; *k; k++) {
         size_t n = strlen(*k);
-        if (strncmp(entry, *k, n) == 0 && entry[n] == '=') return 1;
+        if (strncmp(entry, *k, n) == 0 && entry[n] == '=')
+            return !((strcmp(*k, "LANG") == 0 || strcmp(*k, "LANGUAGE") == 0 || strcmp(*k, "TZ") == 0) && path_value(entry));
     }
     return 0;
 }
@@ -69,29 +81,87 @@ static int safe(const struct stat *st)
     return st->st_uid == 0 && (st->st_mode & (S_IWGRP | S_IWOTH)) == 0;
 }
 
+__attribute__((noreturn)) static void refuse(const char *path) { die("refusing to run: only root may be able to change", path); }
+
+/* The path and every folder above it. */
+static void check_up(const char *path)
+{
+    char up[PATH_MAX], tmp[PATH_MAX];
+    struct stat st;
+    snprintf(up, sizeof up, "%s", path);
+    for (;;) {
+        if (stat(up, &st) != 0 || !safe(&st)) refuse(up);
+        if (strcmp(up, "/") == 0) break;
+        snprintf(tmp, sizeof tmp, "%s", up);
+        snprintf(up, sizeof up, "%s", dirname(tmp));
+    }
+}
+
+static const char *walk_root;   /* the folder being walked (its real path) */
+static int walk_links;          /* links allowed, if they lead to a safe file inside walk_root */
 static const char *unsafe_path;
 
 static int check_entry(const char *path, const struct stat *st, int type, struct FTW *ftw)
 {
     (void)ftw;
-    if (type == FTW_SL || type == FTW_NS || type == FTW_DNR || !safe(st)) { unsafe_path = path; return 1; }
+    if (type == FTW_SL) {
+        char real[PATH_MAX];
+        struct stat target;
+        size_t n = strlen(walk_root);
+        if (walk_links && realpath(path, real) && strncmp(real, walk_root, n) == 0 && (real[n] == '/' || real[n] == '\0')
+            && stat(real, &target) == 0 && safe(&target))
+            return 0;
+        unsafe_path = path;
+        return 1;
+    }
+    if (type == FTW_NS || type == FTW_DNR || !safe(st)) { unsafe_path = path; return 1; }
     return 0;
 }
 
-/* The folder, every folder above it, and everything inside it (links refused). */
-static void check_folder(const char *dir)
+/* The folder, every folder above it, and everything inside it. Links: refused, or with allow_links only those whose
+ * target is inside the folder (distributions' .NET folders link between their own files). */
+static void check_folder(const char *dir, int allow_links)
 {
-    char up[PATH_MAX], tmp[PATH_MAX];
+    char real[PATH_MAX];
+    if (!realpath(dir, real)) refuse(dir);
+    check_up(dir);    /* as given: a link on the way there must not be in a folder others can change */
+    check_up(real);
+    walk_root = real;
+    walk_links = allow_links;
+    unsafe_path = NULL;
+    if (nftw(real, check_entry, 16, FTW_PHYS) != 0) refuse(unsafe_path ? unsafe_path : real);
+}
+
+/* The first line of an install_location file; 0 when the file doesn't exist or names nothing. The file must be
+ * root-only. */
+static int read_location(const char *file, char *out, size_t size)
+{
     struct stat st;
-    snprintf(up, sizeof up, "%s", dir);
-    for (;;) {
-        if (stat(up, &st) != 0 || !safe(&st)) die("refusing to run: only root may be able to change", up);
-        if (strcmp(up, "/") == 0) break;
-        snprintf(tmp, sizeof tmp, "%s", up);
-        snprintf(up, sizeof up, "%s", dirname(tmp));
-    }
-    if (nftw(dir, check_entry, 16, FTW_PHYS) != 0)
-        die("refusing to run: only root may be able to change", unsafe_path ? unsafe_path : dir);
+    out[0] = '\0';
+    if (stat(file, &st) != 0) return 0;
+    if (!S_ISREG(st.st_mode) || !safe(&st)) refuse(file);
+    FILE *f = fopen(file, "r");
+    if (!f) die("can't read", file);
+    if (!fgets(out, (int)size, f)) out[0] = '\0';
+    fclose(f);
+    size_t n = strcspn(out, "\r\n");
+    while (n > 0 && (out[n - 1] == ' ' || out[n - 1] == '\t')) n--;
+    out[n] = '\0';
+    return out[0] != '\0';
+}
+
+/* The .NET runtime the app will load, found as its host finds it: /etc/dotnet/install_location_x64, then
+ * /etc/dotnet/install_location, otherwise /usr/share/dotnet. It, /etc/dotnet and those files must be root-only. */
+static void check_runtime(void)
+{
+    char arch[PATH_MAX], any[PATH_MAX], root[PATH_MAX];
+    struct stat st;
+    if (stat("/etc/dotnet", &st) == 0) check_up("/etc/dotnet");
+    int has_arch = read_location("/etc/dotnet/install_location_x64", arch, sizeof arch);   /* both files are checked */
+    int has_any = read_location("/etc/dotnet/install_location", any, sizeof any);
+    snprintf(root, sizeof root, "%s", has_arch ? arch : has_any ? any : "/usr/share/dotnet");
+    if (root[0] != '/') die("refusing to run: the .NET folder named in /etc/dotnet isn't an absolute path", root);
+    check_folder(root, 1);
 }
 
 /* Inheritable = exactly the capture capabilities we hold (ambient requires them there), then ambient = the same. */
@@ -126,7 +196,8 @@ int main(int argc, char **argv)
     const char *target = strcmp(name, "sluice-cli") == 0 ? "Sluice.Cli" : "Sluice.Desktop";
     if ((size_t)snprintf(app, sizeof app, "%s/%s", dir, target) >= sizeof app) die("path too long", dir);
 
-    check_folder(dir);
+    check_folder(dir, 0);
+    check_runtime();
     struct stat st;
     if (stat(app, &st) != 0 || !S_ISREG(st.st_mode)) die("not found", app);
 

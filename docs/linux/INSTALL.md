@@ -131,6 +131,12 @@ programs may use them.
 
 ## Troubleshooting
 
+**"sluice: refusing to run: only root may be able to change: …"**
+Sluice holds the capture rights only if nothing it loads can be changed by other users: its own folder
+(`/opt/sluice`) and the .NET folder (named in `/etc/dotnet/install_location*`, otherwise `/usr/share/dotnet`), with
+every folder above them. The message names what failed. Run `sudo ./install.sh` again: it installs .NET into a
+root-only folder if needed.
+
 **"Capturing traffic needs root, or these capabilities…"**
 The capture rights are missing, usually because Sluice was started from the unpacked folder or as
 `/opt/sluice/Sluice.Desktop` instead of through the `sluice` command or the menu entry, or `setcap` wasn't available

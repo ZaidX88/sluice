@@ -218,3 +218,7 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   them back in through `lo`, where `tproxy` hands them to `TransparentUdp` (IP_RECVORIGDSTADDR) and on to `UdpFlows`.
   Replies leave from a transparent socket bound to the original destination. Without tproxy support capture starts and
   drops those flows as before. `LinuxUdpTproxyNetnsTests` checks the kernel path in a throwaway network namespace.
+- Update check in Core (2026-11-22, #197): `UpdateCheck.GetNewerAsync` asks GitHub's releases API for the latest
+  published release newer than `SluiceVersion` (drafts skipped, candidates only on request), with the package for
+  this system (Windows installer, Ubuntu `.deb` from `/etc/os-release`, else the tar.gz); `SemVersion` compares
+  versions. Never throws. Tests in `UpdateCheckTests` from a saved sample of the API's JSON. The UI part is #198.

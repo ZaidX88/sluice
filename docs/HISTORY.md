@@ -207,3 +207,8 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   self-contained for win-x64 and compiles `packaging/windows/Sluice.iss` (Inno Setup, adapted from the unreleased 0.1.0
   installer without its .NET download): Start Menu shortcut with the app ID "Sluice", firewall rules, WinDivert
   unloaded before an upgrade and on uninstall. `docs/windows/INSTALL.md`.
+- Release workflow (2026-11-22, #74): `.github/workflows/release.yml` checks a `vX.Y.Z[-rc.N]` tag against
+  `<Version>` and `main`, builds the Linux tar.gz and the Windows installer (Inno Setup 7.1.1 pinned by SHA-256),
+  renames them with the version and drafts a GitHub Release whose notes come from `scripts/release-notes.sh`
+  (the CHANGELOG section, comments removed, plus download links). A manual run only builds. Signing (#65) is a
+  marked step for later.

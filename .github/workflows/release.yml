@@ -1,0 +1,150 @@
+# Release packages from a version tag (#74; docs/CONTRIBUTING.md → Releases).
+#
+# A tag vX.Y.Z or vX.Y.Z-rc.N pushed on main: check it matches <Version> in Directory.Build.props, build the Linux
+# tar.gz and the Windows installer from that tag, and create a **draft** GitHub Release with them, their .sha256 files
+# and the version's CHANGELOG.md section as notes. The owner reviews the draft and publishes it.
+#
+# Run by hand (Actions → Release → Run workflow) it only builds the packages from the chosen ref and keeps them as
+# workflow artifacts: a dry run, and a way to get a release-candidate installer for testing.
+name: Release
+
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+', 'v[0-9]+.[0-9]+.[0-9]+-rc.[0-9]+']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  DOTNET_NOLOGO: 'true'
+  DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+
+jobs:
+  version:
+    name: Check the version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      prerelease: ${{ steps.v.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: v
+        env:
+          EVENT: ${{ github.event_name }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          version=$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' Directory.Build.props | head -n1)
+          [ -n "$version" ] || { echo "::error::No <Version> in Directory.Build.props"; exit 1; }
+          if [ "$EVENT" = push ]; then
+            if [ "v$version" != "$TAG" ]; then
+              echo "::error::Tag $TAG doesn't match <Version> $version in Directory.Build.props"; exit 1
+            fi
+            git merge-base --is-ancestor "$GITHUB_SHA" origin/main ||
+              { echo "::error::Tag $TAG is not on main"; exit 1; }
+          fi
+          case "$version" in *-*) prerelease=true ;; *) prerelease=false ;; esac
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
+          echo "Version $version (pre-release: $prerelease)"
+
+  linux:
+    name: Linux package
+    needs: version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Publish and package
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          # Framework-dependent; sing-box is downloaded by install.sh (DECISIONS.md, 2026-11-14).
+          dotnet publish src/Sluice.Desktop -f net10.0 -r linux-x64 --self-contained false -c Release -p:SluiceFetchDependencies=false -o out/app
+          dotnet publish src/Sluice.Cli -r linux-x64 --self-contained false -c Release -p:SluiceFetchDependencies=false -o out/app
+          scripts/package-linux.sh out/app out/pkg
+          # Release file names carry the version (CONTRIBUTING.md → Releases).
+          mkdir -p dist
+          mv out/pkg/sluice-linux-x64.tar.gz "dist/sluice-$VERSION-linux-x64.tar.gz"
+          (cd dist && sha256sum "sluice-$VERSION-linux-x64.tar.gz" > "sluice-$VERSION-linux-x64.tar.gz.sha256")
+          ls -l dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: dist/
+          if-no-files-found: error
+
+  windows:
+    name: Windows installer
+    needs: version
+    runs-on: windows-latest
+    env:
+      INNO_URL: https://github.com/jrsoftware/issrc/releases/download/is-7_1_1/innosetup-7.1.1-x64.exe
+      INNO_SHA256: 8a5a6711c3766a6e5fb74f280ba0e3551e719ce94538d901fdbd1f8f9920b3f0
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Install Inno Setup (pinned, SHA-256 checked)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $setup = Join-Path $env:RUNNER_TEMP 'innosetup.exe'
+          Invoke-WebRequest $env:INNO_URL -OutFile $setup
+          $hash = (Get-FileHash $setup -Algorithm SHA256).Hash.ToLower()
+          if ($hash -ne $env:INNO_SHA256) { throw "Inno Setup download has SHA-256 $hash, expected $env:INNO_SHA256" }
+          $p = Start-Process $setup -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-','/ALLUSERS' -PassThru -Wait
+          if ($p.ExitCode) { throw "Inno Setup install failed ($($p.ExitCode))" }
+      # Code signing (#65, SignPath Foundation) goes here: sign Sluice's own programs in the publish folder before the
+      # installer is compiled, then sign the installer.
+      - name: Build the installer
+        shell: pwsh
+        run: ./scripts/package-windows.ps1 -OutputDir dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: dist/
+          if-no-files-found: error
+
+  release:
+    name: Draft the GitHub Release
+    needs: [version, linux, windows]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Release notes from CHANGELOG.md
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          PRERELEASE: ${{ needs.version.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+          scripts/release-notes.sh "$VERSION" "$PRERELEASE" > notes.md
+          cat notes.md
+      - name: Create the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          PRERELEASE: ${{ needs.version.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+          flags=(--draft --verify-tag --title "Sluice ${TAG#v}" --notes-file notes.md)
+          [ "$PRERELEASE" = true ] && flags+=(--prerelease)
+          gh release create "$TAG" "${flags[@]}" dist/*

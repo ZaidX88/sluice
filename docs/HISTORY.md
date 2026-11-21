@@ -225,3 +225,6 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
 - Update notice (2026-11-22, #198): `MainViewModel.StartUpdateChecks` runs `UpdateCheck` a minute after start and
   daily while `CheckForUpdates` is on; a newer version shows its own bar above the banner (Download, Release notes,
   close = `DismissedUpdate`) and a tray item. Settings → General has the switch. `banner-update.png` in screenshots.
+- Linux UDP choice in Settings (2026-11-22, #200): `SettingsViewModel.UdpOrder` is the same four choices on both
+  systems ("Through the tunnel" first); the Linux branch and the `Shown` mapping (Tunnel shown as "Block it", from before
+  #60) are gone, so the selected index and the saved value are `UdpMode` itself.

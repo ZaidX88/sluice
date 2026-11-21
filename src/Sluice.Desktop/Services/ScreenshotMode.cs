@@ -103,6 +103,13 @@ internal static class ScreenshotMode
             Save(window, Path.Combine(dir, $"{page.Title.ToLowerInvariant()}.png"));
             if (page is SettingsViewModel settingsPage)
             {
+                // The Tunnels section with the UDP choice (#200), below the first screen.
+                if (window.GetVisualDescendants().OfType<ComboBox>().FirstOrDefault(c => ReferenceEquals(c.ItemsSource, settingsPage.UdpModes)) is { } udp)
+                {
+                    udp.BringIntoView(new Rect(0, 0, udp.Bounds.Width, 200));
+                    await Pump(500);
+                    Save(window, Path.Combine(dir, "settings-tunnels.png"));
+                }
                 // Advanced opened (#149): its top, then the end of the page.
                 settingsPage.AdvancedOpen = true;
                 await Pump(500);

@@ -174,3 +174,6 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
 - Selection colour (2026-11-21, #143): Fluent fills a selection with the accent, which Sluice sets to the text colour;
   `SelectionBg` / `SelectionText` in the palette (grey fills, monochrome) set on every `TextBox` state and on
   `SelectableTextBlock`, so an unfocused selection keeps them too. The accent is unchanged for other controls.
+- Ghost buttons (2026-11-21, #136): `GhostButton` (and `IconButton`, based on it) in `Text` instead of `TextMuted`,
+  with a `Hover` fill on hover and press; disabled keeps 0.35 opacity with no fill and an arrow cursor. Destructive
+  ones stay `Text` too (no red; red is `DangerButton`). The capture bar's two hand-set icon colours are gone.

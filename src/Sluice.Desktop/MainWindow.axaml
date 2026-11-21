@@ -157,14 +157,14 @@
                 <!-- Transport controls -->
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,28,0">
                     <Button Theme="{StaticResource IconButton}" Command="{Binding DisconnectAllCommand}" ToolTip.Tip="Disconnect all connections">
-                        <c:IconView Kind="close" Size="14" Foreground="{DynamicResource Text}"/>
+                        <c:IconView Kind="close" Size="14"/>
                     </Button>
                     <Button Theme="{StaticResource RoundButton}" Command="{Binding ToggleCaptureCommand}" Margin="14,0"
                             ToolTip.Tip="Start or stop capturing every application's traffic">
                         <c:IconView Kind="{Binding CaptureGlyph}" Size="16" Foreground="{DynamicResource OnAccent}"/>
                     </Button>
                     <Button Theme="{StaticResource IconButton}" Command="{Binding ShowLogCommand}" ToolTip.Tip="Open the log">
-                        <c:IconView Kind="list" Size="15" Foreground="{DynamicResource Text}"/>
+                        <c:IconView Kind="list" Size="15"/>
                     </Button>
                 </StackPanel>
 

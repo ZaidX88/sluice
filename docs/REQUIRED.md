@@ -28,20 +28,10 @@ The interfaces every part uses (`PlatformServices`, the new `IPlatformServices` 
 
 ## 2. UDP through tunnels on Linux
 
-Today a UDP flow whose rule says "tunnel" is dropped (browsers fall back from QUIC to TCP). Design that fits the current
-capture (TPROXY):
-
-- In `queue_new`, mark UDP flows to tunnel with a second mark (e.g. `0x5C1CF`).
-- Chain `mangle/prerouting`: `meta mark 0x5C1CF tproxy to :UDPPORT`; locally generated packets need rerouting through
-  `lo`: `ip rule add fwmark 0x5C1CF lookup 100` + `ip route add local default dev lo table 100` (and IPv6), with a
-  `type route hook output` chain setting the mark.
-- A UDP socket with `IP_TRANSPARENT` + `IP_RECVORIGDSTADDR` (and IPv6 equivalents) receives the original destination;
-  replies go out from a transparent socket bound to that address.
-- Reuse the flow logic in Core's `UdpFlows` (#59): hand each datagram in as an `AppDatagram` and implement
-  `IDatagramSender` with the transparent reply socket (`docs/architecture/platforms.md` §6.4).
-- Remove the `ip rule` / route on stop, like the nft table. This also fixes DNS capture when only a loopback resolver exists.
-
-**Done when:** `UdpMode.Tunnel` carries `curl --http3` and a DNS query through a SOCKS5 tunnel in the Linux live test.
+**Done** (#60, on Core's `UdpFlows` from #59): a UDP flow Sluice takes (through a tunnel, or Direct to a placeholder
+address) gets a mark with its NFQUEUE verdict, kept in conntrack for its later packets; a policy routing rule sends
+marked packets back in through `lo`, where nftables' `tproxy` hands them to a transparent socket that reads the original
+destination and passes them to `UdpFlows` ([architecture/capture.md](architecture/capture.md#linux-linuxcapture)).
 
 ## 3. Retire the WPF app
 

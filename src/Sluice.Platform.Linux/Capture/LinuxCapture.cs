@@ -19,6 +19,7 @@ namespace Sluice.Platform.Linux.Capture;
 /// Linux traffic capture: nftables queues the first packet of each new outbound flow to Sluice (NFQUEUE), which
 /// looks up the owning process and asks the rules, as the Windows capture does on each SYN. Connections to be
 /// handled are marked and redirected by nftables to the transparent relay; the rest are never touched again.
+/// UDP flows Sluice takes are marked too and reach <see cref="UdpFlows"/> through a tproxy (<see cref="TransparentUdp"/>).
 /// DNS (UDP/53) is redirected to <see cref="LinuxDnsServer"/>, which hands out fake addresses for hostnames
 /// that go through tunnels. See <see cref="NftRules"/> for the ruleset.
 ///
@@ -30,6 +31,7 @@ public sealed class LinuxCapture : ITrafficCapture
     private const ushort QueueNumber = 0x5C1;     // 1473
     private const uint RedirectMark = 0x5C1CE;
     private const uint RejectMark = 0x5C1CF;      // refused at once: IPv6 through a route Core marked (RoutingEngine.Ipv6Fallback)
+    private const uint UdpMark = 0x5C1D0;         // a UDP flow Sluice takes: rerouted through lo to TransparentUdp (tproxy)
     private static readonly TimeSpan UdpVerdictTime = TimeSpan.FromSeconds(30);
 
     private readonly RoutingEngine _engine;
@@ -38,7 +40,13 @@ public sealed class LinuxCapture : ITrafficCapture
     private readonly FlowRecords _flows = new();
     private Conntrack? _conntrack;
     private bool _conntrackWarned;
-    private readonly ConcurrentDictionary<(IPEndPoint, IPEndPoint), (bool Drop, DateTime At)> _udpVerdicts = new();
+    /// <summary>What happens to a new UDP flow: sent on unchanged, dropped, or taken by Sluice (<see cref="UdpFlows"/>).</summary>
+    internal enum UdpChoice { Pass, Drop, Take }
+
+    private readonly ConcurrentDictionary<(IPEndPoint, IPEndPoint), (UdpChoice Choice, DateTime At)> _udpVerdicts = new();
+    private TransparentUdp? _tproxy;
+    private UdpFlows? _udpFlows;
+    private bool _routesAdded;
     private readonly CancellationTokenSource _cts = new();
     private DnsResolver? _resolver;
     private LinuxDnsServer? _dns;
@@ -50,11 +58,10 @@ public sealed class LinuxCapture : ITrafficCapture
     private Task? _sweeper;
     private (uint Real, uint Effective, uint Saved)? _previousGid;
     private bool _rulesApplied;
-    private int _udpTunnelWarned;
     private readonly DnsPolicyCache _policies;
     private Task? _policyWatch;
     private PosixSignalRegistration[]? _exitSignals;
-    private long _redirected, _passed, _udpDropped, _refused;
+    private long _redirected, _passed, _udpDropped, _udpTaken, _refused;
 
     public LinuxCapture(RoutingEngine engine, IProcessLookup lookup)
     {
@@ -154,7 +161,9 @@ public sealed class LinuxCapture : ITrafficCapture
 
         _queue = NfQueue.Open(QueueNumber);
         UdpMode = _engine.Profile.Options.Udp;
-        NftRules.Apply(new NftRules.Settings(QueueNumber, RedirectMark, gid, _relay.Port, dnsPort, QueueUdp: UdpMode != UdpMode.Bypass, RejectMark));
+        if (UdpMode != UdpMode.Bypass) StartUdpTproxy();
+        NftRules.Apply(new NftRules.Settings(QueueNumber, RedirectMark, gid, _relay.Port, dnsPort, QueueUdp: UdpMode != UdpMode.Bypass, RejectMark,
+            UdpMark: _tproxy is null ? 0 : UdpMark, UdpPort: _tproxy?.Port ?? 0));
         _rulesApplied = true;
         _exitSignals = [.. new[] { PosixSignal.SIGTERM, PosixSignal.SIGINT, PosixSignal.SIGHUP }
             .Select(s => PosixSignalRegistration.Create(s, OnExitSignal))];
@@ -176,11 +185,62 @@ public sealed class LinuxCapture : ITrafficCapture
         _engine.Tracker.Write(LogLevel.Normal, $"Capture started (nftables + NFQUEUE {QueueNumber}, relay port {_relay.Port}" +
             $"{(dnsPort is null ? "" : $", DNS port {dnsPort}")}; UDP: {UdpMode switch
             {
-                UdpMode.Tunnel => "tunneling is not available on Linux yet, so UDP of tunneled apps is blocked",
+                UdpMode.Tunnel => _tproxy is null
+                    ? "tunneling unavailable (see above), so UDP of tunneled apps is blocked"
+                    : $"tunneled through transparent UDP port {_tproxy.Port}",
                 UdpMode.BlockQuic => "QUIC of tunneled apps blocked",
                 UdpMode.BlockAll => "blocked for tunneled apps",
                 _ => "not captured",
             }})");
+    }
+
+    /// <summary>
+    /// Sets up what carries the UDP flows Sluice takes: <see cref="UdpFlows"/> (Core) behind a transparent socket, and
+    /// the policy routing that brings marked packets to it. If any part fails (an old kernel without tproxy), capture
+    /// still starts and those flows are dropped, as before UDP could be tunneled on Linux.
+    /// </summary>
+    private void StartUdpTproxy()
+    {
+        try
+        {
+            _udpFlows = new UdpFlows(_engine, _fakeIps, new ReplySender(this), ep => _lookup.FindUdpOwner(ep));
+            _tproxy = TransparentUdp.Open(OnTakenDatagram, m => _engine.Tracker.Write(LogLevel.Error, m));
+            PolicyRoutes.Add(UdpMark, out var ipv6Problem);
+            _routesAdded = true;
+            if ((ipv6Problem ?? _tproxy.Ipv6Problem) is { } why)
+                _engine.Tracker.Write(LogLevel.Normal, $"UDP is taken for IPv4 only ({why})");
+            _tproxy.Start();
+        }
+        catch (InvalidOperationException ex)
+        {
+            _engine.Tracker.Write(LogLevel.Error, $"UDP can't be taken through tunnels: {ex.Message}. UDP of tunneled apps is blocked, so browsers fall back from QUIC to TCP.");
+            StopUdpTproxy();
+        }
+    }
+
+    private void StopUdpTproxy()
+    {
+        if (_routesAdded) PolicyRoutes.Remove(UdpMark);
+        _routesAdded = false;
+        _tproxy?.Dispose();
+        _tproxy = null;
+    }
+
+    /// <summary>A datagram of a flow Sluice took, as the transparent socket received it.</summary>
+    private void OnTakenDatagram(IPEndPoint app, IPEndPoint destination, ReadOnlyMemory<byte> payload)
+    {
+        if (_udpFlows is not { } flows) return;
+        // Already out of the network: a flow UdpFlows would now pass (the profile changed since it was marked) can only
+        // be dropped. Its conntrack entry keeps the mark until the flow is idle, then the next packet is decided again.
+        if (flows.Handle(new AppDatagram(app, destination, payload, null)) == UdpFlows.Verdict.Pass)
+            Interlocked.Increment(ref _udpDropped);
+    }
+
+    /// <summary>Delivers <see cref="UdpFlows"/>' replies through the transparent socket.</summary>
+    private sealed class ReplySender(LinuxCapture owner) : IDatagramSender
+    {
+        public void SendToApp(IPEndPoint from, IPEndPoint app, ReadOnlyMemory<byte> payload, object? context) =>
+            owner._tproxy?.SendToApp(from, app, payload.Span);
     }
 
     private DnsPolicy CurrentPolicy() => _policies.Current;
@@ -246,7 +306,12 @@ public sealed class LinuxCapture : ITrafficCapture
         {
             if (f.Protocol == PacketInfo.Tcp)
                 return (NfQueue.Accept, DecideTcp(f.Source, f.Destination, quiet));
-            return (DecideUdpDrop(f.Source, f.Destination, quiet) ? NfQueue.Drop : NfQueue.Accept, null);
+            return DecideUdp(f.Source, f.Destination, quiet) switch
+            {
+                UdpChoice.Take => (NfQueue.Accept, UdpMark),
+                UdpChoice.Drop => (NfQueue.Drop, null),
+                _ => (NfQueue.Accept, null),
+            };
         }
         finally
         {
@@ -323,39 +388,62 @@ public sealed class LinuxCapture : ITrafficCapture
     }
 
 
-    /// <summary>True to drop this new UDP flow. UDP is not tunneled on Linux yet: flows meant for a tunnel are blocked.</summary>
-    private bool DecideUdpDrop(IPEndPoint local, IPEndPoint remote, bool quiet = false)
+    /// <summary>What to do with this new UDP flow (its first packets, until the decision is cached).</summary>
+    private UdpChoice DecideUdp(IPEndPoint local, IPEndPoint remote, bool quiet = false)
     {
         var key = (Norm(local), Norm(remote));
-        if (_udpVerdicts.TryGetValue(key, out var cached) && DateTime.UtcNow - cached.At < UdpVerdictTime) return Count(cached.Drop);
+        if (_udpVerdicts.TryGetValue(key, out var cached) && DateTime.UtcNow - cached.At < UdpVerdictTime) return Count(cached.Choice);
 
         var pid = _lookup.FindUdpOwner(local);
         var fake = _fakeIps.TryGetHost(remote.Address, out var hostname);
-        bool drop;
-        if (!fake && FakeIpPool.IsFake(remote.Address)) drop = true;   // a placeholder from before a restart: leads nowhere
-        else if (!fake && (pid == Environment.ProcessId || _engine.Backends.IsHelperProcess(pid))) drop = false;
-        else if (!fake && pid == 0 && !_engine.Profile.Options.ProcessServices) drop = false;
+        UdpChoice choice;
+        if (!fake && FakeIpPool.IsFake(remote.Address)) choice = UdpChoice.Drop;   // a placeholder from before a restart: leads nowhere
+        else if (IsNeverTaken(remote)) choice = UdpChoice.Pass;                   // as UdpFlows: multicast, broadcast, DHCP, mDNS…
+        else if (!fake && (pid == Environment.ProcessId || _engine.Backends.IsHelperProcess(pid))) choice = UdpChoice.Pass;
+        else if (!fake && pid == 0 && !_engine.Profile.Options.ProcessServices) choice = UdpChoice.Pass;
         else
         {
             var path = pid == 0 ? null : _lookup.GetProcessPath(pid);
             var route = _engine.ClassifyUdp(new InboundRequest(fake ? hostname : remote.Address.ToString(), remote.Port, pid, path));
-            drop = fake || route.Verdict != UdpVerdict.Pass;   // a fake address is unreachable without a tunnel
-            if (route.Verdict == UdpVerdict.Tunnel && Interlocked.Exchange(ref _udpTunnelWarned, 1) == 0)
-            {
-                _engine.Tracker.Write(LogLevel.Normal,
-                    "UDP through tunnels is not available on Linux yet: UDP of tunneled apps is blocked, so browsers fall back from QUIC to TCP.");
-            }
-            if (!quiet) _engine.Tracker.Write(drop ? LogLevel.Verbose : LogLevel.Debug,
-                $"{Path.GetFileName(path) ?? "?"} ({pid}) - UDP {(fake ? hostname : remote.Address.ToString())}:{remote.Port} {(drop ? "blocked" : "direct")} (rule {route.Match.Rule.Name})");
+            choice = Choose(route.Verdict, fake, canTake: _tproxy is not null);
+            if (!quiet) _engine.Tracker.Write(choice == UdpChoice.Drop ? LogLevel.Verbose : LogLevel.Debug,
+                $"{Path.GetFileName(path) ?? "?"} ({pid}) - UDP {(fake ? hostname : remote.Address.ToString())}:{remote.Port} " +
+                $"{choice switch { UdpChoice.Take => "taken", UdpChoice.Drop => "blocked", _ => "direct" }} (rule {route.Match.Rule.Name})");
         }
-        _udpVerdicts[key] = (drop, DateTime.UtcNow);
-        return Count(drop);
+        _udpVerdicts[key] = (choice, DateTime.UtcNow);
+        return Count(choice);
     }
 
-    private bool Count(bool drop)
+    /// <summary>
+    /// The choice for a flow the rules gave <paramref name="verdict"/>. A tunnel flow is taken; so is a Direct flow to a
+    /// placeholder (<paramref name="fake"/>), which can't go out as it is: <see cref="UdpFlows"/> sends it by name. Both
+    /// are dropped when Sluice can't take UDP (<paramref name="canTake"/> false).
+    /// </summary>
+    internal static UdpChoice Choose(UdpVerdict verdict, bool fake, bool canTake) => verdict switch
     {
-        if (drop) Interlocked.Increment(ref _udpDropped);
-        return drop;
+        UdpVerdict.Block => UdpChoice.Drop,
+        UdpVerdict.Tunnel => canTake ? UdpChoice.Take : UdpChoice.Drop,
+        _ => !fake ? UdpChoice.Pass : canTake ? UdpChoice.Take : UdpChoice.Drop,
+    };
+
+    /// <summary>The destinations <see cref="UdpFlows"/> always leaves alone (multicast, broadcast, link-local, DNS/DHCP/mDNS…).</summary>
+    internal static bool IsNeverTaken(IPEndPoint dst)
+    {
+        if (dst.Port is 53 or 67 or 68 or 5353 or 5355 or 1900) return true;
+        var a = dst.Address.IsIPv4MappedToIPv6 ? dst.Address.MapToIPv4() : dst.Address;
+        if (a.AddressFamily == AddressFamily.InterNetwork)
+        {
+            var b = a.GetAddressBytes();
+            return b[0] >= 224 || (b[0] == 169 && b[1] == 254) || b[0] == 127 || b[0] == 0;
+        }
+        return a.IsIPv6Multicast || a.IsIPv6LinkLocal || IPAddress.IsLoopback(a);
+    }
+
+    private UdpChoice Count(UdpChoice choice)
+    {
+        if (choice == UdpChoice.Drop) Interlocked.Increment(ref _udpDropped);
+        else if (choice == UdpChoice.Take) Interlocked.Increment(ref _udpTaken);
+        return choice;
     }
 
     private static IPEndPoint Norm(IPEndPoint ep) => IRedirectTable.Normalize(ep);
@@ -408,10 +496,12 @@ public sealed class LinuxCapture : ITrafficCapture
                 _flows.Sweep(now, TimeSpan.FromMinutes(1));
                 foreach (var (k, v) in _udpVerdicts)
                     if (now - v.At > UdpVerdictTime) _udpVerdicts.TryRemove(k, out _);
+                _udpFlows?.Sweep(TimeSpan.FromSeconds(60));
+                _tproxy?.SweepReplies(TimeSpan.FromSeconds(120));
                 _engine.Tracker.Write(LogLevel.Debug,
                     $"Capture stats: {Interlocked.Read(ref _redirected):N0} redirected, {Interlocked.Read(ref _passed):N0} passed, " +
                     $"{Interlocked.Read(ref _refused):N0} IPv6 refused, " +
-                    $"{Interlocked.Read(ref _udpDropped):N0} UDP dropped, {_workers?.Overflowed ?? 0:N0} accepted unmarked (workers behind), DNS {_dns?.Answered ?? 0:N0} answered / {_dns?.Forwarded ?? 0:N0} forwarded, {_fakeIps.Count} fake IPs");
+                    $"{Interlocked.Read(ref _udpDropped):N0} UDP dropped, {Interlocked.Read(ref _udpTaken):N0} UDP flows taken ({_udpFlows?.FlowCount ?? 0} open, {_tproxy?.ReplySockets ?? 0} reply sockets), {_workers?.Overflowed ?? 0:N0} accepted unmarked (workers behind), DNS {_dns?.Answered ?? 0:N0} answered / {_dns?.Forwarded ?? 0:N0} forwarded, {_fakeIps.Count} fake IPs");
             }
         }
         catch (OperationCanceledException) { }
@@ -442,6 +532,8 @@ public sealed class LinuxCapture : ITrafficCapture
         _engine.Tracker.Write(LogLevel.Normal, $"{context.Signal} received while capturing: removing the nftables rules before exit");
         NftRules.Remove();
         _rulesApplied = false;
+        if (_routesAdded) PolicyRoutes.Remove(UdpMark);
+        _routesAdded = false;
         FlushResolverCache();
     }
 
@@ -451,8 +543,9 @@ public sealed class LinuxCapture : ITrafficCapture
         if (_exitSignals is not null)
             foreach (var r in _exitSignals) r.Dispose();
         _exitSignals = null;
-        if (_rulesApplied) NftRules.Remove();     // first: no new packets are queued or redirected
+        if (_rulesApplied) NftRules.Remove();     // first: no new packets are queued, redirected or marked
         _rulesApplied = false;
+        StopUdpTproxy();                          // then the routes (only marked packets used them) and the socket
         _queue?.Stop();
         _thread?.Join(2000);                      // no more packets are handed to the workers
         _workers?.Stop(TimeSpan.FromSeconds(2));  // every queued packet gets its verdict before the socket closes
@@ -501,6 +594,7 @@ public sealed class LinuxCapture : ITrafficCapture
         if (_policyWatch is not null) await _policyWatch;
         if (_relay is not null) await _relay.DisposeAsync();
         if (_dns is not null) await _dns.DisposeAsync();
+        if (_udpFlows is not null) await _udpFlows.DisposeAsync();
         SaveFakeIps();
         _engine.HostResolver = null;
         _resolver?.Dispose();

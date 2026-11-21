@@ -199,14 +199,11 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
 - WPF app retired (2026-11-22, #63, #48): `src/Sluice.App` and its `Sluice.slnx` entry are deleted, after the hand check
   of the Avalonia app on Windows (#61). The UI area, CODEOWNERS and the area check no longer list it; REQUIRED.md §3 is
   marked done.
-<<<<<<< Updated upstream
 - UDP flow logic in Core (2026-11-22, #59): `UdpFlows` with `AppDatagram` / `IDatagramSender` (platforms.md §6.4), the
   flow logic of `UdpNat` with no packet format in it, beside the unchanged `UdpNat` until #53 switches Windows over.
   New: a Direct rule to a placeholder address sends the datagram by name through the flow's own UDP socket (replies
   from the placeholder), where `UdpNat` dropped it. Tests in `UdpFlowsTests` with a fake sender and a local echo server.
-=======
 - Windows installer (2026-11-22, #64): `scripts/package-windows.ps1` publishes `Sluice.Desktop` and `Sluice.Cli`
   self-contained for win-x64 and compiles `packaging/windows/Sluice.iss` (Inno Setup, adapted from the unreleased 0.1.0
   installer without its .NET download): Start Menu shortcut with the app ID "Sluice", firewall rules, WinDivert
   unloaded before an upgrade and on uninstall. `docs/windows/INSTALL.md`.
->>>>>>> Stashed changes

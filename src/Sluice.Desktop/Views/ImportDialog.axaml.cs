@@ -62,7 +62,7 @@ public partial class ImportDialog : SluiceWindow
             var r = Subscriptions.ImportLinks(_profile, LinksBox.Text ?? "");
             if (r.Added.Count + r.Unchanged.Count == 0)
             {
-                Show(r.Warnings.FirstOrDefault() ?? "No share links found.", error: true);
+                ShowStatus(r.Warnings.FirstOrDefault() ?? "No share links found.", error: true);
                 return;
             }
             Result = r;
@@ -77,12 +77,12 @@ public partial class ImportDialog : SluiceWindow
         }
         catch (FormatException ex)
         {
-            Show(ex.Message, error: true);
+            ShowStatus(ex.Message, error: true);
             return;
         }
         var isNew = sub.LastUpdated is null && !_profile.Tunnels.Any(t => t.SubscriptionId == sub.Id);
         ImportButton.IsEnabled = false;
-        Show("Downloading…", error: false);
+        ShowStatus("Downloading…", error: false);
         _cts = new CancellationTokenSource();
         try
         {
@@ -92,7 +92,7 @@ public partial class ImportDialog : SluiceWindow
         catch (Exception ex) when (ex is HttpRequestException or InvalidDataException)
         {
             if (isNew) _profile.Subscriptions.Remove(sub);   // do not keep a subscription that never worked
-            Show(ex.Message, error: true);
+            ShowStatus(ex.Message, error: true);
         }
         catch (OperationCanceledException)
         {
@@ -104,10 +104,13 @@ public partial class ImportDialog : SluiceWindow
         }
     }
 
-    private void Show(string text, bool error)
+    internal void ShowStatus(string text, bool error)
     {
         StatusText.Text = text;
-        StatusText.Foreground = (IBrush?)this.FindResource(error ? "Danger" : "TextMuted");
+        // The palette's brushes are per theme, so they are found only with the theme variant (#181); a plain
+        // FindResource returns UnsetValue for them. Keep the current colour rather than crash if one is missing.
+        if (this.TryFindResource(error ? "Danger" : "TextMuted", ActualThemeVariant, out var brush) && brush is IBrush b)
+            StatusText.Foreground = b;
         StatusText.IsVisible = true;
     }
 }

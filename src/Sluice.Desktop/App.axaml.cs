@@ -1,4 +1,6 @@
 using System.IO.Pipes;
+using System.Security.AccessControl;
+using System.Security.Principal;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -100,19 +102,31 @@ public partial class App : Application
         }
     }, TimeSpan.FromSeconds(15));
 
+    /// <summary>True when another Sluice of this user runs; it is asked to show its window (#171).</summary>
     private static async Task<bool> SignalRunningInstanceAsync()
     {
+        await using var client = new NamedPipeClientStream(".", PipeName, PipeDirection.Out);
         try
         {
-            await using var client = new NamedPipeClientStream(".", PipeName, PipeDirection.Out);
             await client.ConnectAsync(300);
-            await client.WriteAsync("show"u8.ToArray());
-            return true;
         }
-        catch (Exception ex) when (ex is TimeoutException or IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is TimeoutException or IOException)
         {
             return false;   // nobody listening: we are the first instance
         }
+        catch (UnauthorizedAccessException)
+        {
+            return true;    // the pipe exists but we may not use it: another Sluice owns it
+        }
+        // Connected, so another Sluice runs, whatever happens to the request: a failed write must not start a second
+        // copy (the running one may close the pipe early).
+        try
+        {
+            await client.WriteAsync("show"u8.ToArray());
+            await client.FlushAsync();
+        }
+        catch (IOException) { }
+        return true;
     }
 
     private async Task ListenForShowRequestsAsync(CancellationToken ct)
@@ -121,13 +135,41 @@ public partial class App : Application
         {
             try
             {
-                await using var server = new NamedPipeServerStream(PipeName, PipeDirection.In, 1);
+                await using var server = CreatePipeServer();
                 await server.WaitForConnectionAsync(ct);
+                // Read the request to its end before closing, so the other side's write never meets a closed pipe.
+                using (var wait = CancellationTokenSource.CreateLinkedTokenSource(ct))
+                {
+                    wait.CancelAfter(TimeSpan.FromSeconds(2));
+                    var buffer = new byte[16];
+                    try { while (await server.ReadAsync(buffer, wait.Token) > 0) { } }
+                    catch (OperationCanceledException) when (!ct.IsCancellationRequested) { }
+                    catch (IOException) { }
+                }
                 Dispatcher.UIThread.Post(ShowWindow);
             }
             catch (OperationCanceledException) { return; }
-            catch (IOException) { await Task.Delay(500, ct); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                await Task.Delay(500, ct);   // e.g. a second instance's pipe is still closing: try again
+            }
         }
+    }
+
+    /// <summary>
+    /// The single-instance pipe. On Windows it also lets the same user connect from a process without admin rights:
+    /// with the default security a normal launch can't reach a Sluice running as administrator, and would start a
+    /// second copy (#171).
+    /// </summary>
+    private static NamedPipeServerStream CreatePipeServer()
+    {
+        if (OperatingSystem.IsWindows() && WindowsIdentity.GetCurrent().User is { } user)
+        {
+            var security = new PipeSecurity();
+            security.AddAccessRule(new PipeAccessRule(user, PipeAccessRights.ReadWrite | PipeAccessRights.CreateNewInstance, AccessControlType.Allow));
+            return NamedPipeServerStreamAcl.Create(PipeName, PipeDirection.In, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous, 0, 0, security);
+        }
+        return new NamedPipeServerStream(PipeName, PipeDirection.In, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
     }
 
     private void ShowWindow()

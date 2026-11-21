@@ -112,7 +112,13 @@ else
     pkgs=""
     for r in $missing; do p=$(pkg_name "$r"); [ -n "$p" ] && pkgs="$pkgs $p"; done
     # shellcheck disable=SC2086
-    pkg_install $pkgs || warn "some packages failed to install:$pkgs"
+    if ! pkg_install $pkgs; then
+        # pacman installs only against an up-to-date system (Arch supports no partial upgrades), and upgrading the whole
+        # system is the user's call, not install.sh's. Its own error lines above say why; nothing was changed yet.
+        [ "$PM" = pacman ] && die "pacman couldn't install the packages Sluice needs:$pkgs
+Run  sudo pacman -Syu  then run install.sh again. Nothing was changed."
+        warn "some packages failed to install:$pkgs"
+    fi
 fi
 
 # ---------------------------------------------------------------- .NET 10 runtime

@@ -161,3 +161,6 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
 - Own title bar on Linux (2026-11-21, #84): X11 windows (XWayland included) drop the window manager's decorations and
   use `TitleBar` like Windows; moving and maximising through `BeginMoveDrag`, resizing from the edges and corners
   through `BeginResizeDrag`. Avalonia's experimental drawn X11 decorations were left out.
+- pacman in install.sh (2026-11-21, #140): Arch supports no partial upgrades, so when `pacman -S --needed` fails
+  (no synced database, or one older than the mirror) install.sh stops before changing anything and says to run
+  `sudo pacman -Syu` first; upgrading the whole system stays the user's call. apt and dnf keep the warning.

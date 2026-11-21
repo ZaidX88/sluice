@@ -9,7 +9,7 @@ using Sluice.Core.Profiles;
 using Sluice.Core.Tunnels;
 
 const string Usage = """
-    Sluice.Cli [profile.sluice|.ppx] [options]  run the routing engine
+    Sluice.Cli [profile.sluice] [options]       run the routing engine
       --socks 127.0.0.1:1080      local SOCKS5 listener address
       --intercept                 capture all applications' traffic with WinDivert (needs Administrator)
       --udp tunnel|block-quic|block-all|bypass
@@ -20,8 +20,8 @@ const string Usage = """
 
     Sluice.Cli --version          print the version of this build
 
-    Sluice.Cli check <profile.sluice|.ppx | share link> [options]
-                                  test tunnels like Proxifier's Proxy Checker
+    Sluice.Cli check <profile.sluice | share link> [options]
+                                  test tunnels: reachability, latency, a web page
       share link: vless:// vmess:// trojan:// ss:// hysteria2:// tuic:// ssh://
                   socks5:// socks4:// socks4a:// https:// http://  (scheme://[user:pass@]host:port)
       --target host:port          host reached through the proxy (default www.google.com:80)
@@ -282,7 +282,6 @@ static async Task<int> RunImportAsync(string[] args)
         }
     }
     if (profilePath is null || (source is null) == (subscription is null)) { Console.Error.WriteLine(Usage); return 1; }
-    if (ProfileFile.IsProxifier(profilePath)) { Console.Error.WriteLine("Import into a .sluice profile (Proxifier profiles cannot hold these tunnels)."); return 1; }
     if (!TryLoadProfile(File.Exists(profilePath) ? profilePath : null, out var profile)) return 1;
 
     ImportResult result;

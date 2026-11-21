@@ -66,8 +66,7 @@ settings.
 - **Hostnames reach the tunnel:** a built-in fake-DNS server keeps names intact for the tunnel, so name rules work and
   DNS doesn't leak. IPv6 is refused through tunnels that can't reach it, so apps fall back to IPv4 (#30, #31).
 - **Tunnel health:** checks, automatic reconnect, restart after a network change, idle stop, and notifications.
-- **Profiles:** Sluice's own `.sluice` files (JSON, with optional password encryption), and import and export of
-  Proxifier 4 `.ppx` profiles.
+- **Profiles:** Sluice's own `.sluice` files (JSON, with optional password encryption).
 - **Desktop app** for Windows and Linux: light and dark themes, a tray icon, a statistics page, and a banner that says
   what capture needs and offers to get it (#70).
 - **Command line** (`sluice-cli` on Linux, `Sluice.Cli` on Windows) for machines without a desktop.

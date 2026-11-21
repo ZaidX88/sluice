@@ -4,14 +4,17 @@ using System.Text.Json.Serialization;
 namespace Sluice.Core.Profiles;
 
 /// <summary>
-/// Sluice's own profile format (".sluice"): readable JSON that can hold every tunnel type,
-/// including protocol settings Proxifier's .ppx cannot store. Passwords and other secret settings
-/// are encrypted with the same modes as .ppx (disabled / basic / account / master).
+/// Sluice's profile format (".sluice"): readable JSON that can hold every tunnel type and its protocol settings.
+/// Passwords and other secret settings are encrypted with <see cref="ProxifierPasswordCodec"/> in the profile's mode
+/// (disabled / basic / account / master).
 /// </summary>
 public static class SluiceProfileSerializer
 {
     public const string FormatName = "sluice-profile";
     public const int CurrentVersion = 1;
+
+    /// <summary>How many times the master password is asked for before giving up.</summary>
+    public const int MasterPasswordAttempts = 3;
 
     /// <summary>Setting keys whose values are secrets (encrypted like passwords).</summary>
     public static readonly IReadOnlySet<string> SecretSettings =
@@ -84,7 +87,7 @@ public static class SluiceProfileSerializer
             throw new FormatException($"This profile was saved by a newer Sluice (format version {doc.Version}); please update Sluice.");
 
         var profile = new Profile { Options = doc.Options };
-        var codec = PpxSerializer.OpenCodec(profile, doc.PasswordHash, masterPassword, profileName);
+        var codec = OpenCodec(profile, doc.PasswordHash, masterPassword, profileName);
 
         foreach (var d in doc.Tunnels)
         {
@@ -119,6 +122,34 @@ public static class SluiceProfileSerializer
         if (string.IsNullOrEmpty(stored)) return stored;
         try { return codec.Decode(stored); }
         catch (CryptographicFailure ex) { throw new CryptographicFailure($"Cannot decrypt the {what} of tunnel {t}: {ex.Message}"); }
+    }
+
+    /// <summary>Builds the password codec, checking the master password / Windows account against the stored hash.</summary>
+    private static ProxifierPasswordCodec OpenCodec(Profile profile, string? hash, MasterPasswordProvider? ask, string name)
+    {
+        var mode = profile.Options.PasswordEncryption;
+        if (mode != PasswordEncryptionMode.MasterPassword)
+        {
+            var codec = new ProxifierPasswordCodec(mode);
+            if (mode == PasswordEncryptionMode.CurrentUser && hash is not null && !codec.VerifyHash(hash))
+                throw new CryptographicFailure($"Profile '{name}' passwords were encrypted by a different Windows user account.");
+            return codec;
+        }
+
+        if (ask is null)
+            throw new CryptographicFailure($"Profile '{name}' is protected by a master password.");
+        for (var attempt = 1; attempt <= MasterPasswordAttempts; attempt++)
+        {
+            var pw = ask(name, false);
+            if (string.IsNullOrEmpty(pw)) throw new OperationCanceledException("Master password entry cancelled.");
+            var codec = new ProxifierPasswordCodec(mode, pw);
+            if (hash is null || codec.VerifyHash(hash))
+            {
+                profile.MasterPassword = pw;
+                return codec;
+            }
+        }
+        throw new CryptographicFailure($"Wrong master password for profile '{name}'.");
     }
 
     // ---------------- writing ----------------
@@ -163,28 +194,20 @@ public static class SluiceProfileSerializer
     }
 }
 
-/// <summary>Picks the right format for a profile file: .sluice (JSON) or Proxifier's .ppx (XML).</summary>
+/// <summary>Loads and saves profile files. Sluice opens .sluice files only.</summary>
 public static class ProfileFile
 {
     public const string Extension = ".sluice";
 
-    public static bool IsProxifier(string path) =>
-        path.EndsWith(".ppx", StringComparison.OrdinalIgnoreCase) || path.EndsWith(".prx", StringComparison.OrdinalIgnoreCase);
+    public const string NotASluiceProfile = "Not a Sluice profile. Sluice opens .sluice files only.";
 
-    /// <summary>Loads either format, deciding by the file's content rather than its name.</summary>
     public static Profile Load(string path, MasterPasswordProvider? masterPassword = null)
     {
-        var text = File.ReadAllText(path).TrimStart('﻿', ' ', '\t', '\r', '\n');
-        var name = Path.GetFileNameWithoutExtension(path);
-        return text.StartsWith('<')
-            ? PpxSerializer.Parse(text, masterPassword, name)
-            : SluiceProfileSerializer.Parse(text, masterPassword, name);
+        var text = File.ReadAllText(path).TrimStart('\uFEFF', ' ', '\t', '\r', '\n');
+        // A .sluice file is a JSON object; XML (a Proxifier .ppx, for example) or anything else is refused.
+        if (!text.StartsWith('{')) throw new FormatException(NotASluiceProfile);
+        return SluiceProfileSerializer.Parse(text, masterPassword, Path.GetFileNameWithoutExtension(path));
     }
 
-    /// <summary>Saves by extension. A .ppx export may lose tunnels Proxifier cannot express; see <paramref name="warnings"/>.</summary>
-    public static void Save(Profile profile, string path, List<string>? warnings = null)
-    {
-        if (IsProxifier(path)) PpxSerializer.ToXml(profile, warnings).Save(path);
-        else SluiceProfileSerializer.Save(profile, path);
-    }
+    public static void Save(Profile profile, string path) => SluiceProfileSerializer.Save(profile, path);
 }

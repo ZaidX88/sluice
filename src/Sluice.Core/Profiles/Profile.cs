@@ -1,8 +1,8 @@
 namespace Sluice.Core.Profiles;
 
 /// <summary>
-/// How a tunnel reaches its server. The first four are plain proxy protocols Sluice speaks itself
-/// (and that Proxifier's .ppx format can store); the rest are encrypted tunnels added in later steps.
+/// How a tunnel reaches its server. The first four are plain proxy protocols Sluice speaks itself;
+/// the rest are encrypted tunnels.
 /// </summary>
 public enum TunnelType
 {
@@ -12,7 +12,7 @@ public enum TunnelType
 
 public static class TunnelTypes
 {
-    /// <summary>Plain proxy protocols: storable in .ppx and handled by Sluice's own handshakes.</summary>
+    /// <summary>Plain proxy protocols, handled by Sluice's own handshakes.</summary>
     public static bool IsSimple(this TunnelType t) => t is TunnelType.Socks4 or TunnelType.Socks5 or TunnelType.Https or TunnelType.Http;
 
     public static string DisplayName(this TunnelType t) => t switch
@@ -59,7 +59,7 @@ public sealed class Tunnel
     /// <summary>Display name; falls back to address:port.</summary>
     public string? Label { get; set; }
 
-    /// <summary>Raw Proxifier option bitmask (kept for round-tripping .ppx).</summary>
+    /// <summary>Raw option bitmask, stored as "proxifierOptions" in .sluice files; kept so existing files round-trip.</summary>
     public int Options { get; set; }
 
     /// <summary>SOCKS4a: let the tunnel server resolve hostnames.</summary>

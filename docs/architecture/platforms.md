@@ -11,7 +11,7 @@ Part of the [architecture reference](../ARCHITECTURE.md). What each module does 
 ## Modules
 
 ```
-Sluice.Core               shared: routing engine, rules, tunnels (SSH, sing-box), DNS, profiles, .ppx import,
+Sluice.Core               shared: routing engine, rules, tunnels (SSH, sing-box), DNS, profiles,
                           and the interfaces the OS modules implement (IPlatformServices, ITrafficCapture, IProcessLookup)
 Sluice.Platform.Windows   Windows only: toast notifications, Start Menu shortcut, creates the WinDivert capture
 Sluice.Platform.Linux     Linux only: notify-send, /proc process lookup, nftables + NFQUEUE capture, DNS server
@@ -149,7 +149,7 @@ in Core, until #55). So each platform part changes only its own area's files.
 
 ### 6.1 Reaching the platform from Core: `PlatformServices`
 
-Core code deep inside the engine (a sing-box session, the `.ppx` password codec) needs the platform but has no
+Core code deep inside the engine (a sing-box session, the profile password codec) needs the platform but has no
 `OsPlatform` (that lives in the desktop app). One static entry point in Core, set once at start-up:
 
 ```csharp

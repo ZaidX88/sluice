@@ -9,7 +9,7 @@ Two kinds of saved state, kept apart:
 |---|---|---|
 | What | tunnels, chains, rules, subscriptions, routing options | window/app behaviour of the desktop app |
 | Class | `Profile` (`Profile.cs`) | `AppSettings` (`src/Sluice.Desktop/Services/AppSettings.cs`) |
-| File | any `*.sluice` the user picks (or `*.ppx` imported) | `settings.json` in the settings folder |
+| File | a `*.sluice` file (the desktop app keeps them in its profiles folder) | `settings.json` in the settings folder |
 | Shared by | desktop app and CLI | desktop app only |
 
 ## The model: `Profile.cs`
@@ -29,39 +29,30 @@ Profile
 ```
 
 Rules and chains refer to tunnels **by id**; ids survive subscription refreshes (see
-[tunnels.md](tunnels.md#share-links-and-subscriptions)). Many option names come from Proxifier and are kept for `.ppx`
-round-trips even where Sluice does not act on them yet.
+[tunnels.md](tunnels.md#share-links-and-subscriptions)). Some option names come from Proxifier and are kept so
+existing `.sluice` files still read, even where Sluice does not act on them yet.
 
 ## `.sluice`: `SluiceProfileSerializer.cs`
 
 Sluice's own format: readable JSON (`format: "sluice-profile"`, `version: 1`), camelCase properties, enum values in
 lower case (`"socks5"`, `"vless"`). It stores every tunnel type including `Settings`.
 
-- **Secrets are encrypted** with the profile's `PasswordEncryptionMode`, the same modes and codec as Proxifier: the
+- **Secrets are encrypted** with the profile's `PasswordEncryptionMode` (`ProxifierPasswordCodec`, below): the
   tunnel password and the settings listed in `SluiceProfileSerializer.SecretSettings` (`password`, `passphrase`,
   `privatekey`, `uuid`, `auth`, `psk`, `token`, `obfspassword`). `passwordHash` lets a master password be checked before
   any secret is decrypted.
 - `Save` writes a temp file and renames it over the target.
 - A newer `version` is refused with a clear message; a profile without a `Default` rule gets one.
-- **`ProfileFile`** picks the format by content (`<` = XML = `.ppx`) on load and by extension on save.
-
-## Proxifier `.ppx`: `PpxSerializer.cs`
-
-Proxifier 4 profiles (`ProxifierProfile version="102"`) are **import and export only**, kept byte-compatible
-(a settled decision, [DECISIONS.md](../DECISIONS.md)).
-
-- **Import:** the desktop app converts an opened `.ppx` into a new `.sluice` file in the profiles folder and works on
-  that copy (`EngineHost.LoadProfile`); the original is never written back, because autosaving into `.ppx` would lose
-  tunnels it cannot store.
-- **Export:** `PpxSerializer.ToXml` writes only the simple types (SOCKS4/5, HTTP(S)). Encrypted tunnels are left out,
-  rules that used them become Direct and chains lose those hops; every loss is reported as a warning.
+- **`ProfileFile`** loads and saves `.sluice` only: a file that isn't a JSON object (a Proxifier `.ppx`, for example)
+  fails with `ProfileFile.NotASluiceProfile`, "Not a Sluice profile. Sluice opens .sluice files only." Proxifier
+  `.ppx` import and export were dropped before 1.0.0 ([DECISIONS.md](../DECISIONS.md), #133).
 
 ## Password encryption
 
 `PasswordEncryption.cs` defines `PasswordEncryptionMode` (`Disabled`, `Basic`, `CurrentUser`, `MasterPassword`),
 `IPasswordCodec` and the `MasterPasswordProvider` callback (the desktop app shows `PasswordDialog` through
-`Dialogs.AskMasterPassword`; the CLI prompts on the console). `ProxifierPasswordCodec.cs` reproduces Proxifier 4's scheme exactly
-(its doc comment has the byte layout):
+`Dialogs.AskMasterPassword`; the CLI prompts on the console). `ProxifierPasswordCodec.cs` uses Proxifier 4's scheme (hence its name;
+its doc comment has the byte layout), unchanged so existing `.sluice` files keep opening:
 
 | Mode | Stored as | Who can read it |
 |---|---|---|
@@ -70,7 +61,7 @@ Proxifier 4 profiles (`ProxifierProfile version="102"`) are **import and export 
 | `CurrentUser` | Windows DPAPI (`Dpapi.cs`) | this Windows account; not available on Linux |
 | `MasterPassword` | AES-256-CBC keyed from the master password | whoever knows it; asked up to 3 times on load |
 
-`OpenCodec` (in `PpxSerializer`, shared by both formats) checks the stored hash first: a wrong master password or a
+`SluiceProfileSerializer.OpenCodec` checks the stored hash first: a wrong master password or a
 different Windows account fails with `CryptographicFailure` before any value is decrypted. Moving DPAPI behind a
 platform interface is part of [REQUIRED.md §1](../REQUIRED.md#1-move-windows-only-code-out-of-core).
 

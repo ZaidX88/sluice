@@ -179,3 +179,6 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   ones stay `Text` too (no red; red is `DangerButton`). The capture bar's two hand-set icon colours are gone.
 - Ghost button press (2026-11-21, #160): `GhostButton`'s `:pressed` style sets `Opacity` 0.7 next to the `Hover` fill;
   its `:pointerover` style (Opacity 1) had overridden the base's press fade, since a pressed button is also hovered.
+- No more `.ppx` in Core (2026-11-21, #138): `PpxSerializer` and its tests are gone; `OpenCodec` moved into
+  `SluiceProfileSerializer`, with the password codec and the `.sluice` bytes unchanged. `ProfileFile` opens `.sluice` only
+  and refuses anything else with "Not a Sluice profile". The CLI's usage no longer mentions `.ppx`.

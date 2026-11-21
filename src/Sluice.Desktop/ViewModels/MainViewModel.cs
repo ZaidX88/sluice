@@ -67,7 +67,6 @@ public sealed class MainViewModel : ObservableObject
         OpenCommand = new RelayCommand(AfterMenuCloses(Open));
         SaveCommand = new RelayCommand(AfterMenuCloses(Save));
         SaveAsCommand = new RelayCommand(AfterMenuCloses(SaveAs));
-        ExportProxifierCommand = new RelayCommand(AfterMenuCloses(ExportProxifier));
         NewCommand = new RelayCommand(AfterMenuCloses(New));
         DismissBannerCommand = new RelayCommand(() => Banner = null);
         GrantRightsCommand = new AsyncCommand(GrantRightsAsync);
@@ -188,7 +187,6 @@ public sealed class MainViewModel : ObservableObject
     public ICommand OpenCommand { get; }
     public ICommand SaveCommand { get; }
     public ICommand SaveAsCommand { get; }
-    public ICommand ExportProxifierCommand { get; }
     public ICommand NewCommand { get; }
     public ICommand DismissBannerCommand { get; }
     public ICommand RestartElevatedCommand { get; }
@@ -270,7 +268,7 @@ public sealed class MainViewModel : ObservableObject
         Banner = text;
     }
 
-    /// <summary>Neutral notice (e.g. "imported from Proxifier") rather than an error.</summary>
+    /// <summary>Neutral notice (e.g. "Sluice is now allowed in Windows Firewall") rather than an error.</summary>
     public void ShowInfo(string text)
     {
         BannerOffersGrant = false;
@@ -323,8 +321,8 @@ public sealed class MainViewModel : ObservableObject
         if (path is null) return;
         try
         {
-            var note = _host.LoadProfile(path, (name, confirm) => Dialogs.AskMasterPassword(name, confirm));
-            if (note is not null) ShowInfo(note); else Banner = null;
+            _host.LoadProfile(path, (name, confirm) => Dialogs.AskMasterPassword(name, confirm));
+            Banner = null;
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
@@ -344,23 +342,6 @@ public sealed class MainViewModel : ObservableObject
         var path = Dialogs.SaveProfile(_host.ProfileName);
         if (path is not null && !_host.TrySave(path))
             ShowBanner("The profile could not be saved; see the Log page.");
-    }
-
-    private void ExportProxifier()
-    {
-        var path = Dialogs.ExportProxifier(_host.ProfileName);
-        if (path is null) return;
-        try
-        {
-            var lost = _host.ExportProxifier(path);
-            ShowInfo(lost.Count == 0
-                ? $"Exported {Path.GetFileName(path)} for Proxifier."
-                : $"Exported {Path.GetFileName(path)} for Proxifier. Left out: {string.Join(" ", lost)}");
-        }
-        catch (Exception ex)
-        {
-            ShowBanner($"Export failed: {ex.Message}");
-        }
     }
 
     private void New()

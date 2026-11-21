@@ -81,7 +81,6 @@ public static class Dialogs
     private static IStorageProvider? Storage => (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow?.StorageProvider;
 
     private static readonly FilePickerFileType SluiceProfiles = new("Sluice profile") { Patterns = ["*.sluice"] };
-    private static readonly FilePickerFileType ProxifierProfiles = new("Proxifier profile") { Patterns = ["*.ppx", "*.prx"] };
 
     public static string? OpenProfile() => PickFile(OpenProfileAsync);
 
@@ -115,9 +114,7 @@ public static class Dialogs
             Title = "Open profile",
             FileTypeFilter =
             [
-                new FilePickerFileType("Profiles") { Patterns = ["*.sluice", "*.ppx", "*.prx"] },
                 SluiceProfiles,
-                new FilePickerFileType("Proxifier profiles (imported)") { Patterns = ["*.ppx", "*.prx"] },
                 FilePickerFileTypes.All,
             ],
             SuggestedStartLocation = await DefaultFolderAsync(s),
@@ -126,8 +123,6 @@ public static class Dialogs
     }
 
     public static string? SaveProfile(string name) => PickFile(() => SaveAsync("Save profile as", name, ".sluice", SluiceProfiles));
-
-    public static string? ExportProxifier(string name) => PickFile(() => SaveAsync("Export for Proxifier", name, ".ppx", ProxifierProfiles));
 
     private static async Task<string?> SaveAsync(string title, string name, string extension, FilePickerFileType type)
     {

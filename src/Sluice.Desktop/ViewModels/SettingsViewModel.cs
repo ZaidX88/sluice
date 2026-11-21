@@ -95,7 +95,7 @@ public sealed class SettingsViewModel : PageViewModel
     public string[] EncryptionModes { get; } =
     [
         "Disabled — plain text",
-        "Basic — readable by anyone with Sluice or Proxifier",
+        "Basic — readable by anyone with Sluice",
         "Windows account — only you on this PC",
         "Master password — asked when the profile opens",
     ];

@@ -9,7 +9,7 @@ Issues](../CONTRIBUTING.md#issues)).
 
 1. **SSH client selector** in the tunnel dialog (`src/Sluice.Desktop/Views/TunnelDialog.axaml`). The setting
    `sshclient` = `auto | singbox | sshnet` exists but can only be edited in the profile file.
-2. **Chains editor page.** Chains work in the engine and import from `.ppx`, but the UI can't create or edit them.
+2. **Chains editor page.** Chains work in the engine, but the UI can't create or edit them.
 3. **Per-app quick toggle** on the Connections page (right-click: always direct / via tunnel X) that creates the rule.
 4. **Traffic history** (storing it is Core work) saved to disk (per day, per app) with charts on the Statistics page.
 5. **Tray quick switching** (profile, tunnel) and a global hotkey for capture.

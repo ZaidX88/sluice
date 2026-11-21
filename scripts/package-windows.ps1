@@ -14,6 +14,8 @@ param(
 $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 if (-not $OutputDir) { $OutputDir = Join-Path $repo 'artifacts\windows' }
+# Absolute, relative to the current location: Inno Setup would resolve a relative path against the .iss folder (#192).
+$OutputDir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputDir)
 $version = ([xml](Get-Content (Join-Path $repo 'Directory.Build.props'))).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
 if (-not $version) { throw "No <Version> in Directory.Build.props" }
 $numeric = ($version -split '[-+]')[0]            # 1.0.0-rc.1 -> 1.0.0, for the file's version resource

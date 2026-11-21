@@ -17,7 +17,8 @@ namespace Sluice.Desktop.Controls;
 /// that can't be resized shows close only). Colours come from the theme (<c>TitleBarBg</c>, <c>TitleBarText</c>), so
 /// it follows a theme change at once. Each part tells the window system what it is
 /// (<see cref="WindowDecorationProperties.ElementRoleProperty"/>): the bar moves the window and a double-click maximises
-/// it, and the maximise button gets Windows 11's snap layouts.
+/// it, and the maximise button gets Windows 11's snap layouts. Where the window system doesn't use those roles (X11,
+/// <paramref name="movesWindow"/>), the bar does both itself through the window manager.
 /// </summary>
 public sealed class TitleBar : Border
 {
@@ -33,7 +34,9 @@ public sealed class TitleBar : Border
     private const string RestoreData = "M0.5,2.5 H7.5 V9.5 H0.5 Z M2.5,2.5 V0.5 H9.5 V7.5 H7.5";
     private const string CloseData = "M0,0 L10,10 M10,0 L0,10";
 
-    public TitleBar(Window window)
+    /// <param name="window">The window this bar belongs to.</param>
+    /// <param name="movesWindow">True when the bar moves the window and maximises it on a double-click itself.</param>
+    public TitleBar(Window window, bool movesWindow = false)
     {
         _window = window;
         Height = BarHeight;
@@ -47,8 +50,7 @@ public sealed class TitleBar : Border
         _min = CaptionButton("Minimise", Glyph(MinimiseData), WindowDecorationsElementRole.MinimizeButton,
             () => _window.WindowState = WindowState.Minimized);
         _maxGlyph = Glyph(MaximiseData);
-        _max = CaptionButton("Maximise", _maxGlyph, WindowDecorationsElementRole.MaximizeButton,
-            () => _window.WindowState = _window.WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized);
+        _max = CaptionButton("Maximise", _maxGlyph, WindowDecorationsElementRole.MaximizeButton, ToggleMaximised);
         var close = CaptionButton("Close", Glyph(CloseData), WindowDecorationsElementRole.CloseButton, _window.Close);
         close.Classes.Add("Close");
 
@@ -64,7 +66,20 @@ public sealed class TitleBar : Border
             if (e.Property == Window.WindowStateProperty || e.Property == Window.CanResizeProperty) UpdateButtons();
         };
         window.ActualThemeVariantChanged += (_, _) => UpdateIcon();
+        if (movesWindow) PointerPressed += OnPressed;   // the caption buttons handle their own presses
     }
+
+    /// <summary>Drag to move (the window manager moves it); a double-click maximises or restores a resizable window.</summary>
+    private void OnPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
+        if (e.ClickCount == 2) { if (_window.CanResize) ToggleMaximised(); }
+        else _window.BeginMoveDrag(e);
+        e.Handled = true;
+    }
+
+    private void ToggleMaximised() =>
+        _window.WindowState = _window.WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
 
     private void UpdateButtons()
     {

@@ -158,3 +158,6 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
 - Changelog (2026-11-20, #94): `CHANGELOG.md` at the root for users (Keep a Changelog: `Unreleased`, then a drafted
   `1.0.0` with its known limitations). A pull request with a change users would notice adds a line; it is a shared
   file in the rules and the area check, and the release notes come from it.
+- Own title bar on Linux (2026-11-21, #84): X11 windows (XWayland included) drop the window manager's decorations and
+  use `TitleBar` like Windows; moving and maximising through `BeginMoveDrag`, resizing from the edges and corners
+  through `BeginResizeDrag`. Avalonia's experimental drawn X11 decorations were left out.

@@ -70,6 +70,7 @@ public sealed class MainViewModel : ObservableObject
         RenameProfileCommand = new RelayCommand(AfterMenuCloses(Rename));
         DeleteProfileCommand = new RelayCommand(AfterMenuCloses(Delete));
         ImportProfileCommand = new RelayCommand(AfterMenuCloses(Import));
+        PasswordProtectionCommand = new RelayCommand(AfterMenuCloses(() => Dialogs.EditPasswordProtection(_host)));
         ShowProfilesFolderCommand = new RelayCommand(() =>
         {
             Directory.CreateDirectory(_host.Profiles.Folder);
@@ -196,6 +197,7 @@ public sealed class MainViewModel : ObservableObject
     public ICommand RenameProfileCommand { get; }
     public ICommand DeleteProfileCommand { get; }
     public ICommand ImportProfileCommand { get; }
+    public ICommand PasswordProtectionCommand { get; }
     public ICommand ShowProfilesFolderCommand { get; }
     public ICommand DismissBannerCommand { get; }
     public ICommand RestartElevatedCommand { get; }

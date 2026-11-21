@@ -152,6 +152,7 @@ internal static class ScreenshotMode
                      ("dialog-tunnel-vless", new Views.TunnelDialog(p.Tunnels[3])),
                      ("dialog-rule", new Views.RuleDialog(p.Rules[1], p)),
                      ("dialog-password", new Views.PasswordDialog("Work", confirmNew: true)),
+                     ("dialog-password-protection", new Views.PasswordProtectionDialog(host)),
                      ("dialog-profile-name", new NameDialog("New profile",
                          "A new profile starts with the Localhost and Default rules. The current one stays as it is.", "New profile", "Create", _ => null)),
                      ("dialog-file-error", MessageDialog.Create(Dialogs.FileDialogFailedTitle,

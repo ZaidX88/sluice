@@ -167,6 +167,9 @@ public sealed class EngineHost : IAsyncDisposable
         if (!IsSluiceProfile(path))
             throw new FormatException($"Not a Sluice profile. Sluice opens {ProfileFile.Extension} files only.");
         var profile = ProfileFile.Load(path, askMaster);
+        // Plain text is no longer offered (#150): such a profile is saved with basic encryption from its next save.
+        if (profile.Options.PasswordEncryption == PasswordEncryptionMode.Disabled)
+            profile.Options.PasswordEncryption = PasswordEncryptionMode.Basic;
         // The app's network options win over the file's; the first profile opened supplies them once (#148).
         Settings.NetworkFrom(profile.Options).ApplyTo(profile.Options);
         Profile = profile;

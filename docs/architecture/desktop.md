@@ -76,8 +76,12 @@ from other threads are marshalled with `Dispatcher.UIThread.Post`.
 - **Profiles folder (#134):** every profile is a `<name>.sluice` in `AppSettings.ProfilesFolder` (`ProfileStore`: list,
   name checks, copy-in). `ProfileNames`, `SwitchTo`, `NewProfile(name)`, `SaveProfileAs`, `RenameProfile`,
   `DeleteProfile`, `ImportProfile`. The profile menu (`MainWindow.BuildProfileMenu`, refilled on each press of the profile button) lists
-  the profiles with the open one ticked, then New, Save as, Rename, Delete, Import and the folder; names are asked with
-  `NameDialog`. There is no unsaved profile: edits autosave, and the first start creates `Default`.
+  the profiles with the open one ticked, then New, Save as, Rename, Delete, Password protection, Import and the folder;
+  names are asked with `NameDialog`. **Password protection** (#150) belongs to each profile file, so it is in this menu,
+  not on the Settings page: `Views/PasswordProtectionDialog` has one switch for a master password (set, change,
+  remove), and without one says the passwords are only hidden; on Windows they can be tied to the Windows account
+  instead. Changes apply at once and save the profile. Plain text is no longer offered: a profile saved that way loads
+  as basic (`EngineHost.LoadProfile`) and is saved so from then on. There is no unsaved profile: edits autosave, and the first start creates `Default`.
 - **SOCKS5:** `StartSocks` / `RestartSocksAsync` on `127.0.0.1:<AppSettings.SocksPort>`.
 - **Capture:** `StartInterception` checks `CaptureUnavailableReason` and `HasCaptureRights`, calls
   `OsPlatform.Current.CreateCapture(Engine)`, subscribes to `RelayUnreachable`, starts it and warms up tunnels;
@@ -101,7 +105,7 @@ tray, tunnel notifications), Privacy (one choice: names looked up through the tu
 stop, and UDP worded without "UDP"; on Linux "through the tunnel" shows as "Block it" until #47). Everything else is
 under **Advanced**, closed by default and remembered in `AppSettings.SettingsAdvancedOpen`: the names list and invert,
 leak prevention, other DNS query types, the connection switches, the log and the SOCKS5 port (applied when the field
-loses focus or on Enter). The password card stays at the end until #150 moves it to the profile menu.
+loses focus or on Enter). Password protection isn't on this page: it belongs to the profile, in the profile menu (#150).
 
 The UI does not bind to engine objects directly. A **1-second `DispatcherTimer`** in `MainViewModel` drains the log
 (`LogViewModel.Pump`, which queues lines from the tracker's `Log` event in a `ConcurrentQueue`), refreshes only the

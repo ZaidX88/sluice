@@ -42,7 +42,7 @@ public partial class MainWindow : SluiceWindow
 
     /// <summary>
     /// The profile menu (#134): every profile in Sluice's folder, the open one ticked, a click switching at once; then
-    /// new, save as, rename, delete, import and the folder. Rebuilt on each press of the profile button, so it shows the
+    /// new, save as, rename, delete, password protection (#150), import and the folder. Rebuilt on each press of the profile button, so it shows the
     /// folder as it is.
     /// </summary>
     internal MenuFlyout ProfileMenu => (MenuFlyout)ProfileButton.Flyout!;
@@ -69,6 +69,7 @@ public partial class MainWindow : SluiceWindow
         items.Add(new MenuItem { Header = "Save as…", Command = vm.SaveAsCommand });
         items.Add(new MenuItem { Header = "Rename…", Command = vm.RenameProfileCommand, IsEnabled = vm.CanManageProfile });
         items.Add(new MenuItem { Header = "Delete…", Command = vm.DeleteProfileCommand, IsEnabled = vm.CanManageProfile });
+        items.Add(new MenuItem { Header = "Password protection…", Command = vm.PasswordProtectionCommand, IsEnabled = vm.CanManageProfile });
         items.Add(new Separator());
         items.Add(new MenuItem { Header = "Import profile file…", Command = vm.ImportProfileCommand });
         items.Add(new MenuItem { Header = "Show profiles folder", Command = vm.ShowProfilesFolderCommand });

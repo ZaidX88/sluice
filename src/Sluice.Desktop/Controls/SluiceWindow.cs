@@ -4,6 +4,9 @@ using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Templates;
 using Avalonia.Data;
+using Avalonia.Input;
+using Avalonia.Layout;
+using Avalonia.Media;
 
 namespace Sluice.Desktop.Controls;
 
@@ -17,7 +20,9 @@ namespace Sluice.Desktop.Controls;
 public class SluiceWindow : Window
 {
     private Border? _frame;
+    private Panel? _resizeGrips;
     private bool _sized;
+    private bool _framesItself;   // X11: no window manager frame, so moving and resizing are Sluice's own
 
     /// <summary>True when this window draws its own title bar (decided once, in <see cref="SetUpForPlatform"/>).</summary>
     public bool DrawsOwnTitleBar { get; }
@@ -29,21 +34,37 @@ public class SluiceWindow : Window
         Template = new FuncControlTemplate<SluiceWindow>(BuildTemplate);
         PropertyChanged += (_, e) =>
         {
-            if (e.Property == WindowStateProperty || e.Property == OffScreenMarginProperty) UpdateFrame();
+            if (e.Property == WindowStateProperty || e.Property == OffScreenMarginProperty || e.Property == CanResizeProperty) UpdateFrame();
         };
     }
 
     /// <summary>
     /// The one place for OS-specific window setup, decided by what this window's platform handle is, not by the OS:
-    /// a Win32 window (HWND) extends its client area over the title bar, keeping Windows' resize edges, shadow,
-    /// rounded corners and snapping. Other window systems keep their own title bar for now (Linux: #84).
+    /// <list type="bullet">
+    /// <item>a Win32 window (HWND) extends its client area over the title bar, keeping Windows' resize edges, shadow,
+    /// rounded corners and snapping;</item>
+    /// <item>an X11 window (XID; on Wayland desktops through XWayland) has no window manager decorations at all: the
+    /// title bar moves the window (<see cref="Window.BeginMoveDrag"/>) and maximises it on a double-click, and thin
+    /// strips at the edges and corners resize it (<see cref="Window.BeginResizeDrag"/>), all through the window
+    /// manager, so its keyboard shortcuts (Alt+F4, Super+arrows) keep working (#84).</item>
+    /// </list>
+    /// Any other window system keeps its own title bar.
     /// </summary>
     private bool SetUpForPlatform()
     {
-        if (TryGetPlatformHandle()?.HandleDescriptor != "HWND") return false;
-        ExtendClientAreaToDecorationsHint = true;
-        WindowDecorations = WindowDecorations.BorderOnly;   // Windows' frame without its title bar; Avalonia draws none
-        return true;
+        switch (TryGetPlatformHandle()?.HandleDescriptor)
+        {
+            case "HWND":
+                ExtendClientAreaToDecorationsHint = true;
+                WindowDecorations = WindowDecorations.BorderOnly;   // Windows' frame without its title bar; Avalonia draws none
+                return true;
+            case "XID":
+                WindowDecorations = WindowDecorations.None;          // no window manager title bar or frame
+                _framesItself = true;
+                return true;
+            default:
+                return false;
+        }
     }
 
     /// <summary>Border → layer manager (popups, adorners) → title bar above the content presenter.</summary>
@@ -57,7 +78,7 @@ public class SluiceWindow : Window
         presenter.Bind(MarginProperty, new TemplateBinding(PaddingProperty));
         scope.Register(presenter.Name, presenter);
 
-        var bar = new TitleBar(window);
+        var bar = new TitleBar(window, movesWindow: _framesItself);
         DockPanel.SetDock(bar, Dock.Top);
 
         _frame = new Border
@@ -67,8 +88,46 @@ public class SluiceWindow : Window
         };
         _frame.Bind(Border.BackgroundProperty, new TemplateBinding(BackgroundProperty));
         _frame.Bind(Border.BorderBrushProperty, _frame.GetResourceObservable("WindowBorder"));
+        if (!_framesItself)
+        {
+            UpdateFrame();
+            return _frame;
+        }
+        _resizeGrips = ResizeGrips();
         UpdateFrame();
-        return _frame;
+        return new Panel { Children = { _frame, _resizeGrips } };
+    }
+
+    /// <summary>
+    /// Invisible strips along the edges and squares at the corners, above the content: pressing one hands the resize to
+    /// the window manager. Shown only while the window can be resized and isn't maximised.
+    /// </summary>
+    private Panel ResizeGrips()
+    {
+        const double edge = 5, corner = 12;
+        var grips = new Panel();
+        void Grip(WindowEdge side, HorizontalAlignment h, VerticalAlignment v, double width, double height, StandardCursorType cursor)
+        {
+            var grip = new Border { Background = Brushes.Transparent, HorizontalAlignment = h, VerticalAlignment = v, Cursor = new Cursor(cursor) };
+            if (!double.IsNaN(width)) grip.Width = width;
+            if (!double.IsNaN(height)) grip.Height = height;
+            grip.PointerPressed += (_, e) =>
+            {
+                if (!e.GetCurrentPoint(grip).Properties.IsLeftButtonPressed) return;
+                BeginResizeDrag(side, e);
+                e.Handled = true;
+            };
+            grips.Children.Add(grip);
+        }
+        Grip(WindowEdge.North, HorizontalAlignment.Stretch, VerticalAlignment.Top, double.NaN, edge, StandardCursorType.TopSide);
+        Grip(WindowEdge.South, HorizontalAlignment.Stretch, VerticalAlignment.Bottom, double.NaN, edge, StandardCursorType.BottomSide);
+        Grip(WindowEdge.West, HorizontalAlignment.Left, VerticalAlignment.Stretch, edge, double.NaN, StandardCursorType.LeftSide);
+        Grip(WindowEdge.East, HorizontalAlignment.Right, VerticalAlignment.Stretch, edge, double.NaN, StandardCursorType.RightSide);
+        Grip(WindowEdge.NorthWest, HorizontalAlignment.Left, VerticalAlignment.Top, corner, corner, StandardCursorType.TopLeftCorner);
+        Grip(WindowEdge.NorthEast, HorizontalAlignment.Right, VerticalAlignment.Top, corner, corner, StandardCursorType.TopRightCorner);
+        Grip(WindowEdge.SouthWest, HorizontalAlignment.Left, VerticalAlignment.Bottom, corner, corner, StandardCursorType.BottomLeftCorner);
+        Grip(WindowEdge.SouthEast, HorizontalAlignment.Right, VerticalAlignment.Bottom, corner, corner, StandardCursorType.BottomRightCorner);
+        return grips;
     }
 
     protected override void OnInitialized()
@@ -100,5 +159,6 @@ public class SluiceWindow : Window
         var maximised = WindowState == WindowState.Maximized;
         _frame.Margin = maximised ? OffScreenMargin : default;
         _frame.BorderThickness = new Thickness(maximised ? 0 : 1);
+        if (_resizeGrips is not null) _resizeGrips.IsVisible = CanResize && !maximised;
     }
 }

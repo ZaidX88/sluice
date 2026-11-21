@@ -212,3 +212,9 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   renames them with the version and drafts a GitHub Release whose notes come from `scripts/release-notes.sh`
   (the CHANGELOG section, comments removed, plus download links). A manual run only builds. Signing (#65) is a
   marked step for later.
+- UDP through tunnels on Linux (2026-11-22, #60): `DecideUdp` passes, drops or takes a flow; a taken one (tunnel, or
+  Direct to a placeholder) gets mark 0x5C1D0 with its NFQUEUE verdict, kept in conntrack and put back on later packets
+  by a route chain; `PolicyRoutes` (rtnetlink: fwmark rule + "local default dev lo" in table 1473, IPv4 and IPv6) sends
+  them back in through `lo`, where `tproxy` hands them to `TransparentUdp` (IP_RECVORIGDSTADDR) and on to `UdpFlows`.
+  Replies leave from a transparent socket bound to the original destination. Without tproxy support capture starts and
+  drops those flows as before. `LinuxUdpTproxyNetnsTests` checks the kernel path in a throwaway network namespace.

@@ -9,11 +9,11 @@ is worth keeping.
 
 ## 1. Linux capture limitations
 
-- UDP of tunneled apps is dropped (see [REQUIRED.md](../REQUIRED.md#2-udp-through-tunnels-on-linux)).
+- ~~UDP of tunneled apps is dropped~~ **fixed** (#60): taken through a tproxy into `UdpFlows` (REQUIRED.md §2).
 - ~~IPv6 extension headers aren't parsed in `PacketInfo.TryParse`~~ **fixed** (issue #35, PR #27): the parser follows
   the chain; ESP, later fragments and Routing headers with segments left still pass uncaptured.
 - With no non-loopback upstream DNS (e.g. dnsmasq without systemd-resolved), DNS isn't captured (a log line says so).
-  TPROXY for UDP would solve it (the original destination comes with each datagram).
+  The UDP tproxy (#60) doesn't change this: UDP/53 stays with Sluice's DNS server, which needs an upstream to forward to.
 - ~~Finding a connection's owner reads all of `/proc/net/tcp` for every new connection~~ **fixed** (issue #82): each
   new connection cost ~4.4 ms on the packet thread (60 at once: the last waited ~267 ms). `LinuxProcessLookup` now asks
   the kernel's socket diagnostics (`Native/SockDiag.cs`, `NETLINK_SOCK_DIAG`) for the socket's inode and uid (~0.01 ms;

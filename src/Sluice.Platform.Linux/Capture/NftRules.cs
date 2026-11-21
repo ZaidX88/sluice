@@ -10,6 +10,10 @@ namespace Sluice.Platform.Linux.Capture;
 /// <item>The first SYN of every new outbound TCP connection (and, when UDP is handled, every new UDP flow) goes to
 /// NFQUEUE, where Sluice decides with the owning process in hand. <c>bypass</c>: if Sluice is gone, packets pass.</item>
 /// <item>A SYN Sluice marked is redirected to the relay; UDP/53 goes to Sluice's DNS server.</item>
+/// <item>A UDP flow Sluice takes (through a tunnel, or Direct to a placeholder) gets <see cref="Settings.UdpMark"/>
+/// with its NFQUEUE verdict. The mark is kept in conntrack and put back on the flow's later packets (which are no
+/// longer queued), and <see cref="PolicyRoutes"/> sends marked packets back in through <c>lo</c>, where <c>tproxy</c>
+/// hands them to Sluice's transparent UDP socket (<see cref="TransparentUdp"/>) with their destination unchanged.</item>
 /// <item>Sockets of Sluice's own group (Sluice and the helpers it starts) are never touched, nor is loopback.</item>
 /// </list>
 /// </summary>
@@ -19,7 +23,10 @@ internal static class NftRules
 
     /// <param name="RejectMark">A SYN Sluice gives this mark is refused with a TCP reset, so the app's connect() fails at
     /// once (used for IPv6 through a tunnel without IPv6, see <see cref="Sluice.Core.Engine.Ipv6Fallback"/>). 0: no such rule.</param>
-    public sealed record Settings(ushort Queue, uint Mark, uint Gid, int RelayPort, int? DnsPort, bool QueueUdp, uint RejectMark = 0);
+    /// <param name="UdpMark">The mark of UDP flows Sluice takes, and <paramref name="UdpPort"/> the port of its
+    /// transparent UDP socket. 0: UDP flows are only passed or dropped.</param>
+    public sealed record Settings(ushort Queue, uint Mark, uint Gid, int RelayPort, int? DnsPort, bool QueueUdp, uint RejectMark = 0,
+        uint UdpMark = 0, int UdpPort = 0);
 
     public static string Build(Settings s)
     {
@@ -32,6 +39,22 @@ internal static class NftRules
                 chain refuse {
                     type filter hook output priority filter; policy accept;
                     meta mark {{N(s.RejectMark)}} meta l4proto tcp reject with tcp reset
+                }
+            """;
+        // udp_mark runs after queue_new: it saves the mark the verdict set (the kernel reroutes a queued packet whose mark
+        // changed) and puts it back on later packets of the flow; a route chain reroutes the packets whose mark it changes.
+        // udp_tproxy then catches them as they come back in through lo. Sluice's own replies are never marked.
+        var takeUdp = !s.QueueUdp || s.UdpMark == 0 || s.UdpPort == 0 ? "" : $$"""
+
+                chain udp_mark {
+                    type route hook output priority -149; policy accept;
+                    meta skgid {{N(s.Gid)}} return
+                    meta l4proto udp meta mark {{N(s.UdpMark)}} ct mark set meta mark return
+                    meta l4proto udp ct direction original ct mark {{N(s.UdpMark)}} meta mark set ct mark
+                }
+                chain udp_tproxy {
+                    type filter hook prerouting priority mangle; policy accept;
+                    meta l4proto udp meta mark {{N(s.UdpMark)}} tproxy to :{{N(s.UdpPort)}} accept
                 }
             """;
         // "table …" + "delete table …" first removes a table left behind by a crash (and does not fail when there is none).
@@ -49,7 +72,7 @@ internal static class NftRules
                     type nat hook output priority dstnat; policy accept;
                     meta skgid {{N(s.Gid)}} return
                     meta mark {{N(s.Mark)}} meta l4proto tcp redirect to :{{N(s.RelayPort)}}{{dns}}
-                }{{refuse}}
+                }{{refuse}}{{takeUdp}}
             }
 
             """.ReplaceLineEndings("\n");   // a raw string keeps the source file's line endings (CRLF on Windows checkouts); nft rejects CR

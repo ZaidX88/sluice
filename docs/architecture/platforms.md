@@ -265,7 +265,7 @@ public sealed class UdpFlows : IAsyncDisposable
 - **Done in #59:** `UdpFlows` is in Core beside the unchanged `UdpNat` (`UdpNat.cs` and its tests are Windows files, so
   #53 switches `Interceptor` over and deletes them); its tests are `UdpFlowsTests` in the shared tests. It also takes
   Direct UDP to a placeholder address, which `UdpNat` and Linux drop: it goes out through a plain UDP socket to the
-  name's real address, with replies from the placeholder (engine.md → UDP). #167 waits for #53 and #60 to use it.
+  name's real address, with replies from the placeholder (engine.md → UDP). Linux uses it since #60 (`TransparentUdp`); #167 waits for #53.
 
 ### 6.5 The CLI takes its capture from the platform
 

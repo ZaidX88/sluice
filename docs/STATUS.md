@@ -18,7 +18,7 @@ Sluice captures other applications' connections and routes each one by rules: **
 | Share links and subscriptions | ✅ | ✅ |
 | Capturing other apps' traffic | ✅ WinDivert | ✅ nftables + NFQUEUE |
 | Fake DNS (198.18.0.0/15) so hostnames reach tunnels; kept across restarts (`fake-dns.json`) | ✅ | ✅ |
-| UDP through tunnels (QUIC, games, calls) | ✅ | ❌ blocked for tunneled apps (see [REQUIRED.md](REQUIRED.md#2-udp-through-tunnels-on-linux)) |
+| UDP through tunnels (QUIC, games, calls) | ✅ | ✅ tproxy (#60) |
 | Tunnel lifecycle: on/off, idle stop, health checks, retries, restart on network change, notifications | ✅ | ✅ |
 | Desktop app (Avalonia, light/dark, tray) | ✅ | ✅ (tray needs a StatusNotifier host; without one, closing the window quits) |
 | Command line (`Sluice.Cli`) | ✅ | ✅ |
@@ -106,8 +106,9 @@ it would reset every connection through it.
 3. `LinuxCapture.Decide`, on one of 4 worker threads (`VerdictWorkers`; the NFQUEUE thread only receives): TCP → owning PID (`LinuxProcessLookup`: the socket from sock_diag, its process from a cache
    or `/proc/<pid>/fd`) → `RoutingEngine.Classify` → mark and
    remember the original destination by the app's endpoint and the destination (`FlowRecords`); the relay finds it through
-   conntrack (`Conntrack`, by the reply tuple), which also covers a source port renumbered after a clash. UDP → drop or
-   pass, cached 30 s.
+   conntrack (`Conntrack`, by the reply tuple), which also covers a source port renumbered after a clash. UDP → pass,
+   drop, or take (tunnel, or Direct to a placeholder: accept with the UDP mark, for `TransparentUdp` and `UdpFlows`),
+   cached 30 s.
 4. Sluice's own sockets are recognised by group: at start the process calls `setresgid(gid, gid, gid)` (377294 or the
    next free GID); helpers it starts inherit it. Real and effective group must match, or the kernel strips the ambient
    capability that `nft` needs; the saved group must match too, or GTK refuses to start the file dialog (#28). On stop

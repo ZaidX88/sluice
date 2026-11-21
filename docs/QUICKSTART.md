@@ -53,6 +53,6 @@ reopens the last profile when it starts.
   (`127.0.0.1:<port>`); its traffic then follows your rules too.
 - **Hostnames through the tunnel:** **Settings → Name resolution** → *Resolve hostnames through the tunnel*, so sites are
   looked up by your tunnel's server instead of your local network.
-- **UDP** (calls, games, QUIC) goes through tunnels on Windows. On Linux it isn't supported yet: UDP of tunneled apps is
-  blocked and browsers fall back to normal HTTPS. Give call and game apps a **Direct** rule there.
+- **UDP** (calls, games, QUIC) goes through tunnels that carry it (SOCKS5 and the sing-box protocols; not SSH or HTTP,
+  so UDP of apps sent through those is blocked and browsers fall back to normal HTTPS).
 - **Headless?** `Sluice.Cli myprofile.sluice --intercept` (Linux: `sluice-cli`) does the same without a window.

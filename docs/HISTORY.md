@@ -164,3 +164,6 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
 - pacman in install.sh (2026-11-21, #140): Arch supports no partial upgrades, so when `pacman -S --needed` fails
   (no synced database, or one older than the mirror) install.sh stops before changing anything and says to run
   `sudo pacman -Syu` first; upgrading the whole system stays the user's call. apt and dnf keep the warning.
+- install.sh final check (2026-11-21, #141): the end checks the four desktop libraries again with `has_lib` and
+  warns with the missing ones, since the `sluice-cli --help` check doesn't load them; it now says "The command-line
+  version starts." INSTALL.md gains a note on the three capabilities a Docker container needs to start Sluice.

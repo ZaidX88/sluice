@@ -290,7 +290,14 @@ fi
 # ---------------------------------------------------------------- final check
 
 step "Checking the installation"
-if /usr/local/bin/sluice-cli --help >/dev/null 2>&1; then say "Sluice starts."; else warn "Sluice did not start: run sluice-cli --help to see why"; fi
+# Only the command-line version is started here; it doesn't load the desktop app's X11 and font libraries.
+if /usr/local/bin/sluice-cli --help >/dev/null 2>&1; then say "The command-line version starts."; else warn "Sluice did not start: run sluice-cli --help to see why"; fi
+libs=""
+has_lib libX11.so.6        || libs="$libs libX11.so.6"
+has_lib libICE.so.6        || libs="$libs libICE.so.6"
+has_lib libSM.so.6         || libs="$libs libSM.so.6"
+has_lib libfontconfig.so.1 || libs="$libs libfontconfig.so.1"
+[ -z "$libs" ] || warn "the desktop app won't start until these libraries are installed:$libs"
 command -v nft >/dev/null 2>&1 || warn "nftables is missing: capturing traffic will not work until it is installed"
 [ -f "$DEST/sing-box" ] || warn "sing-box is missing: only SSH, SOCKS and HTTP tunnels work"
 

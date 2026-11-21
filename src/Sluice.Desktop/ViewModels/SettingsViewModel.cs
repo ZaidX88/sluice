@@ -10,7 +10,7 @@ public sealed class SettingsViewModel : PageViewModel
     private string _socksPortText;
 
     public SettingsViewModel(EngineHost host)
-        : base(host, "Settings", "settings", "These apply to Sluice on this PC, whichever profile is open. Only how passwords are stored belongs to the profile.")
+        : base(host, "Settings", "settings", "These apply to Sluice on this PC, whichever profile is open.")
     {
         _socksPortText = host.Settings.SocksPort.ToString();
         ToggleAdvancedCommand = new RelayCommand(() => AdvancedOpen = !AdvancedOpen);
@@ -24,8 +24,6 @@ public sealed class SettingsViewModel : PageViewModel
     /// <summary>The current profile's options. The network ones always hold the app's settings (copied in by
     /// <see cref="EngineHost"/>), so the page reads them here; reading never creates the app's settings.</summary>
     private ProfileOptions O => Host.Profile.Options;
-
-    private void Commit() => Host.CommitProfileEdit(notify: false);
 
     /// <summary>Changes an app-wide network option (#148): the app's settings, then the current profile and the engine.</summary>
     private void SetNetwork(Action<NetworkSettings> change, [System.Runtime.CompilerServices.CallerMemberName] string? name = null)
@@ -134,34 +132,6 @@ public sealed class SettingsViewModel : PageViewModel
         }
     }
 
-    // ----- Password encryption (stays in the profile) -----
-    public string[] EncryptionModes { get; } =
-    [
-        "Disabled — plain text",
-        "Basic — readable by anyone with Sluice",
-        "Windows account — only you on this PC",
-        "Master password — asked when the profile opens",
-    ];
-
-    public int EncryptionIndex
-    {
-        get => (int)O.PasswordEncryption;
-        set
-        {
-            var mode = (PasswordEncryptionMode)value;
-            if (mode == O.PasswordEncryption) return;
-            if (mode == PasswordEncryptionMode.MasterPassword)
-            {
-                var pw = Dialogs.AskMasterPassword(Host.ProfileName, confirmNew: true);
-                if (string.IsNullOrEmpty(pw)) { Raise(); return; }   // cancelled: keep the old mode
-                Host.Profile.MasterPassword = pw;
-            }
-            O.PasswordEncryption = mode;
-            Commit();
-            Raise();
-        }
-    }
-
     // ----- App -----
     public bool StartInterceptionOnLaunch
     {
@@ -245,7 +215,7 @@ public sealed class SettingsViewModel : PageViewModel
                  {
                      nameof(ResolveViaProxy), nameof(OnlyListed), nameof(ExclusionList), nameof(BlockNonATypes),
                      nameof(LeakPrevention), nameof(LoopDetection), nameof(HandleDirect), nameof(ProcessServices),
-                     nameof(UdpIndex), nameof(ResolveIndex), nameof(EncryptionIndex),
+                     nameof(UdpIndex), nameof(ResolveIndex),
                  })
             Raise(p);
     }

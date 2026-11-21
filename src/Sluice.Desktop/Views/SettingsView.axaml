@@ -137,14 +137,6 @@
                 </StackPanel>
             </Border>
 
-            <!-- Passwords: belongs to the profile; moves to the profile menu in #150 -->
-            <Border Classes="CardBox" Margin="0,0,0,16">
-                <StackPanel>
-                    <TextBlock Text="Tunnel passwords in the profile" Classes="SectionTitle"/>
-                    <TextBlock Classes="Muted" Text="How tunnel passwords are stored in the profile file. Only a master password keeps them from anyone who has the file."/>
-                    <ComboBox ItemsSource="{Binding EncryptionModes}" SelectedIndex="{Binding EncryptionIndex}" Margin="0,12,0,0" HorizontalAlignment="Left" MinWidth="420"/>
-                </StackPanel>
-            </Border>
         </StackPanel>
     </ScrollViewer>
 </UserControl>

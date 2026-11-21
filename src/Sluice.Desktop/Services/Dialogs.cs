@@ -18,8 +18,19 @@ namespace Sluice.Desktop.Services;
 /// </summary>
 public static class Dialogs
 {
-    private static Window? Owner =>
-        (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow is { IsVisible: true } w ? w : null;
+    /// <summary>
+    /// The window a dialog belongs to: the active one, so a dialog opened from another dialog (the master password from
+    /// Password protection, #150) stays on top of it; otherwise the main window when it is visible.
+    /// </summary>
+    private static Window? Owner
+    {
+        get
+        {
+            if (Application.Current?.ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime desktop) return null;
+            return desktop.Windows.FirstOrDefault(w => w is { IsActive: true, IsVisible: true })
+                   ?? (desktop.MainWindow is { IsVisible: true } main ? main : null);
+        }
+    }
 
     /// <summary>Runs an asynchronous UI operation to completion without blocking the UI thread.</summary>
     internal static T Wait<T>(Task<T> task)
@@ -70,6 +81,9 @@ public static class Dialogs
         var d = new RuleDialog(existing, profile);
         return ShowModal<bool>(d) ? d.Result : null;
     }
+
+    /// <summary>How the current profile stores tunnel passwords (#150); changes apply as they're made.</summary>
+    public static void EditPasswordProtection(EngineHost host) => ShowModal<bool>(new PasswordProtectionDialog(host));
 
     public static string? AskMasterPassword(string profileName, bool confirmNew)
     {

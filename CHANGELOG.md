@@ -21,6 +21,9 @@ into the version's section, and that section, with the install links, becomes th
 - Profiles live in Sluice's own folder, and the profile menu lists them: a click switches at once, and New, Save as,
   Rename, Delete and Import manage them, with no file dialogs. Your last profile is copied there the first time; the
   original file stays where it was (#134).
+- Password protection moved from Settings to the profile menu, since it belongs to each profile: one switch for a
+  master password, and on Windows the option to tie passwords to your Windows account. Plain text is no longer offered;
+  a profile saved that way is saved with basic encryption from now on (#150).
 
 ### Fixed
 - Linux: on Arch, when pacman can't install the packages Sluice needs (an old or never-synced package database),

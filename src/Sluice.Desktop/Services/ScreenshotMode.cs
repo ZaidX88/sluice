@@ -99,11 +99,24 @@ internal static class ScreenshotMode
             if (page is RulesViewModel rules) rules.Selected = rules.Rows.Skip(1).FirstOrDefault();
             await Pump(1300);
             Save(window, Path.Combine(dir, $"{page.Title.ToLowerInvariant()}.png"));
-            if (page is SettingsViewModel && window.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault(s => s.Extent.Height > s.Viewport.Height) is { } scroll)
+            if (page is SettingsViewModel settingsPage)
             {
-                scroll.ScrollToEnd();   // the app options (file log) are at the end
+                // Advanced opened (#149): its top, then the end of the page.
+                settingsPage.AdvancedOpen = true;
                 await Pump(500);
-                Save(window, Path.Combine(dir, "settings-end.png"));
+                if (window.GetVisualDescendants().OfType<Button>().FirstOrDefault(b => b.Name == "AdvancedToggle") is { } toggle)
+                {
+                    toggle.BringIntoView(new Rect(0, 0, toggle.Bounds.Width, 560));
+                    await Pump(500);
+                    Save(window, Path.Combine(dir, "settings-advanced.png"));
+                }
+                if (window.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault(s => s.Extent.Height > s.Viewport.Height) is { } scroll)
+                {
+                    scroll.ScrollToEnd();
+                    await Pump(500);
+                    Save(window, Path.Combine(dir, "settings-end.png"));
+                }
+                settingsPage.AdvancedOpen = false;
             }
         }
 

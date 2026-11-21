@@ -34,6 +34,9 @@ public sealed class AppSettings
     /// and from then on these win over what a profile file says.</summary>
     public NetworkSettings? Network { get; set; }
 
+    /// <summary>The Settings page's Advanced section is open (#149); closed by default.</summary>
+    public bool SettingsAdvancedOpen { get; set; }
+
     /// <summary><paramref name="path"/> for display: the user's folders shortened (%APPDATA%\…, ~/…), so the page
     /// and its screenshots don't show the account name.</summary>
     public static string ShortPath(string path)
@@ -81,6 +84,7 @@ public sealed class AppSettings
 
     public void Save()
     {
+        if (WriteNoFiles) return;   // screenshot mode: never saved
         try
         {
             Directory.CreateDirectory(Folder);

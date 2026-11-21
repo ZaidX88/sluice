@@ -88,4 +88,16 @@ public partial class RulesView : UserControl
 public partial class SettingsView : UserControl
 {
     public SettingsView() => InitializeComponent();
+
+    private void OnSocksPortCommit(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is SettingsViewModel vm) _ = vm.CommitSocksPortAsync();
+    }
+
+    private void OnSocksPortKey(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter || DataContext is not SettingsViewModel vm) return;
+        _ = vm.CommitSocksPortAsync();
+        e.Handled = true;
+    }
 }

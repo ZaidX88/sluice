@@ -41,6 +41,8 @@ into the version's section, and that section, with the install links, becomes th
 - Text buttons such as Clear, Disconnect all and Reset statistics, and the small icon buttons, no longer look
   disabled: they use the normal text colour and show a fill on hover (#136).
 - Pressing a text or icon button shows it again: it fades while held, instead of looking the same as a hover (#160).
+- Linux: notifications show Sluice's icon instead of a generic VPN icon when Sluice was installed with install.sh
+  (#178).
 
 <!-- Add a line under one of these headings; create the heading if it isn't here yet:
 ### Added

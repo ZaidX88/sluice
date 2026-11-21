@@ -185,6 +185,10 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
 - Version in the app (2026-11-21, #96): Settings → General ends with "Version …" (`SluiceVersion.Text`, a
   `SelectableTextBlock`, with Copy); the Log page's first line is `SluiceVersion.Banner`, queued by `LogViewModel` (the
   host logs before the page subscribes, and `FileLog` already writes the banner to each file).
+- Linux notification icon (2026-11-21, #178): `LinuxPlatform.NotifyArguments` builds notify-send's arguments, with
+  `--icon=sluice` when install.sh's `/usr/share/icons/hicolor/256x256/apps/sluice.png` exists (otherwise
+  `network-vpn`, as before). No `desktop-entry` hint: GNOME Shell ties such a notification to the app and removes it
+  when the sender leaves the bus, which notify-send does at once, so it never showed. Tests in `LinuxNotifyTests`.
 - Import dialog crash (2026-11-21, #181): adding a subscription closed Sluice. `ImportDialog.ShowStatus` (was `Show`)
   looked up the palette's per-theme brushes without the theme variant and cast `UnsetValue` to `IBrush`; it now uses
   `TryFindResource(key, ActualThemeVariant, …)`. `--screenshot` adds `dialog-import-error.png`.

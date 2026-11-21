@@ -28,7 +28,7 @@ Program.cs ──▶ App (App.axaml.cs)
 | `Services/TrayHost.cs` | Whether a tray can show Sluice's icon (#45): always on Windows; on Linux a `org.kde.StatusNotifierWatcher` with `IsStatusNotifierHostRegistered`, asked over the session bus (`Tmds.DBus.Protocol`, which Avalonia already uses) when the window is closed |
 | `Services/AppTray.cs` | Tray icon: open, "Capture traffic" toggle, exit; tooltip with status and rates; icon changes with capture state (`AppIcon`) |
 | `Services/Dialogs.cs` | Modal dialogs (`MessageDialog`, tunnel / rule / import / password dialogs, file pickers) |
-| `Services/ScreenshotMode.cs` | `--screenshot DIR`: a demo profile in memory, real traffic through the app's own SOCKS5 listener, every page rendered to PNG (Settings also with Advanced open, plus the capture-rights banner); touches no user files, never captures. It replaces `OsPlatform.Current` with a demo platform that offers granting rights and autostart, so both show in the images |
+| `Services/ScreenshotMode.cs` | `--screenshot DIR`: a demo profile in memory, real traffic through the app's own SOCKS5 listener, every page rendered to PNG (Settings also with Advanced open, plus the capture-rights banner and the profile menu with demo profiles, never the real folder's); touches no user files, never captures. It replaces `OsPlatform.Current` with a demo platform that offers granting rights and autostart, so both show in the images |
 | `ViewModels/` | `MainViewModel` and one `PageViewModel` per page |
 | `Views/` | The pages (`ConnectionsView`, `StatisticsView`, `LogView`, `TunnelsView`, `RulesView`, `SettingsView`; code-behind in `PageViews.axaml.cs`) and dialogs (`TunnelDialog`, `RuleDialog`, `ImportDialog`, `PasswordDialog`) |
 | `Mvvm/ObservableObject.cs` | A minimal MVVM kit: `ObservableObject`, `RelayCommand`, `AsyncCommand` (no MVVM library) |
@@ -47,7 +47,9 @@ Program.cs ──▶ App (App.axaml.cs)
    lookup).
 4. Create `EngineHost` and install `CrashGuard` on it (below), then `MainViewModel`, `MainWindow`, `AppTray`; route
    `EngineHost.TunnelNotice` to `OsPlatform.Current.Notify`.
-5. Open the profile from `--profile` or `AppSettings.LastProfilePath` (asking for a master password if needed).
+5. Open the profile (`EngineHost.OpenStartupProfile`, asking for a master password if needed): `--profile` as it is;
+   otherwise `AppSettings.LastProfilePath`, copied into the profiles folder once if it is elsewhere (#134); otherwise
+   the first profile there, or a new `Default`.
 6. `--log-file DIR` (a Debug-level log for this run only), start the local SOCKS5 listener, and turn capture on with
    `--intercept` or `StartInterceptionOnLaunch`.
 
@@ -68,9 +70,14 @@ from other threads are marshalled with `Dispatcher.UIThread.Post`.
 
 - **Engine objects:** one `ConnectionTracker` (level Verbose), `Statistics`, one `RoutingEngine` for the whole run,
   the optional `FileLog`s.
-- **Profile:** `LoadProfile` (`.sluice` files only), `NewProfile`, `UseProfile`, `CommitProfileEdit`
-  (reload + autosave), `TrySave`, `ApplyNetworkSettings` (the app-wide network options into the current profile,
+- **Profile:** `LoadProfile` (`.sluice` files only), `UseProfile`, `CommitProfileEdit` (reload + autosave), `TrySave`,
+  `ApplyNetworkSettings` (the app-wide network options into the current profile,
   [profiles.md](profiles.md#app-settings-and-the-settings-folder)). Events `ProfileChanged`, `StateChanged`, `Notice`.
+- **Profiles folder (#134):** every profile is a `<name>.sluice` in `AppSettings.ProfilesFolder` (`ProfileStore`: list,
+  name checks, copy-in). `ProfileNames`, `SwitchTo`, `NewProfile(name)`, `SaveProfileAs`, `RenameProfile`,
+  `DeleteProfile`, `ImportProfile`. The profile menu (`MainWindow.BuildProfileMenu`, refilled on each press of the profile button) lists
+  the profiles with the open one ticked, then New, Save as, Rename, Delete, Import and the folder; names are asked with
+  `NameDialog`. There is no unsaved profile: edits autosave, and the first start creates `Default`.
 - **SOCKS5:** `StartSocks` / `RestartSocksAsync` on `127.0.0.1:<AppSettings.SocksPort>`.
 - **Capture:** `StartInterception` checks `CaptureUnavailableReason` and `HasCaptureRights`, calls
   `OsPlatform.Current.CreateCapture(Engine)`, subscribes to `RelayUnreachable`, starts it and warms up tunnels;

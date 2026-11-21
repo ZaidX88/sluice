@@ -59,6 +59,8 @@ internal static class ScreenshotMode
             p.Rules.Insert(2, new Rule { Name = "No trackers", Targets = "*.doubleclick.net; *.ads.example", Action = RuleAction.Block });
             p.Rules.Insert(3, new Rule { Name = "Old VPN", Enabled = false, Ports = "1194", Action = RuleAction.Direct });
         }
+        host.DemoProfileNames = ["Home", "Travel", "Work"];   // never the real profiles folder
+        host.DemoProfileName = "Work";
         host.UseProfile(p);
         host.StartSocks();
 
@@ -127,6 +129,21 @@ internal static class ScreenshotMode
         Save(window, Path.Combine(dir, "banner-rights.png"));
         vm.DismissBannerCommand.Execute(null);
 
+        // The profile menu (#134), drawn in a window of its own: a flyout's popup can't be rendered off-screen.
+        window.BuildProfileMenu();
+        var menuItems = window.ProfileMenu.Items.ToList();
+        window.ProfileMenu.Items.Clear();
+        var menuWindow = new Window
+        {
+            SizeToContent = SizeToContent.WidthAndHeight, WindowDecorations = WindowDecorations.None, ShowInTaskbar = false,
+            WindowStartupLocation = WindowStartupLocation.Manual, Position = new PixelPoint(-10000, 0),
+            Content = new MenuFlyoutPresenter { ItemsSource = menuItems, MinWidth = 220 },
+        };
+        menuWindow.Show();
+        await Pump(700);
+        Save(menuWindow, Path.Combine(dir, "profile-menu.png"));
+        menuWindow.Close();
+
         // Dialogs (shown non-modally just to render them).
         foreach (var (name, dialog) in new (string, Window)[]
                  {
@@ -135,6 +152,8 @@ internal static class ScreenshotMode
                      ("dialog-tunnel-vless", new Views.TunnelDialog(p.Tunnels[3])),
                      ("dialog-rule", new Views.RuleDialog(p.Rules[1], p)),
                      ("dialog-password", new Views.PasswordDialog("Work", confirmNew: true)),
+                     ("dialog-profile-name", new NameDialog("New profile",
+                         "A new profile starts with the Localhost and Default rules. The current one stays as it is.", "New profile", "Create", _ => null)),
                      ("dialog-file-error", MessageDialog.Create(Dialogs.FileDialogFailedTitle,
                          Dialogs.FileDialogFailedText("the system's file chooser didn't answer."), ["OK"], primary: 0)),
                      ("dialog-import", new Views.ImportDialog(Profile.CreateDefault(), null,
@@ -185,7 +204,7 @@ internal static class ScreenshotMode
         }
     }
 
-    private static void Save(Window w, string path)
+    private static void Save(TopLevel w, string path)
     {
         var size = w.ClientSize;
         var scale = Environment.GetEnvironmentVariable("SLUICE_SHOT_SCALE") is { } v ? double.Parse(v, System.Globalization.CultureInfo.InvariantCulture) : 1.0;   // RenderTargetBitmap mis-scales DataGrid content at >1 DPI; 1x is faithful

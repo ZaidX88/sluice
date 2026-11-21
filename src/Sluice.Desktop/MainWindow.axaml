@@ -38,18 +38,13 @@
             <DockPanel>
                 <!-- Profile chip (like the user avatar in the reference) -->
                 <Border DockPanel.Dock="Right" BorderBrush="{DynamicResource Divider}" BorderThickness="1,0,0,0" Padding="22,0,24,0">
-                    <Button Background="Transparent" BorderThickness="0" Cursor="Hand" Padding="0" ToolTip.Tip="{Binding ProfileHint}">
+                    <Button x:Name="ProfileButton" Background="Transparent" BorderThickness="0" Cursor="Hand" Padding="0" ToolTip.Tip="{Binding ProfileHint}">
                         <Button.Template>
                             <ControlTemplate><ContentPresenter Content="{TemplateBinding Content}" Background="Transparent"/></ControlTemplate>
                         </Button.Template>
                         <Button.Flyout>
-                            <MenuFlyout Placement="BottomEdgeAlignedRight">
-                                <MenuItem Header="Open profile…" Command="{Binding OpenCommand}"/>
-                                <MenuItem Header="Save" Command="{Binding SaveCommand}"/>
-                                <MenuItem Header="Save as…" Command="{Binding SaveAsCommand}"/>
-                                <Separator/>
-                                <MenuItem Header="New profile" Command="{Binding NewCommand}"/>
-                            </MenuFlyout>
+                            <!-- Filled by MainWindow.BuildProfileMenu before it opens: every profile, then the actions (#134). -->
+                            <MenuFlyout Placement="BottomEdgeAlignedRight"/>
                         </Button.Flyout>
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                             <Grid Width="34" Height="34">

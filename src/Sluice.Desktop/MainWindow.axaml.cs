@@ -31,6 +31,47 @@ public partial class MainWindow : SluiceWindow
         // and the press itself goes on as before.
         AddHandler(PointerPressedEvent, ClearFocusOnEmptyPress, RoutingStrategies.Tunnel, handledEventsToo: true);
         SearchBox.AddHandler(KeyDownEvent, OnSearchKeyDown, RoutingStrategies.Tunnel);
+
+        // An empty MenuFlyout doesn't open, so the menu is filled before the press that opens it (and whenever the
+        // profile changes), not in its Opening event.
+        BuildProfileMenu();
+        vm.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(MainViewModel.ProfileName)) BuildProfileMenu(); };
+        ProfileButton.AddHandler(PointerPressedEvent, (_, _) => BuildProfileMenu(), RoutingStrategies.Tunnel, handledEventsToo: true);
+        ProfileButton.AddHandler(KeyDownEvent, (_, _) => BuildProfileMenu(), RoutingStrategies.Tunnel, handledEventsToo: true);
+    }
+
+    /// <summary>
+    /// The profile menu (#134): every profile in Sluice's folder, the open one ticked, a click switching at once; then
+    /// new, save as, rename, delete, import and the folder. Rebuilt on each press of the profile button, so it shows the
+    /// folder as it is.
+    /// </summary>
+    internal MenuFlyout ProfileMenu => (MenuFlyout)ProfileButton.Flyout!;
+
+    internal void BuildProfileMenu()
+    {
+        if (DataContext is not MainViewModel vm) return;
+        var items = ProfileMenu.Items;
+        items.Clear();
+        foreach (var name in vm.ProfileNames)
+        {
+            var item = new MenuItem
+            {
+                Header = new TextBlock { Text = name },   // a TextBlock, so an "_" in a name isn't an access key
+                ToggleType = MenuItemToggleType.Radio,
+                GroupName = "profiles",
+                IsChecked = vm.CanManageProfile && string.Equals(name, vm.ProfileName, StringComparison.OrdinalIgnoreCase),
+            };
+            item.Click += (_, _) => vm.SwitchProfile(name);
+            items.Add(item);
+        }
+        if (items.Count > 0) items.Add(new Separator());
+        items.Add(new MenuItem { Header = "New profile…", Command = vm.NewProfileCommand });
+        items.Add(new MenuItem { Header = "Save as…", Command = vm.SaveAsCommand });
+        items.Add(new MenuItem { Header = "Rename…", Command = vm.RenameProfileCommand, IsEnabled = vm.CanManageProfile });
+        items.Add(new MenuItem { Header = "Delete…", Command = vm.DeleteProfileCommand, IsEnabled = vm.CanManageProfile });
+        items.Add(new Separator());
+        items.Add(new MenuItem { Header = "Import profile file…", Command = vm.ImportProfileCommand });
+        items.Add(new MenuItem { Header = "Show profiles folder", Command = vm.ShowProfilesFolderCommand });
     }
 
     /// <summary>

@@ -98,11 +98,8 @@ public sealed class LinuxPlatform : IPlatformServices
         try
         {
             var psi = new ProcessStartInfo("notify-send") { UseShellExecute = false, RedirectStandardError = true, RedirectStandardOutput = true };
-            psi.ArgumentList.Add("--app-name=Sluice");
-            psi.ArgumentList.Add($"--urgency={(isError ? "critical" : "normal")}");
-            psi.ArgumentList.Add("--icon=network-vpn");
-            psi.ArgumentList.Add(title);
-            psi.ArgumentList.Add(message);
+            foreach (var arg in NotifyArguments(title, message, isError, File.Exists(InstalledIconPath)))
+                psi.ArgumentList.Add(arg);
             if (!Native.Libc.ClearPassedOn(out _)) return;   // notify-send gets no capabilities, or doesn't start
             using var p = Process.Start(psi);
         }
@@ -111,6 +108,23 @@ public sealed class LinuxPlatform : IPlatformServices
             // notify-send not installed: notifications are a convenience
         }
     }
+
+    /// <summary>The icon install.sh puts in the hicolor theme (as "sluice", the name sluice.desktop uses); uninstall.sh
+    /// removes it.</summary>
+    internal const string InstalledIconPath = "/usr/share/icons/hicolor/256x256/apps/sluice.png";
+
+    /// <summary>notify-send's arguments: Sluice's own icon when install.sh installed it, otherwise the theme's generic
+    /// VPN icon (a build folder or the unpacked archive). No desktop-entry hint, and an app name that isn't the desktop
+    /// file's ("Sluice", not "sluice"): GNOME Shell removes a notification tied to an app as soon as its sender leaves the
+    /// bus, and notify-send leaves right after sending, so the notification would never show (#178).</summary>
+    internal static IReadOnlyList<string> NotifyArguments(string title, string message, bool isError, bool iconInstalled) =>
+    [
+        "--app-name=Sluice",
+        $"--urgency={(isError ? "critical" : "normal")}",
+        $"--icon={(iconInstalled ? "sluice" : "network-vpn")}",
+        title,
+        message,
+    ];
 
     // ---------- traffic capture ----------
 

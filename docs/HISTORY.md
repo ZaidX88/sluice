@@ -167,3 +167,7 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
 - install.sh final check (2026-11-21, #141): the end checks the four desktop libraries again with `has_lib` and
   warns with the missing ones, since the `sluice-cli --help` check doesn't load them; it now says "The command-line
   version starts." INSTALL.md gains a note on the three capabilities a Docker container needs to start Sluice.
+- Search box (2026-11-21, #135): a `TextBox.Bare` style (transparent, no border in any state, so focus shows as the
+  caret), font 13 in a 32 px row that clicks into the box; the main window clears focus on a press where neither the
+  element nor its parents can take focus (`FocusManager.Focus(null)`: Avalonia 12 has no `ClearFocus`), and `Esc`
+  clears the search.

@@ -24,6 +24,8 @@ into the version's section, and that section, with the install links, becomes th
   install.sh stops with what to run (`sudo pacman -Syu`) instead of carrying on without them (#140).
 - Linux: install.sh no longer ends with "Sluice starts." when the desktop app's libraries are missing; it names
   them in a warning at the end (#141).
+- The search box in the top bar no longer shows a white border and dark fill when clicked, is a little bigger, and
+  gives up the caret when you click elsewhere or press Esc (which also clears the search) (#135).
 
 <!-- Add a line under one of these headings; create the heading if it isn't here yet:
 ### Added

@@ -15,6 +15,32 @@
         <Setter Property="FontSize" Value="12.5"/>
     </Style>
 
+    <!-- ===== A text box without a box (#135): the top bar's search ===== -->
+    <!-- Transparent with no border in every state, so focus shows only as the caret. Fluent sets the border element's
+         background and border on :pointerover and :focus, and a dark foreground on :focus; these win over it. -->
+    <Style Selector="TextBox.Bare, TextBox.Bare:pointerover, TextBox.Bare:focus, TextBox.Bare:focus-within">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="MinHeight" Value="0"/>
+        <Setter Property="Foreground" Value="{DynamicResource Text}"/>
+        <Setter Property="CaretBrush" Value="{DynamicResource Text}"/>
+    </Style>
+    <Style Selector="TextBox.Bare /template/ Border#PART_BorderElement,
+                     TextBox.Bare:pointerover /template/ Border#PART_BorderElement,
+                     TextBox.Bare:focus /template/ Border#PART_BorderElement,
+                     TextBox.Bare:focus-within /template/ Border#PART_BorderElement">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderBrush" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+    </Style>
+    <!-- The search icon: faint, in the text colour while the box has focus. -->
+    <Style Selector="Grid.Search > c|IconView">
+        <Setter Property="Foreground" Value="{DynamicResource TextFaint}"/>
+    </Style>
+    <Style Selector="Grid.Search:focus-within > c|IconView">
+        <Setter Property="Foreground" Value="{DynamicResource Text}"/>
+    </Style>
+
     <!-- ===== Typography ===== -->
     <Style Selector="TextBlock.PageTitle">
         <Setter Property="FontSize" Value="19"/>

@@ -192,3 +192,7 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
 - Import dialog crash (2026-11-21, #181): adding a subscription closed Sluice. `ImportDialog.ShowStatus` (was `Show`)
   looked up the palette's per-theme brushes without the theme variant and cast `UnsetValue` to `IBrush`; it now uses
   `TryFindResource(key, ActualThemeVariant, …)`. `--screenshot` adds `dialog-import-error.png`.
+- Single instance (2026-11-22, #171): a second launch started a second Sluice. The running copy closed the pipe without
+  reading, so the new copy's write failed and it took that for "nobody listening"; it now reads the request to its end,
+  and the new copy counts a successful connect as "another Sluice runs". On Windows the pipe allows the same user from
+  a non-elevated process (`NamedPipeServerStreamAcl`), so a normal launch reaches a Sluice running as administrator.

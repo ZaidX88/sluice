@@ -41,8 +41,11 @@ Program.cs ──▶ App (App.axaml.cs)
 `OnFrameworkInitializationCompleted` runs, in order:
 
 1. `--theme dark|light`; `--screenshot DIR` short-circuits into `ScreenshotMode` and exits.
-2. **Single instance:** connect to the named pipe `Sluice-<user name>`; if another Sluice answers, send `show` and exit.
-   Otherwise listen on that pipe (`ListenForShowRequestsAsync`) and show the window on each request.
+2. **Single instance:** connect to the named pipe `Sluice-<user name>`; if the connect succeeds, another Sluice runs:
+   send `show` and exit, even if the write fails (#171). Otherwise listen on that pipe (`ListenForShowRequestsAsync`),
+   read each request to its end before closing it, and show the window. On Windows the pipe (`CreatePipeServer`) also
+   lets the same user connect from a process without admin rights, so a normal launch reaches a Sluice running as
+   administrator.
 3. `OsPlatform.Current.OnAppStart()` (Windows: Start Menu shortcut and app ID for notifications; Linux: `/proc` process
    lookup).
 4. Create `EngineHost` and install `CrashGuard` on it (below), then `MainViewModel`, `MainWindow`, `AppTray`; route

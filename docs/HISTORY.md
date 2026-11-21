@@ -171,3 +171,6 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   caret), font 13 in a 32 px row that clicks into the box; the main window clears focus on a press where neither the
   element nor its parents can take focus (`FocusManager.Focus(null)`: Avalonia 12 has no `ClearFocus`), and `Esc`
   clears the search.
+- Selection colour (2026-11-21, #143): Fluent fills a selection with the accent, which Sluice sets to the text colour;
+  `SelectionBg` / `SelectionText` in the palette (grey fills, monochrome) set on every `TextBox` state and on
+  `SelectableTextBlock`, so an unfocused selection keeps them too. The accent is unchanged for other controls.

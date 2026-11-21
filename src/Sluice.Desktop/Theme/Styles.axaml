@@ -15,6 +15,19 @@
         <Setter Property="FontSize" Value="12.5"/>
     </Style>
 
+    <!-- ===== Selected text (#143) ===== -->
+    <!-- Fluent fills a selection with the accent, which is the text colour here, and keeps the text colour on it. Every
+         state is listed so Fluent's state styles can't bring the accent back, also for a selection kept after the box
+         loses focus. Covers the boxes inside AutoCompleteBox, NumericUpDown and editable ComboBox. -->
+    <Style Selector="TextBox, TextBox:pointerover, TextBox:focus, TextBox:focus-within, TextBox:not(:focus), TextBox:disabled">
+        <Setter Property="SelectionBrush" Value="{DynamicResource SelectionBg}"/>
+        <Setter Property="SelectionForegroundBrush" Value="{DynamicResource SelectionText}"/>
+    </Style>
+    <Style Selector="SelectableTextBlock">
+        <Setter Property="SelectionBrush" Value="{DynamicResource SelectionBg}"/>
+        <Setter Property="SelectionForegroundBrush" Value="{DynamicResource SelectionText}"/>
+    </Style>
+
     <!-- ===== A text box without a box (#135): the top bar's search ===== -->
     <!-- Transparent with no border in every state, so focus shows only as the caret. Fluent sets the border element's
          background and border on :pointerover and :focus, and a dark foreground on :focus; these win over it. -->

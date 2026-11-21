@@ -26,6 +26,9 @@
             <SolidColorBrush x:Key="Danger" Color="#D33A3A"/>
             <SolidColorBrush x:Key="DangerSoft" Color="#FBEDED"/>
             <SolidColorBrush x:Key="SwitchOff" Color="#D4D4D8"/>
+            <!-- Selected text (#143): the accent is the text colour, so the selection needs its own pair. -->
+            <SolidColorBrush x:Key="SelectionBg" Color="#D4D4D8"/>
+            <SolidColorBrush x:Key="SelectionText" Color="#0A0A0A"/>
             <SolidColorBrush x:Key="Spark" Color="#0A0A0A"/>
             <SolidColorBrush x:Key="SparkFill" Color="#140A0A0A"/>
             <!-- Sluice's own title bar and window edge (#44): white bar, black text, 1 px black border. -->
@@ -61,6 +64,8 @@
             <SolidColorBrush x:Key="Danger" Color="#F07070"/>
             <SolidColorBrush x:Key="DangerSoft" Color="#2A1617"/>
             <SolidColorBrush x:Key="SwitchOff" Color="#3A3A40"/>
+            <SolidColorBrush x:Key="SelectionBg" Color="#3F3F46"/>
+            <SolidColorBrush x:Key="SelectionText" Color="#F4F4F5"/>
             <SolidColorBrush x:Key="Spark" Color="#FAFAFA"/>
             <SolidColorBrush x:Key="SparkFill" Color="#1AFAFAFA"/>
             <!-- Dark: black bar, white text, no added border. -->

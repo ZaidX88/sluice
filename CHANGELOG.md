@@ -29,6 +29,8 @@ into the version's section, and that section, with the install links, becomes th
   them in a warning at the end (#141).
 - The search box in the top bar no longer shows a white border and dark fill when clicked, is a little bigger, and
   gives up the caret when you click elsewhere or press Esc (which also clears the search) (#135).
+- Selected text in text fields is readable again: it was filled with the text's own colour, so it showed as a solid
+  block (#143).
 
 <!-- Add a line under one of these headings; create the heading if it isn't here yet:
 ### Added

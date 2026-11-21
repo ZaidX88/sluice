@@ -17,6 +17,8 @@ into the version's section, and that section, with the install links, becomes th
   tunnel (#60).
 - The version is shown at the bottom of Settings → General, with a Copy button for bug reports, and the Log page
   starts with the same version line as the log files (#96).
+- Sluice tells you when a new version is out: a notice with a Download link for your system, checked once a day on
+  GitHub. It never downloads or installs anything itself; turn it off in Settings → General (#198).
 
 ### Changed
 - Linux: Sluice's windows have their own title bar and border in the app's theme, like on Windows, instead of the

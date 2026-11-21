@@ -111,7 +111,6 @@ Not restated here; the plan of record is:
 - [REQUIRED.md §1](../REQUIRED.md#1-move-windows-only-code-out-of-core): Windows-only code still in `Sluice.Core`,
   and `Sluice.Cli` not multi-targeted.
 - [REQUIRED.md §2](../REQUIRED.md#2-udp-through-tunnels-on-linux): UDP through tunnels on Linux (TPROXY).
-- [REQUIRED.md §3](../REQUIRED.md#3-retire-the-wpf-app): retiring the WPF app (`Sluice.App`).
 - Known bugs, by area: [core](../core/FIXES.md) (helper log levels, machine-dependent tests, IPv6 through tunnels),
   [windows](../windows/FIXES.md) (WSL/VM DNS, fake answers after capture), [linux](../linux/FIXES.md) (capture
   limits), [ui](../ui/FIXES.md) (layout, UI gaps, log file).

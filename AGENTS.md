@@ -15,7 +15,7 @@ the area isn't clear, **ask before editing anything**. You may change only the f
 |---|---|---|
 | **Linux** | `src/Sluice.Platform.Linux/**`, `scripts/linux/**`, `packaging/linux/**`, `scripts/package-linux.sh`, `docs/linux/**`, `tests/Sluice.Tests.Linux/**` | repository owner |
 | **Windows** | `src/Sluice.Platform.Windows/**`, `docs/windows/**`, the Windows-only files still in Core (`src/Sluice.Core/Interception/Interceptor.cs`, `WinDivertNative.cs`, `UdpNat.cs`, `CaptureFilter.cs`, `src/Sluice.Core/Platform/ProcessLookup.cs`, `src/Sluice.Core/Profiles/Dpapi.cs`), `scripts/*.ps1`, `packaging/windows/**`, `tests/Sluice.Tests.Windows/**` | repository owner |
-| **UI** | `src/Sluice.Desktop/**` (and the legacy `src/Sluice.App/**`), `docs/ui/**`, `docs/architecture/desktop.md` | repository owner |
+| **UI** | `src/Sluice.Desktop/**`, `docs/ui/**`, `docs/architecture/desktop.md` | repository owner |
 | **Core** (owner; contributors only on `help wanted` issues) | everything else: `src/Sluice.Core/**` (shared engine), `src/Sluice.Cli/**`, the shared tests `tests/Sluice.Tests/**` and `tests/Sluice.Tests.Support/**`, `build/**`,
 `Sluice.slnx`, `Sluice.*.slnf`, `docs/core/**`, `.github/**`, `README.md`, `AGENTS.md`, `CLAUDE.md`, `.gitignore`, `.gitattributes` | — |
 | **Shared docs** (every area) | `docs/*.md` (`STATUS.md`, `REQUIRED.md`, `ARCHITECTURE.md`, `HISTORY.md`, `QUICKSTART.md`, …), `docs/architecture/**` and `CHANGELOG.md`, for what your change affects | — |

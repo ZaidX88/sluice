@@ -64,7 +64,8 @@ The installer:
 5. grants Sluice's launcher (`/opt/sluice/sluice`, which the `sluice` command and the menu entry start) the rights to
    capture traffic (`setcap`), so **you don't need to run it as root**.
 
-It ends with `Done.`, after checking that Sluice starts. Any problem is printed as a `WARNING:` line saying what to do.
+It ends with `Done.`, after checking that the command-line version starts and that the desktop app's libraries are
+there. Any problem is printed as a `WARNING:` line saying what to do.
 
 To see what's missing **without changing anything**:
 
@@ -148,6 +149,11 @@ pacman can only install against an up-to-date system: with no synced package dat
 packages, it reports "target not found" or conflicting files. The installer stops there without changing anything,
 rather than upgrading your whole system. Run `sudo pacman -Syu`, then `sudo ./install.sh` again.
 
+**"the desktop app won't start until these libraries are installed: …"**
+The package manager couldn't install the X11 and font libraries the window needs (see the `WARNING:` lines above it);
+`sluice-cli` still works. Install the packages for the window from the table in [3. Install](#3-install), or fix the
+package manager and run `sudo ./install.sh` again.
+
 **"nftables is not installed"**
 Run `sudo ./install.sh` again with internet access; it installs nftables. Or install the `nftables` package yourself.
 
@@ -171,6 +177,12 @@ fall back from QUIC (HTTP/3) to normal HTTPS automatically. Voice and video call
 **The window doesn't open on a Wayland desktop**
 Make sure XWayland is installed (`xwayland` / `xorg-x11-server-Xwayland`), then run `sluice` from a terminal to see
 any error.
+
+**In a Docker container: "sluice-cli: Operation not permitted"**
+The launcher has capabilities that Docker's default set doesn't include, and the kernel won't start it without them,
+even for `--help`. Start the container with
+`--cap-add SYS_PTRACE --cap-add DAC_READ_SEARCH --cap-add NET_ADMIN`; all three are needed for Sluice to start, and
+`NET_ADMIN` also lets it capture.
 
 **Running Sluice without installing it**
 With the .NET 10 runtime installed, `./app/Sluice.Desktop` (the app) and `./app/Sluice.Cli` (the command line) run

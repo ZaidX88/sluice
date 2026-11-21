@@ -18,6 +18,8 @@ into the version's section, and that section, with the install links, becomes th
 ### Fixed
 - Linux: on Arch, when pacman can't install the packages Sluice needs (an old or never-synced package database),
   install.sh stops with what to run (`sudo pacman -Syu`) instead of carrying on without them (#140).
+- Linux: install.sh no longer ends with "Sluice starts." when the desktop app's libraries are missing; it names
+  them in a warning at the end (#141).
 
 <!-- Add a line under one of these headings; create the heading if it isn't here yet:
 ### Added

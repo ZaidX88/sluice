@@ -289,12 +289,16 @@ the repository**:
 - **Bumping it** is the owner's job, in its own small pull request: `1.0.0-dev` while working towards a release,
   `1.0.0-rc.1`, `-rc.2` … for release candidates, `1.0.0` for the release, then the next `-dev`. Never change it in a
   feature pull request.
-- **A release tag** `vX.Y.Z` (or `vX.Y.Z-rc.N`) on `main` must match `<Version>`; release CI (#74) checks that and
-  builds the packages, whose file names take the version (`sluice-1.0.0-linux-x64.tar.gz`). Built packages are never
-  committed.
+- **A release tag** `vX.Y.Z` (or `vX.Y.Z-rc.N`) on `main` must match `<Version>`. Pushing it runs the release workflow
+  (`.github/workflows/release.yml`, #74): it checks the tag, builds the Linux tar.gz and the Windows installer from
+  it, whose file names take the version (`sluice-1.0.0-linux-x64.tar.gz`, `Sluice-Setup-1.0.0-x64.exe`), each with
+  a `.sha256`, and creates a **draft** GitHub Release with them; the owner reviews it and publishes it (a `-rc` tag
+  becomes a pre-release). Run by hand from the Actions tab, the workflow only builds the packages and keeps them as
+  workflow artifacts (a dry run, or a test installer). Built packages are never committed.
 - **Release notes** are the version's section of [CHANGELOG.md](../CHANGELOG.md), plus the install links. Before
-  tagging, the owner turns `Unreleased` into that section (with the date) and checks its known limitations; release CI
-  (#74) can copy the section into the GitHub Release.
+  tagging, the owner turns `Unreleased` into that section (with the date) and checks its known limitations; the
+  release workflow copies the section into the draft (`scripts/release-notes.sh`) and refuses a release whose section
+  is still marked "not released yet".
 - **Packaging scripts are code on `main`**, reviewed like any other change: `packaging/linux/` and
   `scripts/package-linux.sh` belong to the Linux area, `packaging/windows/` and `scripts/package-windows.ps1` to the
   Windows area. Packages are built only from a clean checkout of a tag.

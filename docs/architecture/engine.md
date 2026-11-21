@@ -171,7 +171,7 @@ UDP is only captured while capture runs and the profile's `UdpMode` is not `Bypa
 it is: the flow gets its own UDP socket to the name's real address (looked up like a Direct TCP connection:
 `RoutingEngine.HostResolver`, else the OS; the app's address family first), and replies reach the app from the
 placeholder. Only datagrams from that address and port are passed on; a failed lookup is retried at most every 5 s.
-Not used by a capture yet: Windows switches to it in #53 (which deletes `UdpNat`), Linux in #60.
+Linux uses it since #60; Windows switches to it in #53 (which deletes `UdpNat`).
 
 **Windows: `Interception/UdpNat.cs`.** For each outbound datagram `Interceptor` calls `UdpNat.ProcessOutbound`. Flows
 are keyed by (app socket, destination) and classified once (again after a profile change). Tunneled datagrams are taken
@@ -181,8 +181,9 @@ original destination (`UdpPacket`) and injected through the `Injector` delegate.
 Multicast, broadcast, link-local, DNS and DHCP are never captured; idle flows end after 60 s; a failed association is
 retried at most every 5 s. Each tunneled flow appears in the Connections list (`BeginUdp`).
 
-**Linux:** UDP is not tunneled yet; `LinuxCapture` only passes or drops new flows (verdict cached 30 s), so tunneled
-apps' UDP is blocked and browsers fall back from QUIC to TCP. Plan: [REQUIRED.md §2](../REQUIRED.md#2-udp-through-tunnels-on-linux).
+**Linux:** `LinuxCapture` passes, drops or takes each new flow (verdict cached 30 s). Taken flows (tunnel, or Direct
+to a placeholder) reach `UdpFlows` through a tproxy and the transparent socket `TransparentUdp`, which also delivers
+the replies ([capture.md](capture.md#linux-linuxcapture), #60).
 
 ## Health checking a tunnel by hand: `Checker/TunnelChecker.cs`
 

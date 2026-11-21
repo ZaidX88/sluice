@@ -143,6 +143,11 @@ The capture rights are missing, usually because Sluice was started from the unpa
 during install. Install `libcap2-bin` (Debian/Ubuntu) or `libcap`, then
 run `sudo ./install.sh` again. As a one-off alternative, run `sudo sluice`; notifications may not appear then.
 
+**Arch: "pacman couldn't install the packages Sluice needs"**
+pacman can only install against an up-to-date system: with no synced package database, or one newer than the installed
+packages, it reports "target not found" or conflicting files. The installer stops there without changing anything,
+rather than upgrading your whole system. Run `sudo pacman -Syu`, then `sudo ./install.sh` again.
+
 **"nftables is not installed"**
 Run `sudo ./install.sh` again with internet access; it installs nftables. Or install the `nftables` package yourself.
 

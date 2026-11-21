@@ -15,6 +15,10 @@ into the version's section, and that section, with the install links, becomes th
 - Linux: Sluice's windows have their own title bar and border in the app's theme, like on Windows, instead of the
   desktop's (#84).
 
+### Fixed
+- Linux: on Arch, when pacman can't install the packages Sluice needs (an old or never-synced package database),
+  install.sh stops with what to run (`sudo pacman -Syu`) instead of carrying on without them (#140).
+
 <!-- Add a line under one of these headings; create the heading if it isn't here yet:
 ### Added
 ### Changed

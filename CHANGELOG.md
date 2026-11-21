@@ -14,6 +14,8 @@ into the version's section, and that section, with the install links, becomes th
 ### Changed
 - Linux: Sluice's windows have their own title bar and border in the app's theme, like on Windows, instead of the
   desktop's (#84).
+- Name resolution, connection and UDP settings now belong to Sluice on this PC, not to each profile, so opening
+  another profile no longer changes them. They start from the profile you last used (#148).
 
 ### Fixed
 - Linux: on Arch, when pacman can't install the packages Sluice needs (an old or never-synced package database),

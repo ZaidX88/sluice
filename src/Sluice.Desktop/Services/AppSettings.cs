@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text.Json;
+using Sluice.Core.Profiles;
 
 namespace Sluice.Desktop.Services;
 
@@ -27,6 +28,11 @@ public sealed class AppSettings
     /// <summary>Windows notifications when tunnels connect, disconnect or give up.</summary>
     public bool TunnelNotifications { get; set; } = true;
     public string LogDirectory { get; set; } = Path.Combine(Folder, "Logs");
+
+    /// <summary>Name resolution, connection and UDP options for every profile (#148). Null until the first profile
+    /// Sluice opens (or the first change on the Settings page) supplies them: that profile's values carry over once,
+    /// and from then on these win over what a profile file says.</summary>
+    public NetworkSettings? Network { get; set; }
 
     /// <summary><paramref name="path"/> for display: the user's folders shortened (%APPDATA%\…, ~/…), so the page
     /// and its screenshots don't show the account name.</summary>
@@ -70,6 +76,9 @@ public sealed class AppSettings
         return new AppSettings();
     }
 
+    /// <summary>The app-wide network options, taken from <paramref name="current"/> the first time they're needed.</summary>
+    public NetworkSettings NetworkFrom(ProfileOptions current) => Network ??= NetworkSettings.From(current);
+
     public void Save()
     {
         try
@@ -79,5 +88,50 @@ public sealed class AppSettings
         }
         catch (IOException) { }
         catch (UnauthorizedAccessException) { }
+    }
+}
+
+/// <summary>
+/// The options the Settings page shows for name resolution, connections and UDP. They belong to the app, not to a
+/// profile (#148), so switching profile never changes them. <see cref="ApplyTo"/> copies them into a profile's
+/// options, which the engine reads and which are saved in the profile file, so <c>sluice-cli</c> running that file
+/// behaves as the app did. Password protection is not here: it belongs to each profile file.
+/// </summary>
+public sealed class NetworkSettings
+{
+    public bool ResolveViaTunnel { get; set; }
+    public string ResolveLocallyList { get; set; } = "%ComputerName%; localhost; *.local";
+    public bool OnlyListedViaTunnel { get; set; }
+    public bool LeakPrevention { get; set; }
+    public bool BlockOtherQueryTypes { get; set; }
+    public bool LoopDetection { get; set; } = true;
+    public bool HandleDirectConnections { get; set; }
+    public bool IncludeSystemServices { get; set; }
+    public UdpMode Udp { get; set; } = UdpMode.Tunnel;
+
+    public static NetworkSettings From(ProfileOptions o) => new()
+    {
+        ResolveViaTunnel = o.Resolve.ViaProxy,
+        ResolveLocallyList = o.Resolve.ExclusionList,
+        OnlyListedViaTunnel = o.Resolve.OnlyFromListMode,
+        LeakPrevention = o.LeakPreventionMode,
+        BlockOtherQueryTypes = o.Resolve.BlockNonATypes,
+        LoopDetection = o.ConnectionLoopDetection,
+        HandleDirectConnections = o.HandleDirectConnections,
+        IncludeSystemServices = o.ProcessServices,
+        Udp = o.Udp,
+    };
+
+    public void ApplyTo(ProfileOptions o)
+    {
+        o.Resolve.ViaProxy = ResolveViaTunnel;
+        o.Resolve.ExclusionList = ResolveLocallyList;
+        o.Resolve.OnlyFromListMode = OnlyListedViaTunnel;
+        o.LeakPreventionMode = LeakPrevention;
+        o.Resolve.BlockNonATypes = BlockOtherQueryTypes;
+        o.ConnectionLoopDetection = LoopDetection;
+        o.HandleDirectConnections = HandleDirectConnections;
+        o.ProcessServices = IncludeSystemServices;
+        o.Udp = Udp;
     }
 }

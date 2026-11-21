@@ -1,6 +1,7 @@
 using System.Windows.Input;
 using Sluice.Desktop.Mvvm;
 using Sluice.Desktop.Services;
+using Sluice.Core;
 using Sluice.Core.Profiles;
 
 namespace Sluice.Desktop.ViewModels;
@@ -19,7 +20,12 @@ public sealed class SettingsViewModel : PageViewModel
             System.IO.Directory.CreateDirectory(Host.Settings.LogDirectory);
             App.OpenFolder(Host.Settings.LogDirectory);
         });
+        CopyVersionCommand = new RelayCommand(() => App.SetClipboardText(SluiceVersion.Text));
     }
+
+    /// <summary>The build's version (#96), for bug reports; <see cref="CopyVersionCommand"/> copies it.</summary>
+    public string VersionText => $"Version {SluiceVersion.Text}";
+    public ICommand CopyVersionCommand { get; }
 
     /// <summary>The current profile's options. The network ones always hold the app's settings (copied in by
     /// <see cref="EngineHost"/>), so the page reads them here; reading never creates the app's settings.</summary>

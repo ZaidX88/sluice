@@ -81,12 +81,22 @@ The settings folder is `<ApplicationData>/Sluice` (`AppSettings.Folder`): `%APPD
 
 | Path | Written by |
 |---|---|
-| `settings.json` | `AppSettings.Save`: last profile path, local SOCKS port (1080), start capture on launch, minimise to tray, file log on/off (on by default), its detail and folder, tunnel idle minutes, tunnel notifications |
+| `settings.json` | `AppSettings.Save`: last profile path, local SOCKS port (1080), start capture on launch, minimise to tray, file log on/off (on by default), its detail and folder, tunnel idle minutes, tunnel notifications, the network options (`Network`, below) |
 | `Profiles/` | `.ppx` imports converted to `.sluice` (`AppSettings.ProfilesFolder`) |
 | `Logs/` | the file log (`FileLog`), default `AppSettings.LogDirectory` |
 | `fake-dns.json` | the capture's fake-IP mappings (`FakeIpPool.DefaultStatePath`) |
 
 A missing or corrupt `settings.json` starts with defaults rather than refusing to launch.
+
+**Network options belong to the app, not the profile (#148).** Name resolution (through the tunnel, the names resolved
+locally, invert, leak prevention, other query types), connections (loop detection, direct connections, system
+services) and the UDP mode live in `AppSettings.Network` (`NetworkSettings`), so opening another profile never changes
+them. `EngineHost` copies them into `Profile.Options` whenever a profile is loaded, created or used, and
+`ApplyNetworkSettings` does the same after a change on the Settings page. The engine and `SluiceProfileSerializer`
+read `Profile.Options` as before, so the saved profile file carries the app's values and `sluice-cli` running it
+behaves as the app did. `Network` is null until the first profile Sluice opens (or the first change on the page): that
+profile's values carry over once, and from then on the app's win over a file's. Password protection stays in each
+profile.
 
 ## Editing a profile in the app
 

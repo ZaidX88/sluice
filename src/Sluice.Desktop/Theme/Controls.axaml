@@ -40,11 +40,20 @@
     <ControlTheme x:Key="DangerButton" TargetType="Button" BasedOn="{StaticResource ButtonBase}">
         <Setter Property="Foreground" Value="{DynamicResource Danger}"/>
     </ControlTheme>
+    <!-- Text-only button (#136): the text colour, so it doesn't look disabled, and a filled pill on hover so it reads as
+         clickable. Disabled stays at the base's 0.35 opacity, with no hover fill and no hand cursor. -->
     <ControlTheme x:Key="GhostButton" TargetType="Button" BasedOn="{StaticResource ButtonBase}">
         <Setter Property="Background" Value="Transparent"/>
         <Setter Property="BorderThickness" Value="0"/>
-        <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
+        <Setter Property="Foreground" Value="{DynamicResource Text}"/>
         <Setter Property="Padding" Value="8,0"/>
+        <Style Selector="^:pointerover /template/ Border#Bd">
+            <Setter Property="Background" Value="{DynamicResource Hover}"/>
+            <Setter Property="Opacity" Value="1"/>
+        </Style>
+        <Style Selector="^:pressed /template/ Border#Bd"><Setter Property="Background" Value="{DynamicResource Hover}"/></Style>
+        <Style Selector="^:disabled"><Setter Property="Cursor" Value="Arrow"/></Style>
+        <Style Selector="^:disabled /template/ Border#Bd"><Setter Property="Background" Value="Transparent"/></Style>
     </ControlTheme>
     <ControlTheme x:Key="IconButton" TargetType="Button" BasedOn="{StaticResource GhostButton}">
         <Setter Property="Width" Value="32"/>

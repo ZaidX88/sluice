@@ -47,7 +47,6 @@
                                 <MenuItem Header="Open profile…" Command="{Binding OpenCommand}"/>
                                 <MenuItem Header="Save" Command="{Binding SaveCommand}"/>
                                 <MenuItem Header="Save as…" Command="{Binding SaveAsCommand}"/>
-                                <MenuItem Header="Export for Proxifier (.ppx)…" Command="{Binding ExportProxifierCommand}"/>
                                 <Separator/>
                                 <MenuItem Header="New profile" Command="{Binding NewCommand}"/>
                             </MenuFlyout>

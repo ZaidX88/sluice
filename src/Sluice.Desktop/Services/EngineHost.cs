@@ -159,24 +159,13 @@ public sealed class EngineHost : IAsyncDisposable
 
     // ---------------- profile ----------------
 
-    /// <summary>
-    /// Opens a profile. A Proxifier .ppx is imported: it is converted into a new .sluice file in the
-    /// Sluice profiles folder (autosaving back into .ppx would lose tunnels it cannot store).
-    /// </summary>
-    /// <returns>A message for the user when the file was imported, otherwise null.</returns>
-    public string? LoadProfile(string path, MasterPasswordProvider? askMaster)
+    /// <summary>Opens a Sluice profile (<c>.sluice</c>). Other files are refused, so autosave never writes Sluice's
+    /// format into a file of another kind.</summary>
+    public void LoadProfile(string path, MasterPasswordProvider? askMaster)
     {
+        if (!IsSluiceProfile(path))
+            throw new FormatException($"Not a Sluice profile. Sluice opens {ProfileFile.Extension} files only.");
         var profile = ProfileFile.Load(path, askMaster);
-        string? note = null;
-        if (ProfileFile.IsProxifier(path))
-        {
-            var target = UniquePath(Path.Combine(AppSettings.ProfilesFolder, Path.GetFileNameWithoutExtension(path) + ProfileFile.Extension));
-            Directory.CreateDirectory(AppSettings.ProfilesFolder);
-            SluiceProfileSerializer.Save(profile, target);
-            note = $"Imported {Path.GetFileName(path)} from Proxifier as {Path.GetFileName(target)}. Changes are saved there; the original file is untouched.";
-            Tracker.Write(LogLevel.Normal, note);
-            path = target;
-        }
         Profile = profile;
         ProfilePath = path;
         IsDirty = false;
@@ -184,29 +173,10 @@ public sealed class EngineHost : IAsyncDisposable
         Settings.LastProfilePath = path;
         Settings.Save();
         ProfileChanged?.Invoke();
-        return note;
     }
 
-    private static string UniquePath(string path)
-    {
-        if (!File.Exists(path)) return path;
-        var dir = Path.GetDirectoryName(path)!;
-        var name = Path.GetFileNameWithoutExtension(path);
-        for (var i = 2; ; i++)
-        {
-            var candidate = Path.Combine(dir, $"{name} ({i}){ProfileFile.Extension}");
-            if (!File.Exists(candidate)) return candidate;
-        }
-    }
-
-    /// <summary>Writes a Proxifier-compatible copy; returns what could not be exported.</summary>
-    public List<string> ExportProxifier(string path)
-    {
-        var warnings = new List<string>();
-        ProfileFile.Save(Profile, path, warnings);
-        Tracker.Write(LogLevel.Normal, $"Exported {Path.GetFileName(path)} for Proxifier" + (warnings.Count > 0 ? $" ({warnings.Count} item(s) left out)" : ""));
-        return warnings;
-    }
+    private static bool IsSluiceProfile(string path) =>
+        path.EndsWith(ProfileFile.Extension, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Use an in-memory profile without a file (demo / screenshots).</summary>
     public void UseProfile(Profile profile)
@@ -241,8 +211,8 @@ public sealed class EngineHost : IAsyncDisposable
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
-            // Saving always writes Sluice's format; Proxifier copies go through ExportProxifier.
-            if (ProfileFile.IsProxifier(path)) path = Path.ChangeExtension(path, ProfileFile.Extension);
+            // Saving always writes Sluice's format, so the file always gets its extension.
+            if (!IsSluiceProfile(path)) path = Path.ChangeExtension(path, ProfileFile.Extension);
             SluiceProfileSerializer.Save(Profile, path);
             ProfilePath = path;
             IsDirty = false;

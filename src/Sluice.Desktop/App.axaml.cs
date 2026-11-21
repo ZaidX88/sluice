@@ -72,8 +72,7 @@ public partial class App : Application
         {
             try
             {
-                var note = _host.LoadProfile(profilePath, (name, confirm) => Dialogs.AskMasterPassword(name, confirm));
-                if (note is not null) vm.ShowInfo(note);
+                _host.LoadProfile(profilePath, (name, confirm) => Dialogs.AskMasterPassword(name, confirm));
             }
             catch (OperationCanceledException) { }
             catch (Exception ex) { vm.Banner = $"Could not open {Path.GetFileName(profilePath)}: {ex.Message}"; }

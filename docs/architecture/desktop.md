@@ -68,8 +68,8 @@ from other threads are marshalled with `Dispatcher.UIThread.Post`.
 
 - **Engine objects:** one `ConnectionTracker` (level Verbose), `Statistics`, one `RoutingEngine` for the whole run,
   the optional `FileLog`s.
-- **Profile:** `LoadProfile` (`.ppx` imported to a new `.sluice`), `NewProfile`, `UseProfile`, `CommitProfileEdit`
-  (reload + autosave), `TrySave`, `ExportProxifier`. Events `ProfileChanged`, `StateChanged`, `Notice`.
+- **Profile:** `LoadProfile` (`.sluice` files only), `NewProfile`, `UseProfile`, `CommitProfileEdit`
+  (reload + autosave), `TrySave`. Events `ProfileChanged`, `StateChanged`, `Notice`.
 - **SOCKS5:** `StartSocks` / `RestartSocksAsync` on `127.0.0.1:<AppSettings.SocksPort>`.
 - **Capture:** `StartInterception` checks `CaptureUnavailableReason` and `HasCaptureRights`, calls
   `OsPlatform.Current.CreateCapture(Engine)`, subscribes to `RelayUnreachable`, starts it and warms up tunnels;
@@ -111,7 +111,7 @@ visible page (`PageViewModel.Refresh`) and updates rates and status. `TunnelsVie
     through the launcher, #129);
   - capture impossible (Linux without `nft`) → `CaptureUnavailableReason`;
   - `FirewallBlocked` (from `RelayUnreachable`) → "Allow" button running `AllowThroughFirewall`;
-  - neutral notices (`ShowInfo`), e.g. "imported from Proxifier".
+  - neutral notices (`ShowInfo`), e.g. "Sluice is now allowed in Windows Firewall".
 
 Checking UI changes: `Sluice.Desktop --screenshot <dir> [--theme dark]`, light and dark (see
 [windows/BUILD.md](../windows/BUILD.md)). Known UI gaps: [ui/FIXES.md §1 and §2](../ui/FIXES.md).

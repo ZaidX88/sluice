@@ -196,3 +196,7 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   reading, so the new copy's write failed and it took that for "nobody listening"; it now reads the request to its end,
   and the new copy counts a successful connect as "another Sluice runs". On Windows the pipe allows the same user from
   a non-elevated process (`NamedPipeServerStreamAcl`), so a normal launch reaches a Sluice running as administrator.
+- UDP flow logic in Core (2026-11-22, #59): `UdpFlows` with `AppDatagram` / `IDatagramSender` (platforms.md §6.4), the
+  flow logic of `UdpNat` with no packet format in it, beside the unchanged `UdpNat` until #53 switches Windows over.
+  New: a Direct rule to a placeholder address sends the datagram by name through the flow's own UDP socket (replies
+  from the placeholder), where `UdpNat` dropped it. Tests in `UdpFlowsTests` with a fake sender and a local echo server.

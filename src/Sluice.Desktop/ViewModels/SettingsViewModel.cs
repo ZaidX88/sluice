@@ -13,7 +13,7 @@ public sealed class SettingsViewModel : PageViewModel
         : base(host, "Settings", "settings", "These apply to Sluice on this PC, whichever profile is open. Only how passwords are stored belongs to the profile.")
     {
         _socksPortText = host.Settings.SocksPort.ToString();
-        ApplySocksPortCommand = new AsyncCommand(ApplySocksPortAsync, () => SocksPortValid && SocksPortText != Host.Settings.SocksPort.ToString());
+        ToggleAdvancedCommand = new RelayCommand(() => AdvancedOpen = !AdvancedOpen);
         OpenLogFolderCommand = new RelayCommand(() =>
         {
             System.IO.Directory.CreateDirectory(Host.Settings.LogDirectory);
@@ -34,6 +34,33 @@ public sealed class SettingsViewModel : PageViewModel
         Host.ApplyNetworkSettings();
         Raise(name);
     }
+
+    // ----- Privacy: one choice on the main page -----
+    public string[] ResolveChoices { get; } =
+    [
+        "Through the tunnel (recommended, no DNS leaks)",
+        "On this PC",
+    ];
+
+    public int ResolveIndex
+    {
+        get => O.Resolve.ViaProxy ? 0 : 1;
+        set
+        {
+            if (value < 0 || (value == 0) == O.Resolve.ViaProxy) return;
+            ResolveViaProxy = value == 0;
+            Raise();
+        }
+    }
+
+    // ----- Advanced: closed by default, remembered -----
+    public bool AdvancedOpen
+    {
+        get => Host.Settings.SettingsAdvancedOpen;
+        set { Host.Settings.SettingsAdvancedOpen = value; Host.Settings.Save(); Raise(); }
+    }
+
+    public ICommand ToggleAdvancedCommand { get; }
 
     // ----- Name resolution (app-wide) -----
     public bool ResolveViaProxy { get => O.Resolve.ViaProxy; set => SetNetwork(n => n.ResolveViaTunnel = value); }
@@ -78,23 +105,31 @@ public sealed class SettingsViewModel : PageViewModel
         set { Host.Settings.TunnelNotifications = value; Host.Settings.Save(); Raise(); }
     }
 
-    // ----- UDP (app-wide) -----
-    private static readonly UdpMode[] UdpOrder = [UdpMode.Tunnel, UdpMode.BlockQuic, UdpMode.BlockAll, UdpMode.Bypass];
+    // ----- UDP (app-wide), worded without "UDP" or "QUIC" -----
+    // Linux can't tunnel UDP yet (#47): there "through the tunnel" blocks it, so the choice is shown as "Block it".
+    private static readonly UdpMode[] UdpOrder = OperatingSystem.IsLinux()
+        ? [UdpMode.BlockAll, UdpMode.BlockQuic, UdpMode.Bypass]
+        : [UdpMode.Tunnel, UdpMode.BlockQuic, UdpMode.BlockAll, UdpMode.Bypass];
 
-    public string[] UdpModes { get; } =
-    [
-        "Through the tunnel — SOCKS5 and encrypted tunnels; blocked if the tunnel cannot carry UDP",
-        "Block QUIC (UDP 443) so browsers use TCP; other UDP goes direct",
-        "Block all UDP of tunneled apps",
-        "Bypass — UDP goes direct, outside the tunnel",
-    ];
+    private static string UdpLabel(UdpMode mode) => mode switch
+    {
+        UdpMode.Tunnel => "Through the tunnel (blocked if the tunnel can't carry it)",
+        UdpMode.BlockQuic => "Make browsers use regular HTTPS; the rest goes direct",
+        UdpMode.BlockAll => "Block it",
+        _ => "Let it go direct, outside the tunnel",
+    };
+
+    public string[] UdpModes { get; } = UdpOrder.Select(UdpLabel).ToArray();
+
+    private static UdpMode Shown(UdpMode mode) =>
+        OperatingSystem.IsLinux() && mode == UdpMode.Tunnel ? UdpMode.BlockAll : mode;
 
     public int UdpIndex
     {
-        get => Array.IndexOf(UdpOrder, O.Udp);
+        get => Array.IndexOf(UdpOrder, Shown(O.Udp));
         set
         {
-            if (value < 0 || UdpOrder[value] == O.Udp) return;
+            if (value < 0 || UdpOrder[value] == Shown(O.Udp)) return;
             SetNetwork(n => n.Udp = UdpOrder[value]);
         }
     }
@@ -182,17 +217,24 @@ public sealed class SettingsViewModel : PageViewModel
     public string SocksPortText
     {
         get => _socksPortText;
-        set { Set(ref _socksPortText, value); Raise(nameof(SocksPortValid)); }
+        set { Set(ref _socksPortText, value); Raise(nameof(SocksPortValid)); Raise(nameof(SocksPortError)); }
     }
 
     public bool SocksPortValid => int.TryParse(SocksPortText, out var p) && p is > 0 and < 65536;
 
-    public ICommand ApplySocksPortCommand { get; }
+    /// <summary>Shown only for a port the user typed, not for the one in use (screenshot mode runs on port 0).</summary>
+    public bool SocksPortError => !SocksPortValid && SocksPortText != Host.Settings.SocksPort.ToString();
+
     public ICommand OpenLogFolderCommand { get; }
 
-    private async Task ApplySocksPortAsync()
+    /// <summary>Applies the port when the field loses focus or on Enter (no Apply button). An invalid port keeps the
+    /// current one; the page says why.</summary>
+    public async Task CommitSocksPortAsync()
     {
-        Host.Settings.SocksPort = int.Parse(SocksPortText);
+        if (!SocksPortValid) return;
+        var port = int.Parse(SocksPortText);
+        if (port == Host.Settings.SocksPort) return;
+        Host.Settings.SocksPort = port;
         Host.Settings.Save();
         await Host.RestartSocksAsync();
     }
@@ -203,7 +245,7 @@ public sealed class SettingsViewModel : PageViewModel
                  {
                      nameof(ResolveViaProxy), nameof(OnlyListed), nameof(ExclusionList), nameof(BlockNonATypes),
                      nameof(LeakPrevention), nameof(LoopDetection), nameof(HandleDirect), nameof(ProcessServices),
-                     nameof(UdpIndex), nameof(EncryptionIndex),
+                     nameof(UdpIndex), nameof(ResolveIndex), nameof(EncryptionIndex),
                  })
             Raise(p);
     }

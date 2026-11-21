@@ -28,7 +28,7 @@ Program.cs ──▶ App (App.axaml.cs)
 | `Services/TrayHost.cs` | Whether a tray can show Sluice's icon (#45): always on Windows; on Linux a `org.kde.StatusNotifierWatcher` with `IsStatusNotifierHostRegistered`, asked over the session bus (`Tmds.DBus.Protocol`, which Avalonia already uses) when the window is closed |
 | `Services/AppTray.cs` | Tray icon: open, "Capture traffic" toggle, exit; tooltip with status and rates; icon changes with capture state (`AppIcon`) |
 | `Services/Dialogs.cs` | Modal dialogs (`MessageDialog`, tunnel / rule / import / password dialogs, file pickers) |
-| `Services/ScreenshotMode.cs` | `--screenshot DIR`: a demo profile in memory, real traffic through the app's own SOCKS5 listener, every page rendered to PNG (plus the capture-rights banner); touches no user files, never captures. It replaces `OsPlatform.Current` with a demo platform that offers granting rights and autostart, so both show in the images |
+| `Services/ScreenshotMode.cs` | `--screenshot DIR`: a demo profile in memory, real traffic through the app's own SOCKS5 listener, every page rendered to PNG (Settings also with Advanced open, plus the capture-rights banner); touches no user files, never captures. It replaces `OsPlatform.Current` with a demo platform that offers granting rights and autostart, so both show in the images |
 | `ViewModels/` | `MainViewModel` and one `PageViewModel` per page |
 | `Views/` | The pages (`ConnectionsView`, `StatisticsView`, `LogView`, `TunnelsView`, `RulesView`, `SettingsView`; code-behind in `PageViews.axaml.cs`) and dialogs (`TunnelDialog`, `RuleDialog`, `ImportDialog`, `PasswordDialog`) |
 | `Mvvm/ObservableObject.cs` | A minimal MVVM kit: `ObservableObject`, `RelayCommand`, `AsyncCommand` (no MVVM library) |
@@ -88,6 +88,13 @@ from other threads are marshalled with `Dispatcher.UIThread.Post`.
 `StatisticsViewModel`, `LogViewModel`), **Configure** (`TunnelsViewModel`, `RulesViewModel`), **App**
 (`SettingsViewModel`). It owns the capture switch (`Intercepting`, `TurnOn`), file commands, search, rates and the
 banner.
+
+The **Settings page** (#149, rules in #147) shows what most people change in three short sections: General (start-up,
+tray, tunnel notifications), Privacy (one choice: names looked up through the tunnel or on this PC) and Tunnels (idle
+stop, and UDP worded without "UDP"; on Linux "through the tunnel" shows as "Block it" until #47). Everything else is
+under **Advanced**, closed by default and remembered in `AppSettings.SettingsAdvancedOpen`: the names list and invert,
+leak prevention, other DNS query types, the connection switches, the log and the SOCKS5 port (applied when the field
+loses focus or on Enter). The password card stays at the end until #150 moves it to the profile menu.
 
 The UI does not bind to engine objects directly. A **1-second `DispatcherTimer`** in `MainViewModel` drains the log
 (`LogViewModel.Pump`, which queues lines from the tracker's `Log` event in a `ConcurrentQueue`), refreshes only the

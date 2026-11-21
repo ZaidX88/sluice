@@ -11,7 +11,7 @@ requests don't conflict. Contributors may work in any area, one claimed issue at
 |---|---|---|
 | **Linux** | `src/Sluice.Platform.Linux/`, `scripts/linux/`, `packaging/linux/`, `scripts/package-linux.sh`, `docs/linux/`, `tests/Sluice.Tests.Linux/` | capture (nftables, NFQUEUE), DNS, process lookup, notifications, testing on real distributions: [linux/WORK.md](linux/WORK.md) |
 | **Windows** | `src/Sluice.Platform.Windows/`, `docs/windows/`, the Windows-only files still in Core (listed in `AGENTS.md`), `scripts/*.ps1` (including `scripts/package-windows.ps1`), `packaging/windows/`, `tests/Sluice.Tests.Windows/` | WinDivert capture, Windows integration, the Windows installer |
-| **UI** | `src/Sluice.Desktop/` (legacy `src/Sluice.App/`), `docs/ui/`, `docs/architecture/desktop.md` | the Avalonia app on both OSes |
+| **UI** | `src/Sluice.Desktop/`, `docs/ui/`, `docs/architecture/desktop.md` | the Avalonia app on both OSes |
 | **Core** (owner; `help wanted` issues: anyone) | everything else (`src/Sluice.Core/` shared engine, `src/Sluice.Cli/`, shared tests `tests/Sluice.Tests/` and `tests/Sluice.Tests.Support/`, `docs/core/`, `.github/`, build files) | the repository owner |
 | **Shared docs** | `docs/*.md` (`STATUS.md`, `REQUIRED.md`, `ARCHITECTURE.md`, `HISTORY.md`, …), `docs/architecture/` and `CHANGELOG.md` | every area, in the pull request whose change they describe |
 

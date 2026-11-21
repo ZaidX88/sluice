@@ -50,7 +50,6 @@ src/Sluice.Platform.Windows  Windows-specific code (notifications, WinDivert cap
 src/Sluice.Platform.Linux    Linux-specific code (nftables/NFQUEUE capture, /proc lookups, notifications)
 src/Sluice.Desktop           the desktop app (Avalonia), Windows and Linux
 src/Sluice.Cli               command line
-src/Sluice.App               the old WPF app (being retired)
 tests/Sluice.Tests*          xUnit tests: shared, .Linux, .Windows, .Support (helpers)
 build/                       build-time dependency fetching
 scripts/                     live-test helpers, sing-box download scripts

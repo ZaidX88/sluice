@@ -50,8 +50,7 @@ All paths below are relative to `src/` unless they start with another top-level 
 `Sluice.Core` has no UI and is shared by every build. The platform modules implement `IPlatformServices`; the desktop
 app picks one at compile time ([platforms.md](architecture/platforms.md)). Some Windows-only code still sits in Core
 (`Interceptor`, `WinDivertNative`, the iphlpapi part of `ProcessLookup`, `Dpapi`, the job object in `SingBoxSession`);
-see [REQUIRED.md §1](REQUIRED.md#1-move-windows-only-code-out-of-core). The old WPF app (`Sluice.App`) is still in the
-repository until it is retired ([REQUIRED.md §3](REQUIRED.md#3-retire-the-wpf-app)); nothing here describes it.
+see [REQUIRED.md §1](REQUIRED.md#1-move-windows-only-code-out-of-core).
 
 ## The life of one connection
 

@@ -80,7 +80,9 @@ settings.
 - **Linux:** a package with `install.sh`, which installs what Sluice needs (.NET, nftables and the rest). It gives the
   capture rights to a small launcher, so Sluice captures without running as root. A copy run without the installer can
   get the same rights from the app, and Sluice can start at login (#69).
-- **Windows:** <!-- the installer and package (#64), if it is in this release --> run as administrator for capture.
+- **Windows:** an installer (`Sluice-Setup-<version>-x64.exe`) with everything Sluice needs, .NET included, so it
+  installs offline: Start Menu shortcut, firewall rules, and a clean uninstall (#64). Run Sluice as administrator for
+  capture.
 
 ### Known limitations
 

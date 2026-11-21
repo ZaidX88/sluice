@@ -18,7 +18,6 @@
 /tests/Sluice.Tests.Windows/
 
 /src/Sluice.Desktop/
-/src/Sluice.App/
 /docs/ui/
 
 /docs/*.md

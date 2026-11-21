@@ -20,7 +20,6 @@ dotnet run --project src/Sluice.Desktop -f net10.0-windows10.0.19041.0
   `netsh`).
 - **Notifications** are titled "Sluice" with its icon through a Start Menu shortcut carrying the app ID "Sluice"; the app
   creates it on first start.
-- The old WPF app (`src/Sluice.App`) still builds; it is being retired.
 
 ## Command line
 

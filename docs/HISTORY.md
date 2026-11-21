@@ -196,3 +196,6 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   reading, so the new copy's write failed and it took that for "nobody listening"; it now reads the request to its end,
   and the new copy counts a successful connect as "another Sluice runs". On Windows the pipe allows the same user from
   a non-elevated process (`NamedPipeServerStreamAcl`), so a normal launch reaches a Sluice running as administrator.
+- WPF app retired (2026-11-22, #63, #48): `src/Sluice.App` and its `Sluice.slnx` entry are deleted, after the hand check
+  of the Avalonia app on Windows (#61). The UI area, CODEOWNERS and the area check no longer list it; REQUIRED.md §3 is
+  marked done.

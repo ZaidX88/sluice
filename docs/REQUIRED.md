@@ -44,16 +44,8 @@ capture (TPROXY):
 
 ## 3. Retire the WPF app
 
-Check by hand on Windows that the Avalonia app does everything `src/Sluice.App` did:
-- tray (show, hide, exit, capture toggle); single instance (a second launch shows the window);
-- "Restart as administrator" with `--intercept`; firewall banner and Allow button;
-- tunnel notifications (title "Sluice" + icon);
-- open / save / recent profile, master password; import links and subscriptions;
-- closing the window goes to the tray with the hint toast;
-- `--profile`, `--log-file`, `--theme`, `--screenshot`.
-
-Then remove `Sluice.App` from `Sluice.slnx` and delete it. The Start Menu shortcut / AUMID code is already in the
-Windows module (`StartMenuShortcut`, #62); only the WPF app's own copy goes with it.
+**Done** (#48): the Avalonia app was checked against the WPF app by hand on Windows (#61; its gaps are issues of
+their own), and `src/Sluice.App` was deleted (#63).
 
 ## 4. Windows release package
 

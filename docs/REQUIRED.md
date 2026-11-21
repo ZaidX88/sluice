@@ -13,7 +13,7 @@ interface it hands out). Still in Core:
 |---|---|
 | `Interception/WinDivertNative.cs`, `Interceptor.cs`, WinDivert I/O in `UdpNat.cs` | `Sluice.Platform.Windows`. `PacketReflector`, `DnsRedirector`, `TcpPacket`, `UdpPacket` are pure packet logic and can stay. |
 | `Platform/ProcessLookup.cs` (iphlpapi/kernel32 code) | `WindowsProcessLookup : IProcessLookup`; Core keeps the interface and `Backend`. |
-| `Profiles/Dpapi.cs` (used by `ProxifierPasswordCodec`) | an `ISecretProtector` in Core. Linux: a clear "not supported" for DPAPI blobs from `.ppx`. |
+| `Profiles/Dpapi.cs` (used by `ProxifierPasswordCodec`) | an `ISecretProtector` in Core. Linux: a clear "not supported" for "account"-mode (DPAPI) passwords. |
 | Job object in `Tunnels/SingBoxSession.cs` | `IPlatformServices.TieChildProcess(Process)`. Windows: Job object. Linux: done (#57): SIGTERM to the helpers on exit, and the next start ends those of a Sluice killed with SIGKILL. |
 | `Interceptor.FlushOsDnsCache` (dnsapi) | platform method; Linux uses `resolvectl flush-caches`. |
 | WinDivert entries in `build/Dependencies.targets` | import from the Windows module instead of Core. |
@@ -48,7 +48,7 @@ Check by hand on Windows that the Avalonia app does everything `src/Sluice.App` 
 - tray (show, hide, exit, capture toggle); single instance (a second launch shows the window);
 - "Restart as administrator" with `--intercept`; firewall banner and Allow button;
 - tunnel notifications (title "Sluice" + icon);
-- open / save / recent profile, master password; import links and subscriptions; export to `.ppx`;
+- open / save / recent profile, master password; import links and subscriptions;
 - closing the window goes to the tray with the hint toast;
 - `--profile`, `--log-file`, `--theme`, `--screenshot`.
 

@@ -1,5 +1,5 @@
 using System.Security.Cryptography;
-using System.Xml.Linq;
+using System.Text.Json.Nodes;
 using Sluice.Core.Profiles;
 
 namespace Sluice.Tests;
@@ -124,45 +124,38 @@ public class PasswordEncryptionTests
 
     [Theory]
     [MemberData(nameof(AllModes))]
-    public void Ppx_RoundTrip_AllModes(PasswordEncryptionMode mode)
+    public void SluiceProfile_RoundTrip_AllModes(PasswordEncryptionMode mode)
     {
         var master = mode == PasswordEncryptionMode.MasterPassword ? "mp" : null;
-        var xml = PpxSerializer.ToXml(ProfileWith(mode, master)).ToString();
+        var json = SluiceProfileSerializer.Serialize(ProfileWith(mode, master));
 
-        var enc = XDocument.Parse(xml).Root!.Element("Options")!.Element("Encryption")!;
-        Assert.Equal(mode switch
-        {
-            PasswordEncryptionMode.Disabled => "disabled",
-            PasswordEncryptionMode.CurrentUser => "account",
-            PasswordEncryptionMode.MasterPassword => "master",
-            _ => "basic",
-        }, enc.Attribute("mode")!.Value);
-        Assert.Equal(mode is PasswordEncryptionMode.CurrentUser or PasswordEncryptionMode.MasterPassword, enc.Element("Hash") is not null);
-        Assert.Equal(mode == PasswordEncryptionMode.Disabled, xml.Contains("<Password>s3cret</Password>"));
+        var doc = JsonNode.Parse(json)!;
+        Assert.Equal(mode == PasswordEncryptionMode.MasterPassword, doc["passwordHash"] is not null);
+        Assert.Equal(mode == PasswordEncryptionMode.Disabled, json.Contains("s3cret"));
 
-        var back = PpxSerializer.Parse(xml, (_, _) => master);
+        var back = SluiceProfileSerializer.Parse(json, (_, _) => master);
         Assert.Equal("s3cret", back.Tunnels[0].Password);
         Assert.Equal("alice", back.Tunnels[0].Username);
         Assert.Equal(mode, back.Options.PasswordEncryption);
     }
 
     [Fact]
-    public void Ppx_Master_RetriesThenFails_AndCancelPropagates()
+    public void SluiceProfile_Master_RetriesThenFails_AndCancelPropagates()
     {
-        var xml = PpxSerializer.ToXml(ProfileWith(PasswordEncryptionMode.MasterPassword, "mp")).ToString();
+        var json = SluiceProfileSerializer.Serialize(ProfileWith(PasswordEncryptionMode.MasterPassword, "mp"));
 
         var asked = 0;
-        var ok = PpxSerializer.Parse(xml, (_, _) => ++asked < 3 ? "nope" : "mp");
-        Assert.Equal(3, asked);
+        var ok = SluiceProfileSerializer.Parse(json, (_, _) => ++asked < SluiceProfileSerializer.MasterPasswordAttempts ? "nope" : "mp");
+        Assert.Equal(SluiceProfileSerializer.MasterPasswordAttempts, asked);
         Assert.Equal("s3cret", ok.Tunnels[0].Password);
         Assert.Equal("mp", ok.MasterPassword);
 
-        Assert.Throws<CryptographicFailure>(() => PpxSerializer.Parse(xml, (_, _) => "nope"));
-        Assert.Throws<OperationCanceledException>(() => PpxSerializer.Parse(xml, (_, _) => null));
-        Assert.Throws<CryptographicFailure>(() => PpxSerializer.Parse(xml));       // no provider at all
+        Assert.Throws<CryptographicFailure>(() => SluiceProfileSerializer.Parse(json, (_, _) => "nope"));
+        Assert.Throws<OperationCanceledException>(() => SluiceProfileSerializer.Parse(json, (_, _) => null));
+        Assert.Throws<CryptographicFailure>(() => SluiceProfileSerializer.Parse(json));       // no provider at all
     }
 
     [Fact]
-    public void Ppx_SavingMasterModeWithoutPassword_Throws() =>
-        Assert.Throws<ArgumentException>(() => PpxSerializer.ToXml(ProfileWith(PasswordEncryptionMode.MasterPassword)));
+    public void SluiceProfile_SavingMasterModeWithoutPassword_Throws() =>
+        Assert.Throws<ArgumentException>(() => SluiceProfileSerializer.Serialize(ProfileWith(PasswordEncryptionMode.MasterPassword)));
 }

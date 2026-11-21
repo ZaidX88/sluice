@@ -3,7 +3,7 @@
 Part of the [architecture reference](../ARCHITECTURE.md). Paths are relative to `src/Sluice.Core/`.
 
 A **tunnel** (`Profiles/Profile.cs`: `Tunnel`) is an outbound route rules can send traffic through. Never call it a
-"proxy" in UI or code; the word survives only in `.ppx` XML and in protocol messages.
+"proxy" in UI or code; the word survives only in protocol messages (and the `proxifierOptions` field of a `.sluice` file).
 
 ## Tunnel types
 

@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Xml.Linq;
 using Sluice.Core.Profiles;
 
 namespace Sluice.Tests;
@@ -94,7 +93,7 @@ public class SluiceProfileTests
     }
 
     [Fact]
-    public void ProfileFile_DetectsFormatByContent_AndSaveIsAtomic()
+    public void ProfileFile_LoadsSluiceOnly_AndSaveIsAtomic()
     {
         var dir = Directory.CreateTempSubdirectory("sluice-profile-").FullName;
         try
@@ -104,57 +103,17 @@ public class SluiceProfileTests
             Assert.False(File.Exists(sluice + ".tmp"));
             Assert.Equal(2, ProfileFile.Load(sluice).Tunnels.Count);
 
-            // A Proxifier file is recognised even with a misleading name.
-            var ppxContent = PpxSerializer.ToXml(Sample()).ToString();
-            var disguised = Path.Combine(dir, "really-ppx.sluice");
-            File.WriteAllText(disguised, ppxContent);
-            Assert.Single(ProfileFile.Load(disguised).Tunnels);
+            // Anything that isn't a Sluice profile is refused with a clear message, whatever its name.
+            var xml = Path.Combine(dir, "other.ppx");
+            File.WriteAllText(xml, "<ProxifierProfile version=\"102\"><RuleList/></ProxifierProfile>");
+            Assert.Equal(ProfileFile.NotASluiceProfile, Assert.Throws<FormatException>(() => ProfileFile.Load(xml)).Message);
+            var disguised = Path.Combine(dir, "really-xml.sluice");
+            File.Copy(xml, disguised);
+            Assert.Equal(ProfileFile.NotASluiceProfile, Assert.Throws<FormatException>(() => ProfileFile.Load(disguised)).Message);
         }
         finally
         {
             Directory.Delete(dir, true);
         }
-    }
-
-    [Fact]
-    public void PpxExport_DropsEncryptedTunnels_WithWarnings_AndKeepsProxifierWording()
-    {
-        var warnings = new List<string>();
-        var xml = PpxSerializer.ToXml(Sample(), warnings);
-
-        var proxies = xml.Root!.Element("ProxyList")!.Elements("Proxy").ToList();
-        Assert.Single(proxies);
-        Assert.Equal("100", proxies[0].Attribute("id")!.Value);
-
-        var rules = xml.Root.Element("RuleList")!.Elements("Rule").ToDictionary(r => r.Element("Name")!.Value, r => r.Element("Action")!);
-        Assert.Equal("Direct", rules["Browsers"].Attribute("type")!.Value);         // its VLESS tunnel was dropped
-        Assert.Equal("Chain", rules["Work"].Attribute("type")!.Value);
-        var chainHops = xml.Root.Element("ChainList")!.Element("Chain")!.Elements("Proxy").Select(h => h.Value);
-        Assert.Equal(["100"], chainHops);
-
-        Assert.Contains(warnings, w => w.Contains("Edge") && w.Contains("VLESS"));
-        Assert.Contains(warnings, w => w.Contains("Browsers"));
-        Assert.Contains(warnings, w => w.Contains("Both"));
-
-        // A rule using a plain tunnel is written with Proxifier's own word, "Proxy".
-        var simple = Profile.CreateDefault();
-        simple.Tunnels.Add(new Tunnel { Id = 1, Address = "a", Port = 1 });
-        simple.Rules.Single(r => r.IsDefault).Action = RuleAction.ViaTunnel(1);
-        var dflt = PpxSerializer.ToXml(simple).Root!.Element("RuleList")!.Elements("Rule").Single(r => r.Element("Name")!.Value == "Default");
-        Assert.Equal("Proxy", dflt.Element("Action")!.Attribute("type")!.Value);
-        Assert.Equal("1", dflt.Element("Action")!.Value);
-    }
-
-    [Fact]
-    public void ImportedPpx_ThenSavedAsSluice_KeepsEverything()
-    {
-        var original = Sample();
-        original.Tunnels.RemoveAll(t => !t.Type.IsSimple());
-        original.Chains.Clear();
-        original.Rules.RemoveAll(r => r.Name is "Browsers" or "Work");
-        var fromPpx = PpxSerializer.Parse(PpxSerializer.ToXml(original).ToString());
-        var back = SluiceProfileSerializer.Parse(SluiceProfileSerializer.Serialize(fromPpx));
-        Assert.Equal("s3cret", back.FindTunnel(100)!.Password);
-        Assert.Equal(["Localhost", "Default"], back.Rules.Select(r => r.Name));
     }
 }

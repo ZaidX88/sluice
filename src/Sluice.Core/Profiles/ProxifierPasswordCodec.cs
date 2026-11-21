@@ -13,8 +13,8 @@ namespace Sluice.Core.Profiles;
 ///   type 2 "master"  : AES-256-CBC, IV = 0, key[i] = i XOR pw[UTF-16LE bytes, cycled over 32]
 ///   AES plaintext    = FF FF FF FF ‖ UTF-16LE text ‖ 00 00 ‖ padding, nBlocks = ⌈(2n+6)/16⌉, at least 2
 ///
-/// The profile's &lt;Encryption&gt; element also carries &lt;Hash&gt; = Encode("A") in account/master
-/// modes, used to check the master password before any proxy password is decrypted.
+/// A profile also stores a hash = Encode("A") in account/master modes ("passwordHash" in a .sluice file), used to
+/// check the master password before any tunnel password is decrypted.
 /// </summary>
 public sealed class ProxifierPasswordCodec : IPasswordCodec
 {

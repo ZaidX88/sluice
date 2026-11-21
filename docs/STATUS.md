@@ -12,7 +12,7 @@ Sluice captures other applications' connections and routes each one by rules: **
 
 | Area | Windows | Linux |
 |---|---|---|
-| Routing engine, rules, chains, `.sluice` profiles, `.ppx` (Proxifier) import/export, profile password encryption | ✅ | ✅ |
+| Routing engine, rules, chains, `.sluice` profiles, profile password encryption | ✅ | ✅ |
 | Tunnels: SSH (sing-box client, SSH.NET fallback; direct / payload / TLS+SNI modes), SOCKS4/5, HTTP(S) | ✅ | ✅ |
 | Tunnels through the sing-box helper: Shadowsocks (incl. 2022), VMess, VLESS (+REALITY/Vision), Trojan, Hysteria2, TUIC; ws / gRPC / HTTP / HTTPUpgrade transports | ✅ | ✅ |
 | Share links and subscriptions | ✅ | ✅ |

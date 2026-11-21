@@ -13,7 +13,7 @@ SOCKS, HTTP(S), VLESS, VMess, Trojan, Shadowsocks, Hysteria2, TUIC) or a chain o
   HTTP transports.
 - **Share links and subscriptions** (`vless://`, `vmess://`, `ss://`, `trojan://`, `hysteria2://`, `tuic://`, `ssh://`…).
 - **Tunnel health:** checks, automatic reconnect, idle stop, notifications.
-- **Proxifier compatible:** imports and exports Proxifier 4 `.ppx` profiles; native profiles are `.sluice` (JSON).
+- **Profiles** are `.sluice` files (JSON), with optional password encryption.
 - **Desktop app** (light/dark, tray) and a **command line** for headless machines.
 
 Status per platform, including what isn't done yet: [docs/STATUS.md](docs/STATUS.md). How one codebase serves both

@@ -12,7 +12,7 @@ How Sluice is built, read from the code. Start here for the big picture; each pa
 | [architecture/engine.md](architecture/engine.md) | `Sluice.Core` engine: routing and rules, inbound listeners, connection tracking, relay, DNS and fake IPs, UDP, happy eyeballs |
 | [architecture/tunnels.md](architecture/tunnels.md) | Tunnel types, chains, SSH, the sing-box helper, share links and subscriptions, tunnel lifecycle |
 | [architecture/capture.md](architecture/capture.md) | Capture on Windows (WinDivert) and Linux (nftables + NFQUEUE) |
-| [architecture/profiles.md](architecture/profiles.md) | `.sluice` profiles, Proxifier `.ppx` import/export, password encryption, app settings |
+| [architecture/profiles.md](architecture/profiles.md) | `.sluice` profiles, password encryption, app settings |
 | [architecture/desktop.md](architecture/desktop.md) | The Avalonia app: `App`, `EngineHost`, view models, tray, single instance, notifications, banners |
 | [architecture/build-and-test.md](architecture/build-and-test.md) | `Sluice.Cli`, the tests, the build-time dependency fetch, packaging |
 | [architecture/cross-cutting.md](architecture/cross-cutting.md) | Threading, errors and logging, security, known debt |
@@ -40,7 +40,7 @@ All paths below are relative to `src/` unless they start with another top-level 
                   Dns/           DnsResolver, DnsPolicy, FakeIpPool, DnsMessage
                   Interception/  ITrafficCapture, Interceptor + WinDivertNative (Windows), PacketReflector,
                                  DnsRedirector, UdpNat
-                  Profiles/      Profile, SluiceProfileSerializer, PpxSerializer, ProxifierPasswordCodec
+                  Profiles/      Profile, SluiceProfileSerializer, ProxifierPasswordCodec
                   Platform/      IPlatformServices, ProcessLookup
                   Checker/       TunnelChecker
 

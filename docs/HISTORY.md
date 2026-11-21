@@ -182,3 +182,6 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
 - No more `.ppx` in Core (2026-11-21, #138): `PpxSerializer` and its tests are gone; `OpenCodec` moved into
   `SluiceProfileSerializer`, with the password codec and the `.sluice` bytes unchanged. `ProfileFile` opens `.sluice` only
   and refuses anything else with "Not a Sluice profile". The CLI's usage no longer mentions `.ppx`.
+- Version in the app (2026-11-21, #96): Settings → General ends with "Version …" (`SluiceVersion.Text`, a
+  `SelectableTextBlock`, with Copy); the Log page's first line is `SluiceVersion.Banner`, queued by `LogViewModel` (the
+  host logs before the page subscribes, and `FileLog` already writes the banner to each file).

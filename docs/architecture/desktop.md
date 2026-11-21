@@ -105,10 +105,12 @@ tray, tunnel notifications), Privacy (one choice: names looked up through the tu
 stop, and UDP worded without "UDP"; on Linux "through the tunnel" shows as "Block it" until #47). Everything else is
 under **Advanced**, closed by default and remembered in `AppSettings.SettingsAdvancedOpen`: the names list and invert,
 leak prevention, other DNS query types, the connection switches, the log and the SOCKS5 port (applied when the field
-loses focus or on Enter). Password protection isn't on this page: it belongs to the profile, in the profile menu (#150).
+loses focus or on Enter). General ends with the version (`SluiceVersion.Text`, selectable, with Copy; #96).
+Password protection isn't on this page: it belongs to the profile, in the profile menu (#150).
 
 The UI does not bind to engine objects directly. A **1-second `DispatcherTimer`** in `MainViewModel` drains the log
-(`LogViewModel.Pump`, which queues lines from the tracker's `Log` event in a `ConcurrentQueue`), refreshes only the
+(`LogViewModel.Pump`, which queues lines from the tracker's `Log` event in a `ConcurrentQueue`; the first line is
+`SluiceVersion.Banner`, queued by `LogViewModel` itself, #96), refreshes only the
 visible page (`PageViewModel.Refresh`) and updates rates and status. `TunnelsViewModel` additionally listens to
 `Backends.StatusChanged` (posted to the UI thread) and runs its own 3-second timer for session states; it also runs
 `TunnelChecker`, imports links and subscriptions, and copies share links. When the profile is replaced, every page gets

@@ -3,6 +3,7 @@ using System.Collections.ObjectModel;
 using System.Windows.Input;
 using Sluice.Desktop.Mvvm;
 using Sluice.Desktop.Services;
+using Sluice.Core;
 using Sluice.Core.Engine;
 
 namespace Sluice.Desktop.ViewModels;
@@ -31,6 +32,9 @@ public sealed class LogViewModel : PageViewModel
     public LogViewModel(EngineHost host)
         : base(host, "Log", "list", "What Sluice is doing: connections, rule decisions and errors.")
     {
+        // The first line is the version banner the log files start with (#96). Added here, not written to the tracker:
+        // the host logs before this page subscribes, and FileLog already writes the banner at the top of each file.
+        _incoming.Enqueue(new LogLine(DateTime.Now, LogLevel.Normal, SluiceVersion.Banner));
         host.Tracker.Log += (level, message) => _incoming.Enqueue(new LogLine(DateTime.Now, level, message));
         ClearCommand = new RelayCommand(() => { _all.Clear(); Lines.Clear(); });
         CopyCommand = new RelayCommand(() =>

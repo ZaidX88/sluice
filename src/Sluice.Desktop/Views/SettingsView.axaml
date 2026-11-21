@@ -24,6 +24,14 @@
                             <TextBlock Classes="Muted" Text="When a tunnel connects, disconnects or gives up."/>
                         </StackPanel>
                     </CheckBox>
+                    <!-- The version, selectable and with Copy for bug reports (#96). Muted like the other small lines; the
+                         TextBlock.Muted style doesn't reach a SelectableTextBlock, so it's set here. -->
+                    <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
+                        <SelectableTextBlock Text="{Binding VersionText}" FontSize="11.5" Foreground="{DynamicResource TextMuted}"
+                                             VerticalAlignment="Center"/>
+                        <Button Theme="{StaticResource GhostButton}" Content="Copy" Command="{Binding CopyVersionCommand}"
+                                Margin="4,0,0,0" ToolTip.Tip="Copy the version, for a bug report"/>
+                    </StackPanel>
                 </StackPanel>
             </Border>
 

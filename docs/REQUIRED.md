@@ -50,9 +50,9 @@ their own), and `src/Sluice.App` was deleted (#63).
 
 ## 4. Windows release package
 
-There is no Windows package yet (Linux has one: [linux/INSTALL.md](linux/INSTALL.md)). Needed: a self-contained or
-framework-dependent build of `Sluice.Desktop` + `Sluice.Cli` with WinDivert and sing-box, an installer (MSIX or Inno Setup)
-that adds the Start Menu shortcut and the firewall rule, and a guide in `docs/windows/`. Code signing avoids SmartScreen
+There is no Windows package yet (Linux has one: [linux/INSTALL.md](linux/INSTALL.md)). Needed (DECISIONS.md, 2026-11-22):
+a self-contained build of `Sluice.Desktop` + `Sluice.Cli` with WinDivert and sing-box, an Inno Setup installer that adds
+the Start Menu shortcut and the firewall rule (#64; a WiX MSI after 1.0, #186), and a guide in `docs/windows/`. Code signing avoids SmartScreen
 warnings and antivirus complaints about the WinDivert driver.
 
 ## 5. Linux release, remaining

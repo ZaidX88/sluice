@@ -69,7 +69,8 @@ from other threads are marshalled with `Dispatcher.UIThread.Post`.
 - **Engine objects:** one `ConnectionTracker` (level Verbose), `Statistics`, one `RoutingEngine` for the whole run,
   the optional `FileLog`s.
 - **Profile:** `LoadProfile` (`.sluice` files only), `NewProfile`, `UseProfile`, `CommitProfileEdit`
-  (reload + autosave), `TrySave`. Events `ProfileChanged`, `StateChanged`, `Notice`.
+  (reload + autosave), `TrySave`, `ApplyNetworkSettings` (the app-wide network options into the current profile,
+  [profiles.md](profiles.md#app-settings-and-the-settings-folder)). Events `ProfileChanged`, `StateChanged`, `Notice`.
 - **SOCKS5:** `StartSocks` / `RestartSocksAsync` on `127.0.0.1:<AppSettings.SocksPort>`.
 - **Capture:** `StartInterception` checks `CaptureUnavailableReason` and `HasCaptureRights`, calls
   `OsPlatform.Current.CreateCapture(Engine)`, subscribes to `RelayUnreachable`, starts it and warms up tunnels;

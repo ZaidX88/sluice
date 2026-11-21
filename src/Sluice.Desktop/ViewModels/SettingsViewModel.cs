@@ -10,7 +10,7 @@ public sealed class SettingsViewModel : PageViewModel
     private string _socksPortText;
 
     public SettingsViewModel(EngineHost host)
-        : base(host, "Settings", "settings", "Profile options are saved in the profile; app options apply to Sluice on this PC.")
+        : base(host, "Settings", "settings", "These apply to Sluice on this PC, whichever profile is open. Only how passwords are stored belongs to the profile.")
     {
         _socksPortText = host.Settings.SocksPort.ToString();
         ApplySocksPortCommand = new AsyncCommand(ApplySocksPortAsync, () => SocksPortValid && SocksPortText != Host.Settings.SocksPort.ToString());
@@ -21,21 +21,31 @@ public sealed class SettingsViewModel : PageViewModel
         });
     }
 
+    /// <summary>The current profile's options. The network ones always hold the app's settings (copied in by
+    /// <see cref="EngineHost"/>), so the page reads them here; reading never creates the app's settings.</summary>
     private ProfileOptions O => Host.Profile.Options;
 
     private void Commit() => Host.CommitProfileEdit(notify: false);
 
-    // ----- Name resolution -----
-    public bool ResolveViaProxy { get => O.Resolve.ViaProxy; set { O.Resolve.ViaProxy = value; Commit(); Raise(); } }
-    public bool OnlyListed { get => O.Resolve.OnlyFromListMode; set { O.Resolve.OnlyFromListMode = value; Commit(); Raise(); } }
-    public string ExclusionList { get => O.Resolve.ExclusionList; set { O.Resolve.ExclusionList = value; Commit(); Raise(); } }
-    public bool BlockNonATypes { get => O.Resolve.BlockNonATypes; set { O.Resolve.BlockNonATypes = value; Commit(); Raise(); } }
-    public bool LeakPrevention { get => O.LeakPreventionMode; set { O.LeakPreventionMode = value; Commit(); Raise(); } }
+    /// <summary>Changes an app-wide network option (#148): the app's settings, then the current profile and the engine.</summary>
+    private void SetNetwork(Action<NetworkSettings> change, [System.Runtime.CompilerServices.CallerMemberName] string? name = null)
+    {
+        change(Host.Settings.NetworkFrom(O));
+        Host.ApplyNetworkSettings();
+        Raise(name);
+    }
 
-    // ----- Connections -----
-    public bool LoopDetection { get => O.ConnectionLoopDetection; set { O.ConnectionLoopDetection = value; Commit(); Raise(); } }
-    public bool HandleDirect { get => O.HandleDirectConnections; set { O.HandleDirectConnections = value; Commit(); Raise(); } }
-    public bool ProcessServices { get => O.ProcessServices; set { O.ProcessServices = value; Commit(); Raise(); } }
+    // ----- Name resolution (app-wide) -----
+    public bool ResolveViaProxy { get => O.Resolve.ViaProxy; set => SetNetwork(n => n.ResolveViaTunnel = value); }
+    public bool OnlyListed { get => O.Resolve.OnlyFromListMode; set => SetNetwork(n => n.OnlyListedViaTunnel = value); }
+    public string ExclusionList { get => O.Resolve.ExclusionList; set => SetNetwork(n => n.ResolveLocallyList = value); }
+    public bool BlockNonATypes { get => O.Resolve.BlockNonATypes; set => SetNetwork(n => n.BlockOtherQueryTypes = value); }
+    public bool LeakPrevention { get => O.LeakPreventionMode; set => SetNetwork(n => n.LeakPrevention = value); }
+
+    // ----- Connections (app-wide) -----
+    public bool LoopDetection { get => O.ConnectionLoopDetection; set => SetNetwork(n => n.LoopDetection = value); }
+    public bool HandleDirect { get => O.HandleDirectConnections; set => SetNetwork(n => n.HandleDirectConnections = value); }
+    public bool ProcessServices { get => O.ProcessServices; set => SetNetwork(n => n.IncludeSystemServices = value); }
 
     // ----- Tunnels (app settings, not part of the profile) -----
     private static readonly int[] IdleChoices = [5, 10, 30, 60, 0];
@@ -68,7 +78,7 @@ public sealed class SettingsViewModel : PageViewModel
         set { Host.Settings.TunnelNotifications = value; Host.Settings.Save(); Raise(); }
     }
 
-    // ----- UDP -----
+    // ----- UDP (app-wide) -----
     private static readonly UdpMode[] UdpOrder = [UdpMode.Tunnel, UdpMode.BlockQuic, UdpMode.BlockAll, UdpMode.Bypass];
 
     public string[] UdpModes { get; } =
@@ -85,13 +95,11 @@ public sealed class SettingsViewModel : PageViewModel
         set
         {
             if (value < 0 || UdpOrder[value] == O.Udp) return;
-            O.Udp = UdpOrder[value];
-            Commit();
-            Raise();
+            SetNetwork(n => n.Udp = UdpOrder[value]);
         }
     }
 
-    // ----- Password encryption -----
+    // ----- Password encryption (stays in the profile) -----
     public string[] EncryptionModes { get; } =
     [
         "Disabled — plain text",
@@ -195,7 +203,7 @@ public sealed class SettingsViewModel : PageViewModel
                  {
                      nameof(ResolveViaProxy), nameof(OnlyListed), nameof(ExclusionList), nameof(BlockNonATypes),
                      nameof(LeakPrevention), nameof(LoopDetection), nameof(HandleDirect), nameof(ProcessServices),
-                     nameof(EncryptionIndex),
+                     nameof(UdpIndex), nameof(EncryptionIndex),
                  })
             Raise(p);
     }

@@ -135,6 +135,7 @@ public sealed class EngineHost : IAsyncDisposable
         Settings = settings;
         Statistics = new Statistics(Tracker);
         Profile = Profile.CreateDefault();
+        Settings.Network?.ApplyTo(Profile.Options);
         Engine = new RoutingEngine(Profile, Tracker);
         // Trust-on-first-use: remember an SSH server's host key in the profile (checked from then on).
         Engine.Backends.HostKeyLearned += (tunnel, fingerprint, publicKey) => Dispatcher.UIThread.Post(() =>
@@ -166,6 +167,8 @@ public sealed class EngineHost : IAsyncDisposable
         if (!IsSluiceProfile(path))
             throw new FormatException($"Not a Sluice profile. Sluice opens {ProfileFile.Extension} files only.");
         var profile = ProfileFile.Load(path, askMaster);
+        // The app's network options win over the file's; the first profile opened supplies them once (#148).
+        Settings.NetworkFrom(profile.Options).ApplyTo(profile.Options);
         Profile = profile;
         ProfilePath = path;
         IsDirty = false;
@@ -181,6 +184,7 @@ public sealed class EngineHost : IAsyncDisposable
     /// <summary>Use an in-memory profile without a file (demo / screenshots).</summary>
     public void UseProfile(Profile profile)
     {
+        Settings.Network?.ApplyTo(profile.Options);
         Profile = profile;
         ProfilePath = null;
         ReloadEngine();
@@ -190,10 +194,22 @@ public sealed class EngineHost : IAsyncDisposable
     public void NewProfile()
     {
         Profile = Profile.CreateDefault();
+        Settings.Network?.ApplyTo(Profile.Options);
         ProfilePath = null;
         IsDirty = true;
         ReloadEngine();
         ProfileChanged?.Invoke();
+    }
+
+    /// <summary>
+    /// Call after changing <see cref="AppSettings.Network"/>: saves the settings, copies them into the current profile
+    /// (so its file, and <c>sluice-cli</c> running it, match the app) and applies them live.
+    /// </summary>
+    public void ApplyNetworkSettings()
+    {
+        Settings.NetworkFrom(Profile.Options).ApplyTo(Profile.Options);
+        Settings.Save();
+        CommitProfileEdit(notify: false);
     }
 
     /// <summary>Call after editing <see cref="Profile"/>: applies it live and autosaves if it has a file.</summary>

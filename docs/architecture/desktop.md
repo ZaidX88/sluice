@@ -21,7 +21,7 @@ Program.cs ──▶ App (App.axaml.cs)
 |---|---|
 | `Program.cs` | Avalonia set-up; on Linux with capture rights, Avalonia's own managed file dialogs instead of the portal, so GTK is never loaded there ([ui/FIXES §4](../ui/FIXES.md), #126) |
 | `App.axaml(.cs)` | Start-up and shutdown, command-line options, single instance, clipboard and folder helpers |
-| `MainWindow.axaml(.cs)` | The shell: sidebar navigation, top bar (capture button, search, rates sparkline), banner, current page; closing hides to the tray when `MinimizeToTray` is on and a tray is there (`TrayHost`), otherwise quits |
+| `MainWindow.axaml(.cs)` | The shell: sidebar navigation, top bar (capture button, search, rates sparkline), banner, current page; a press on anything that can't take focus clears it, and `Esc` in the search box clears the search and its focus; closing hides to the tray when `MinimizeToTray` is on and a tray is there (`TrayHost`), otherwise quits |
 | `Services/EngineHost.cs` | The bridge between UI and engine (below) |
 | `Services/Platform.cs` | `OsPlatform.Current`, chosen with `#if WINDOWS` |
 | `Services/AppSettings.cs` | Per-user settings ([profiles.md](profiles.md#app-settings-and-the-settings-folder)) |

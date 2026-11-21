@@ -80,11 +80,13 @@
                 </Border>
 
                 <!-- Search -->
-                <Grid Margin="32,0,24,0" VerticalAlignment="Center">
-                    <c:IconView Kind="search" Size="14" Foreground="{DynamicResource TextFaint}" HorizontalAlignment="Left" VerticalAlignment="Center"/>
-                    <TextBox Text="{Binding Search}" Margin="22,0,0,0" BorderThickness="0" Background="Transparent" Padding="0"
-                             MinHeight="0" FontSize="12" VerticalContentAlignment="Center" Classes="Bare"/>
-                    <TextBlock Text="Search connections by app, host or rule" Margin="22,0,0,0" FontSize="12" VerticalAlignment="Center"
+                <!-- The box spans the whole row (its left padding makes room for the icon), so a press anywhere in it puts
+                     the caret in the box; the icon and the placeholder let presses through. -->
+                <Grid Classes="Search" Margin="32,0,24,0" Height="32" VerticalAlignment="Center">
+                    <TextBox x:Name="SearchBox" Text="{Binding Search}" Classes="Bare" Padding="22,0,0,0" FontSize="13"
+                             VerticalAlignment="Stretch" VerticalContentAlignment="Center"/>
+                    <c:IconView Kind="search" Size="14" HorizontalAlignment="Left" VerticalAlignment="Center" IsHitTestVisible="False"/>
+                    <TextBlock Text="Search connections by app, host or rule" Margin="22,0,0,0" FontSize="13" VerticalAlignment="Center"
                                Foreground="{DynamicResource TextFaint}" IsHitTestVisible="False"
                                IsVisible="{Binding Search, Converter={x:Static StringConverters.IsNullOrEmpty}}"/>
                 </Grid>

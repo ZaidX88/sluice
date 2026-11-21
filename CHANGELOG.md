@@ -28,6 +28,8 @@ into the version's section, and that section, with the install links, becomes th
 - Password protection moved from Settings to the profile menu, since it belongs to each profile: one switch for a
   master password, and on Windows the option to tie passwords to your Windows account. Plain text is no longer offered;
   a profile saved that way is saved with basic encryption from now on (#150).
+- Website names are looked up through the tunnel by default, so a new install doesn't leak DNS. Settings and
+  profiles you already have keep their choice, and "On this PC" is still in Settings → Privacy (#167).
 
 ### Fixed
 - Linux: on Arch, when pacman can't install the packages Sluice needs (an old or never-synced package database),

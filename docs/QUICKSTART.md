@@ -51,8 +51,8 @@ reopens the last profile when it starts.
 
 - **No capture needed?** Point an app's proxy setting at the SOCKS5 address shown at the bottom right
   (`127.0.0.1:<port>`); its traffic then follows your rules too.
-- **Hostnames through the tunnel:** **Settings → Name resolution** → *Resolve hostnames through the tunnel*, so sites are
-  looked up by your tunnel's server instead of your local network.
+- **Hostnames through the tunnel:** on by default (**Settings → Privacy** → *Look up website names*), so sites are
+  looked up by your tunnel's server instead of your local network. Choose *On this PC* to use your local DNS instead.
 - **UDP** (calls, games, QUIC) goes through tunnels on Windows. On Linux it isn't supported yet: UDP of tunneled apps is
   blocked and browsers fall back to normal HTTPS. Give call and game apps a **Direct** rule there.
 - **Headless?** `Sluice.Cli myprofile.sluice --intercept` (Linux: `sluice-cli`) does the same without a window.

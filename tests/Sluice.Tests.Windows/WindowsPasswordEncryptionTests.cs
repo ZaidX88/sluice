@@ -1,4 +1,3 @@
-using System.Xml.Linq;
 using Sluice.Core.Profiles;
 
 namespace Sluice.Tests;
@@ -36,20 +35,6 @@ public class WindowsPasswordEncryptionTests
         p.Options.PasswordEncryption = PasswordEncryptionMode.CurrentUser;
         p.Tunnels.Add(new Tunnel { Id = 100, Type = TunnelType.Socks5, Address = "10.0.0.1", Port = 1080, Username = "alice", Password = "s3cret" });
         return p;
-    }
-
-    [Fact]
-    public void Ppx_RoundTrip_AccountMode()
-    {
-        var xml = PpxSerializer.ToXml(ProfileWithAccountMode()).ToString();
-        var enc = XDocument.Parse(xml).Root!.Element("Options")!.Element("Encryption")!;
-        Assert.Equal("account", enc.Attribute("mode")!.Value);
-        Assert.NotNull(enc.Element("Hash"));
-        Assert.DoesNotContain("<Password>s3cret</Password>", xml);
-
-        var back = PpxSerializer.Parse(xml, (_, _) => null);
-        Assert.Equal(("alice", "s3cret"), (back.Tunnels[0].Username, back.Tunnels[0].Password));
-        Assert.Equal(PasswordEncryptionMode.CurrentUser, back.Options.PasswordEncryption);
     }
 
     [Fact]

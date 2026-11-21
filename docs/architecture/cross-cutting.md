@@ -101,6 +101,13 @@ headers (`Interceptor.DiagnosticPackets`). Helper output (sing-box) is logged li
   running process, so `LinuxPlatform.TieChildProcess` sends the helpers SIGTERM when Sluice exits on a signal or an
   unhandled exception, and records them in a file in the helper folder, so the next Sluice ends the helpers of one
   killed with SIGKILL or crashed (`HelperTies`, [linux/FIXES.md §6](../linux/FIXES.md#6-sing-box-helpers-outlived-sluice--fixed)).
+- **Update check** (#196): `Sluice.Core.Updates.UpdateCheck` sends one `GET` to GitHub's public releases API
+  (`api.github.com/repos/ZaidX88/sluice/releases`, no token, `User-Agent: Sluice/<version>`), so GitHub sees the
+  user's IP address and Sluice's version; nothing else is sent. It only reports a newer release and its download link:
+  Sluice never downloads or runs an update itself. The desktop app checks about once a day while the setting is on (on
+  by default, #198). The request is Sluice's own, so it isn't captured and goes out directly; where that is blocked it
+  fails quietly. Versions compare by Semantic Versioning (`SemVersion`; `1.0.0-rc.2` < `1.0.0` < `1.0.1`), drafts are
+  skipped, and release candidates are offered only to someone running one.
 - **SSH host keys** are trusted on first use and pinned in the profile; a changed key fails the connection.
 - **Supply chain.** WinDivert and sing-box are pinned to exact releases and SHA-256 checked at build and install time.
 

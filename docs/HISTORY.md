@@ -212,3 +212,7 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   renames them with the version and drafts a GitHub Release whose notes come from `scripts/release-notes.sh`
   (the CHANGELOG section, comments removed, plus download links). A manual run only builds. Signing (#65) is a
   marked step for later.
+- Update check in Core (2026-11-22, #197): `UpdateCheck.GetNewerAsync` asks GitHub's releases API for the latest
+  published release newer than `SluiceVersion` (drafts skipped, candidates only on request), with the package for
+  this system (Windows installer, Ubuntu `.deb` from `/etc/os-release`, else the tar.gz); `SemVersion` compares
+  versions. Never throws. Tests in `UpdateCheckTests` from a saved sample of the API's JSON. The UI part is #198.

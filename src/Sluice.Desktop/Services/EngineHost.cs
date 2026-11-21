@@ -156,7 +156,7 @@ public sealed class EngineHost : IAsyncDisposable
         ApplyTunnelSettings();
     }
 
-    public string ProfileName => ProfilePath is null ? "Untitled profile" : Path.GetFileNameWithoutExtension(ProfilePath);
+    public string ProfileName => ProfilePath is null ? DemoProfileName ?? "Untitled profile" : Path.GetFileNameWithoutExtension(ProfilePath);
 
     // ---------------- profile ----------------
 
@@ -191,14 +191,105 @@ public sealed class EngineHost : IAsyncDisposable
         ProfileChanged?.Invoke();
     }
 
-    public void NewProfile()
+    // ---------------- the profiles folder (#134) ----------------
+
+    /// <summary>Sluice's own profiles folder; every profile the menu offers lives there.</summary>
+    public ProfileStore Profiles { get; init; } = ProfileStore.Default;
+
+    /// <summary>Screenshot mode: the names the profile menu shows instead of the real folder's, and the open one.</summary>
+    public IReadOnlyList<string>? DemoProfileNames { get; set; }
+    public string? DemoProfileName { get; set; }
+
+    /// <summary>The profiles the menu lists, sorted by name.</summary>
+    public IReadOnlyList<string> ProfileNames() => DemoProfileNames ?? Profiles.List();
+
+    /// <summary>The current profile is a file in the profiles folder (rename and delete need it).</summary>
+    public bool ProfileInFolder => ProfilePath is not null ? Profiles.Contains(ProfilePath) : DemoProfileName is not null;
+
+    /// <summary>
+    /// The profile Sluice starts with: <paramref name="argPath"/> (<c>--profile</c>) as it is; otherwise the last one
+    /// used. A last profile outside the profiles folder (from before #134) is copied in once and the copy is used; the
+    /// original stays untouched. With nothing to open, the first profile in the folder, or a new "Default".
+    /// </summary>
+    /// <returns>A message for the user when a profile was copied in, otherwise null.</returns>
+    public string? OpenStartupProfile(string? argPath, MasterPasswordProvider? askMaster)
+    {
+        if (argPath is not null)
+        {
+            LoadProfile(argPath, askMaster);
+            return null;
+        }
+        if (Settings.LastProfilePath is { } last && File.Exists(last) && IsSluiceProfile(last))
+        {
+            string? note = null;
+            if (!Profiles.Contains(last))
+            {
+                var copy = Profiles.CopyIn(last);
+                note = $"Sluice now keeps its profiles in a folder of its own, so it copied \"{Path.GetFileNameWithoutExtension(last)}\" "
+                       + $"there as \"{Path.GetFileNameWithoutExtension(copy)}\". Switch profiles from the profile menu. The original file is untouched.";
+                Tracker.Write(LogLevel.Normal, $"Copied the profile {Path.GetFileName(last)} into the profiles folder as {Path.GetFileName(copy)}");
+                last = copy;
+            }
+            LoadProfile(last, askMaster);
+            return note;
+        }
+        if (ProfileNames() is [var first, ..])
+        {
+            LoadProfile(Profiles.PathFor(first), askMaster);
+            return null;
+        }
+        NewProfile("Default");
+        return null;
+    }
+
+    /// <summary>Switches to the profile called <paramref name="name"/>. A wrong or cancelled master password throws, and the
+    /// current profile keeps running.</summary>
+    public void SwitchTo(string name, MasterPasswordProvider? askMaster) => LoadProfile(Profiles.PathFor(name), askMaster);
+
+    /// <summary>A new profile with the default rules, saved in the folder as <paramref name="name"/>, and switched to.</summary>
+    public bool NewProfile(string name)
     {
         Profile = Profile.CreateDefault();
         Settings.Network?.ApplyTo(Profile.Options);
         ProfilePath = null;
-        IsDirty = true;
         ReloadEngine();
+        return TrySave(Profiles.PathFor(name));
+    }
+
+    /// <summary>Saves the current profile as a new one called <paramref name="name"/> and carries on with the copy.</summary>
+    public bool SaveProfileAs(string name) => TrySave(Profiles.PathFor(name));
+
+    /// <summary>Renames the current profile (a file in the profiles folder).</summary>
+    public void RenameProfile(string name)
+    {
+        if (!ProfileInFolder) throw new InvalidOperationException("Only a profile in Sluice's profiles folder can be renamed.");
+        var target = Profiles.PathFor(name);
+        File.Move(ProfilePath!, target);
+        ProfilePath = target;
+        Settings.LastProfilePath = target;
+        Settings.Save();
         ProfileChanged?.Invoke();
+    }
+
+    /// <summary>Deletes a profile that isn't the current one.</summary>
+    public void DeleteProfile(string name)
+    {
+        var path = Profiles.PathFor(name);
+        if (ProfilePath is not null && string.Equals(Path.GetFullPath(path), Path.GetFullPath(ProfilePath), StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Switch to another profile before deleting this one.");
+        File.Delete(path);
+        Tracker.Write(LogLevel.Normal, $"Deleted the profile {name}");
+    }
+
+    /// <summary>Copies a <c>.sluice</c> file from anywhere into the folder and switches to the copy. If it can't be
+    /// opened (a wrong or cancelled master password), the copy is removed again.</summary>
+    public void ImportProfile(string path, MasterPasswordProvider? askMaster)
+    {
+        if (!IsSluiceProfile(path))
+            throw new FormatException($"Not a Sluice profile. Sluice opens {ProfileFile.Extension} files only.");
+        var copy = Profiles.CopyIn(path);
+        try { LoadProfile(copy, askMaster); }
+        catch { File.Delete(copy); throw; }
     }
 
     /// <summary>

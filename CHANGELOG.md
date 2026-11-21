@@ -18,6 +18,9 @@ into the version's section, and that section, with the install links, becomes th
   another profile no longer changes them. They start from the profile you last used (#148).
 - A shorter Settings page: General, Privacy and Tunnels hold what most people change; the rest is under Advanced,
   closed until you open it. The SOCKS5 port applies without an Apply button (#149).
+- Profiles live in Sluice's own folder, and the profile menu lists them: a click switches at once, and New, Save as,
+  Rename, Delete and Import manage them, with no file dialogs. Your last profile is copied there the first time; the
+  original file stays where it was (#134).
 
 ### Fixed
 - Linux: on Arch, when pacman can't install the packages Sluice needs (an old or never-synced package database),

@@ -67,16 +67,16 @@ public partial class App : Application
         _window.Show();
         base.OnFrameworkInitializationCompleted();
 
-        var profilePath = Arg(args, "--profile") ?? settings.LastProfilePath;
-        if (profilePath is not null && File.Exists(profilePath))
+        // --profile opens that file as it is; otherwise the last profile, copied into Sluice's profiles folder once if it
+        // was elsewhere (#134), or the first profile there, or a new "Default".
+        var profileArg = Arg(args, "--profile") is { } p && File.Exists(p) ? p : null;
+        try
         {
-            try
-            {
-                _host.LoadProfile(profilePath, (name, confirm) => Dialogs.AskMasterPassword(name, confirm));
-            }
-            catch (OperationCanceledException) { }
-            catch (Exception ex) { vm.Banner = $"Could not open {Path.GetFileName(profilePath)}: {ex.Message}"; }
+            if (_host.OpenStartupProfile(profileArg, (name, confirm) => Dialogs.AskMasterPassword(name, confirm)) is { } note)
+                vm.ShowInfo(note);
         }
+        catch (OperationCanceledException) { }
+        catch (Exception ex) { vm.Banner = $"Could not open the profile: {ex.Message}"; }
 
         if (Arg(args, "--log-file") is { } diagDir) _host.StartDiagnosticLog(diagDir);
         _host.StartSocks();

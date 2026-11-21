@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Layout;
 using Avalonia.Platform.Storage;
+using Avalonia.Styling;
 using Avalonia.Threading;
 using Sluice.Core.Profiles;
 using Sluice.Desktop.Views;
@@ -82,7 +83,18 @@ public static class Dialogs
 
     private static readonly FilePickerFileType SluiceProfiles = new("Sluice profile") { Patterns = ["*.sluice"] };
 
-    public static string? OpenProfile() => PickFile(OpenProfileAsync);
+    /// <summary>Picks a <c>.sluice</c> file anywhere, to copy into Sluice's profiles folder (#134).</summary>
+    public static string? PickProfileToImport() => PickFile(OpenProfileAsync);
+
+    /// <summary>
+    /// Asks for a name (a new profile, Save as, Rename). <paramref name="check"/> returns why a name can't be used, or
+    /// null; the dialog shows the reason and stays open until the name is fine or the user cancels.
+    /// </summary>
+    public static string? AskName(string title, string message, string initial, string okText, Func<string, string?> check)
+    {
+        var d = new NameDialog(title, message, initial, okText, check);
+        return ShowModal<bool>(d) ? d.Result : null;
+    }
 
     internal const string FileDialogFailedTitle = "File dialog";
 
@@ -111,37 +123,82 @@ public static class Dialogs
         if (Storage is not { } s) return null;
         var files = await s.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = "Open profile",
+            Title = "Import a profile",
             FileTypeFilter =
             [
                 SluiceProfiles,
                 FilePickerFileTypes.All,
             ],
-            SuggestedStartLocation = await DefaultFolderAsync(s),
         });
         return files.Count > 0 ? files[0].TryGetLocalPath() : null;
     }
+}
 
-    public static string? SaveProfile(string name) => PickFile(() => SaveAsync("Save profile as", name, ".sluice", SluiceProfiles));
+/// <summary>Asks for a profile's name (#134), with the reason shown when a name can't be used.</summary>
+public sealed class NameDialog : SluiceWindow
+{
+    private readonly TextBox _box;
+    private readonly TextBlock _error;
+    private readonly Func<string, string?> _check;
 
-    private static async Task<string?> SaveAsync(string title, string name, string extension, FilePickerFileType type)
+    public string? Result { get; private set; }
+
+    internal NameDialog(string title, string message, string initial, string okText, Func<string, string?> check)
     {
-        if (Storage is not { } s) return null;
-        var file = await s.SaveFilePickerAsync(new FilePickerSaveOptions
+        _check = check;
+        Title = title;
+        Width = 420;
+        SizeToContent = SizeToContent.Height;
+        CanResize = false;
+        WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        ShowInTaskbar = false;
+
+        _box = new TextBox { Text = initial };
+        _error = new TextBlock
         {
-            Title = title,
-            SuggestedFileName = name + extension,
-            DefaultExtension = extension,
-            FileTypeChoices = [type],
-            SuggestedStartLocation = await DefaultFolderAsync(s),
-        });
-        return file?.TryGetLocalPath();
+            TextWrapping = Avalonia.Media.TextWrapping.Wrap,
+            Margin = new Thickness(0, 8, 0, 0),
+            IsVisible = false,
+        };
+        _error.Bind(TextBlock.ForegroundProperty, _error.GetResourceObservable("Danger"));
+        _box.TextChanged += (_, _) => _error.IsVisible = false;
+
+        ControlTheme Theme(string key) => (ControlTheme)Application.Current!.FindResource(key)!;
+        var cancel = new Button { Content = "Cancel", MinWidth = 90, Theme = Theme("SecondaryButton"), IsCancel = true };
+        var ok = new Button { Content = okText, MinWidth = 90, Theme = Theme("PrimaryButton"), IsDefault = true };
+        cancel.Click += (_, _) => Close(false);
+        ok.Click += (_, _) => Accept();
+
+        Content = new StackPanel
+        {
+            Margin = new Thickness(24, 20),
+            Children =
+            {
+                new TextBlock { Text = title, Classes = { "PageTitle" }, FontSize = 17 },
+                new TextBlock { Text = message, TextWrapping = Avalonia.Media.TextWrapping.Wrap, Margin = new Thickness(0, 12, 0, 12) },
+                _box,
+                _error,
+                new StackPanel
+                {
+                    Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Spacing = 10,
+                    Margin = new Thickness(0, 22, 0, 0), Children = { cancel, ok },
+                },
+            },
+        };
+        Opened += (_, _) => { _box.Focus(); _box.SelectAll(); };
     }
 
-    private static async Task<IStorageFolder?> DefaultFolderAsync(IStorageProvider s)
+    private void Accept()
     {
-        Directory.CreateDirectory(AppSettings.ProfilesFolder);
-        return await s.TryGetFolderFromPathAsync(AppSettings.ProfilesFolder);
+        var name = (_box.Text ?? "").Trim();
+        if (_check(name) is { } problem)
+        {
+            _error.Text = problem;
+            _error.IsVisible = true;
+            return;
+        }
+        Result = name;
+        Close(true);
     }
 }
 

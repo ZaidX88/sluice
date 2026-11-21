@@ -82,7 +82,7 @@ The settings folder is `<ApplicationData>/Sluice` (`AppSettings.Folder`): `%APPD
 | Path | Written by |
 |---|---|
 | `settings.json` | `AppSettings.Save`: last profile path, local SOCKS port (1080), start capture on launch, minimise to tray, file log on/off (on by default), its detail and folder, tunnel idle minutes, tunnel notifications, the network options (`Network`, below) |
-| `Profiles/` | `.ppx` imports converted to `.sluice` (`AppSettings.ProfilesFolder`) |
+| `Profiles/` | every profile the app offers, `<name>.sluice` (`AppSettings.ProfilesFolder`, `ProfileStore`, #134) |
 | `Logs/` | the file log (`FileLog`), default `AppSettings.LogDirectory` |
 | `fake-dns.json` | the capture's fake-IP mappings (`FakeIpPool.DefaultStatePath`) |
 

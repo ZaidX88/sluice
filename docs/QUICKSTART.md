@@ -38,10 +38,12 @@ Press the **play button** at the bottom. The status changes to *Capture is on*.
 Open the app or website, then look at **Connections**: each connection shows the rule that matched and its route.
 **Log** shows everything Sluice decided. Press the button again to stop; Sluice removes its network rules.
 
-## 5. Save
+## 5. Profiles
 
-Open the **profile menu** at the top right (your profile's name) and choose **Save** or **Save as…**. Sluice reopens the
-last profile when it starts.
+Changes are saved as you make them. To keep several setups, open the **profile menu** at the top right (your profile's
+name): it lists your profiles, and a click switches to another one at once. **New profile…**, **Save as…**,
+**Rename…** and **Delete…** manage them, and **Import profile file…** adds a `.sluice` file someone gave you. Sluice
+reopens the last profile when it starts.
 
 ---
 

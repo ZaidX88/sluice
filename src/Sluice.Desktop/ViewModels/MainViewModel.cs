@@ -47,6 +47,7 @@ public sealed class MainViewModel : ObservableObject
             Raise(nameof(ProfileName));
             Raise(nameof(ProfileInitial));
             Raise(nameof(ProfileHint));
+            Raise(nameof(CanManageProfile));
         };
         host.StateChanged += () => RaiseCapture();
         host.Notice += ShowInfo;
@@ -64,10 +65,16 @@ public sealed class MainViewModel : ObservableObject
 
         // The profile menu's items open file pickers and other dialogs that wait until they close. Run them after the
         // click has been handled, so the menu closes first instead of staying on top of the dialog.
-        OpenCommand = new RelayCommand(AfterMenuCloses(Open));
-        SaveCommand = new RelayCommand(AfterMenuCloses(Save));
+        NewProfileCommand = new RelayCommand(AfterMenuCloses(NewProfile));
         SaveAsCommand = new RelayCommand(AfterMenuCloses(SaveAs));
-        NewCommand = new RelayCommand(AfterMenuCloses(New));
+        RenameProfileCommand = new RelayCommand(AfterMenuCloses(Rename));
+        DeleteProfileCommand = new RelayCommand(AfterMenuCloses(Delete));
+        ImportProfileCommand = new RelayCommand(AfterMenuCloses(Import));
+        ShowProfilesFolderCommand = new RelayCommand(() =>
+        {
+            Directory.CreateDirectory(_host.Profiles.Folder);
+            App.OpenFolder(_host.Profiles.Folder);
+        });
         DismissBannerCommand = new RelayCommand(() => Banner = null);
         GrantRightsCommand = new AsyncCommand(GrantRightsAsync);
         RestartElevatedCommand = new RelayCommand(() =>
@@ -158,7 +165,7 @@ public sealed class MainViewModel : ObservableObject
         Peak = $"peak {Format.Rate(_rates.Max())}";
         Raise(nameof(Totals));
     }
-    public string ProfileHint => _host.ProfilePath ?? "Not saved yet — use Save as";
+    public string ProfileHint => "Switch, create or manage profiles";
 
     public string SocksText => _host.SocksEndPoint is { } ep ? $"SOCKS5 {ep}" : "SOCKS5 off";
 
@@ -184,10 +191,12 @@ public sealed class MainViewModel : ObservableObject
     public bool HasBanner => _banner is not null;
     public bool BannerOffersElevation { get; private set; }
 
-    public ICommand OpenCommand { get; }
-    public ICommand SaveCommand { get; }
+    public ICommand NewProfileCommand { get; }
     public ICommand SaveAsCommand { get; }
-    public ICommand NewCommand { get; }
+    public ICommand RenameProfileCommand { get; }
+    public ICommand DeleteProfileCommand { get; }
+    public ICommand ImportProfileCommand { get; }
+    public ICommand ShowProfilesFolderCommand { get; }
     public ICommand DismissBannerCommand { get; }
     public ICommand RestartElevatedCommand { get; }
     public ICommand GrantRightsCommand { get; }
@@ -315,39 +324,83 @@ public sealed class MainViewModel : ObservableObject
     private static Action AfterMenuCloses(Action action) =>
         () => Dispatcher.UIThread.Post(action, DispatcherPriority.Background);
 
-    private void Open()
+    private string? AskMaster(string name, bool confirm) => Dialogs.AskMasterPassword(name, confirm);
+
+    /// <summary>The profiles the menu lists, and which one is open (#134).</summary>
+    public IReadOnlyList<string> ProfileNames => _host.ProfileNames();
+
+    public bool CanManageProfile => _host.ProfileInFolder;
+
+    /// <summary>Switches to another profile at once; capture keeps running. A cancelled or wrong master password
+    /// leaves the current profile as it is.</summary>
+    public void SwitchProfile(string name)
     {
-        var path = Dialogs.OpenProfile();
-        if (path is null) return;
-        try
-        {
-            _host.LoadProfile(path, (name, confirm) => Dialogs.AskMasterPassword(name, confirm));
-            Banner = null;
-        }
-        catch (OperationCanceledException) { }
-        catch (Exception ex)
-        {
-            ShowBanner($"Could not open {Path.GetFileName(path)}: {ex.Message}");
-        }
+        if (name == ProfileName && _host.ProfileInFolder) return;
+        Dispatcher.UIThread.Post(() => RunProfileAction(() => { _host.SwitchTo(name, AskMaster); Banner = null; },
+            $"Could not open \"{name}\""), DispatcherPriority.Background);
     }
 
-    private void Save()
+    private void NewProfile()
     {
-        if (_host.ProfilePath is null) SaveAs();
-        else _host.TrySave(_host.ProfilePath);
+        var name = Dialogs.AskName("New profile", "A new profile starts with the Localhost and Default rules. The current one stays as it is.",
+            _host.Profiles.UniqueName("New profile"), "Create", n => _host.Profiles.CheckName(n));
+        if (name is not null && !_host.NewProfile(name)) ShowBanner("The profile could not be created; see the Log page.");
     }
 
     private void SaveAs()
     {
-        var path = Dialogs.SaveProfile(_host.ProfileName);
-        if (path is not null && !_host.TrySave(path))
-            ShowBanner("The profile could not be saved; see the Log page.");
+        var name = Dialogs.AskName("Save as", $"Saves a copy of \"{ProfileName}\" under a new name and carries on with the copy.",
+            _host.Profiles.UniqueName(ProfileName + " copy"), "Save", n => _host.Profiles.CheckName(n));
+        if (name is not null && !_host.SaveProfileAs(name)) ShowBanner("The profile could not be saved; see the Log page.");
     }
 
-    private void New()
+    private void Rename()
     {
-        if (!Dialogs.Confirm("New profile", "Start a new profile with only the Localhost and Default rules?\n\nThe current profile stays on disk.", "New profile"))
+        if (!_host.ProfileInFolder) return;
+        var current = ProfileName;
+        var name = Dialogs.AskName("Rename profile", $"A new name for \"{current}\".", current, "Rename",
+            n => _host.Profiles.CheckName(n, current));
+        if (name is null || name == current) return;
+        RunProfileAction(() => _host.RenameProfile(name), "Could not rename the profile");
+    }
+
+    /// <summary>Deletes the current profile after switching to another one; the last profile can't be deleted.</summary>
+    private void Delete()
+    {
+        if (!_host.ProfileInFolder) return;
+        var current = ProfileName;
+        var other = _host.ProfileNames().FirstOrDefault(n => !string.Equals(n, current, StringComparison.OrdinalIgnoreCase));
+        if (other is null)
+        {
+            Dialogs.Info("Delete profile", $"\"{current}\" is the only profile, and Sluice needs one. Create another profile first.");
             return;
-        _host.NewProfile();
+        }
+        if (!Dialogs.Confirm("Delete profile",
+                $"Delete \"{current}\" with its tunnels and rules? This can't be undone.\n\nSluice switches to \"{other}\".", "Delete"))
+            return;
+        RunProfileAction(() =>
+        {
+            _host.SwitchTo(other, AskMaster);
+            _host.DeleteProfile(current);
+            ShowInfo($"Deleted \"{current}\". Now using \"{other}\".");
+        }, "Could not delete the profile");
+    }
+
+    private void Import()
+    {
+        if (Dialogs.PickProfileToImport() is not { } path) return;
+        RunProfileAction(() =>
+        {
+            _host.ImportProfile(path, AskMaster);
+            ShowInfo($"Imported {Path.GetFileName(path)} as \"{ProfileName}\". The original file is untouched.");
+        }, $"Could not import {Path.GetFileName(path)}");
+    }
+
+    /// <summary>Runs a profile action; a cancelled master password does nothing, any other error shows in the banner.</summary>
+    private void RunProfileAction(Action action, string failure)
+    {
+        try { action(); }
+        catch (OperationCanceledException) { }
+        catch (Exception ex) { ShowBanner($"{failure}: {ex.Message}"); }
     }
 }

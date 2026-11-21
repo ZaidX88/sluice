@@ -51,7 +51,11 @@
             <Setter Property="Background" Value="{DynamicResource Hover}"/>
             <Setter Property="Opacity" Value="1"/>
         </Style>
-        <Style Selector="^:pressed /template/ Border#Bd"><Setter Property="Background" Value="{DynamicResource Hover}"/></Style>
+        <!-- After :pointerover, which sets Opacity 1: a pressed button is under the pointer too, so the press fade goes here (#160). -->
+        <Style Selector="^:pressed /template/ Border#Bd">
+            <Setter Property="Background" Value="{DynamicResource Hover}"/>
+            <Setter Property="Opacity" Value="0.7"/>
+        </Style>
         <Style Selector="^:disabled"><Setter Property="Cursor" Value="Arrow"/></Style>
         <Style Selector="^:disabled /template/ Border#Bd"><Setter Property="Background" Value="Transparent"/></Style>
     </ControlTheme>

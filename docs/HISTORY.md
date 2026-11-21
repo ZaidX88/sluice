@@ -177,3 +177,5 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
 - Ghost buttons (2026-11-21, #136): `GhostButton` (and `IconButton`, based on it) in `Text` instead of `TextMuted`,
   with a `Hover` fill on hover and press; disabled keeps 0.35 opacity with no fill and an arrow cursor. Destructive
   ones stay `Text` too (no red; red is `DangerButton`). The capture bar's two hand-set icon colours are gone.
+- Ghost button press (2026-11-21, #160): `GhostButton`'s `:pressed` style sets `Opacity` 0.7 next to the `Hover` fill;
+  its `:pointerover` style (Opacity 1) had overridden the base's press fade, since a pressed button is also hovered.

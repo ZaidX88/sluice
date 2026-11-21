@@ -165,6 +165,14 @@ UDP is only captured while capture runs and the profile's `UdpMode` is not `Bypa
 | Tunnel / Chain | `BlockQuic` | `Block` for port 443, otherwise `Pass` |
 | Tunnel / Chain | `Tunnel` (default) | `Tunnel` through a tunnel that carries UDP (SOCKS5 or a sing-box protocol, `CarriesUdp`); a simple chain only with exactly one hop; redundancy uses the first usable hop, load balancing one per PID. Otherwise `Block` |
 
+**Shared: `Interception/UdpFlows.cs` (#59).** The same flow logic with no packet format in it, for both captures
+(platforms.md §6.4): a capture hands each datagram in as an `AppDatagram` (`Handle`) and delivers replies through its
+`IDatagramSender`. Besides tunneled flows it handles a **Direct rule to a placeholder address**, which can't go out as
+it is: the flow gets its own UDP socket to the name's real address (looked up like a Direct TCP connection:
+`RoutingEngine.HostResolver`, else the OS; the app's address family first), and replies reach the app from the
+placeholder. Only datagrams from that address and port are passed on; a failed lookup is retried at most every 5 s.
+Not used by a capture yet: Windows switches to it in #53 (which deletes `UdpNat`), Linux in #60.
+
 **Windows: `Interception/UdpNat.cs`.** For each outbound datagram `Interceptor` calls `UdpNat.ProcessOutbound`. Flows
 are keyed by (app socket, destination) and classified once (again after a profile change). Tunneled datagrams are taken
 out of the network and sent through one `Socks5UdpAssociation` per app socket and tunnel (`RoutingEngine.OpenUdpAsync`,

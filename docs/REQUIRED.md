@@ -37,7 +37,8 @@ capture (TPROXY):
   `type route hook output` chain setting the mark.
 - A UDP socket with `IP_TRANSPARENT` + `IP_RECVORIGDSTADDR` (and IPv6 equivalents) receives the original destination;
   replies go out from a transparent socket bound to that address.
-- Reuse `UdpNat`'s flow logic (per-flow association via `RoutingEngine.OpenUdpAsync`) by splitting off its WinDivert I/O.
+- Reuse the flow logic in Core's `UdpFlows` (#59): hand each datagram in as an `AppDatagram` and implement
+  `IDatagramSender` with the transparent reply socket (`docs/architecture/platforms.md` §6.4).
 - Remove the `ip rule` / route on stop, like the nft table. This also fixes DNS capture when only a loopback resolver exists.
 
 **Done when:** `UdpMode.Tunnel` carries `curl --http3` and a DNS query through a SOCKS5 tunnel in the Linux live test.

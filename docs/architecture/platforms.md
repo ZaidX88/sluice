@@ -262,6 +262,10 @@ public sealed class UdpFlows : IAsyncDisposable
 - **Linux** (#60): a transparent UDP socket (`IP_TRANSPARENT`, `IP_RECVORIGDSTADDR`) gives `App`, `Destination` and the
   payload; `SendToApp` answers from a transparent socket bound to `from`.
 - `UdpNat` itself goes away once both use `UdpFlows`; its tests move to `UdpFlows` with a fake sender.
+- **Done in #59:** `UdpFlows` is in Core beside the unchanged `UdpNat` (`UdpNat.cs` and its tests are Windows files, so
+  #53 switches `Interceptor` over and deletes them); its tests are `UdpFlowsTests` in the shared tests. It also takes
+  Direct UDP to a placeholder address, which `UdpNat` and Linux drop: it goes out through a plain UDP socket to the
+  name's real address, with replies from the placeholder (engine.md → UDP). #167 waits for #53 and #60 to use it.
 
 ### 6.5 The CLI takes its capture from the platform
 

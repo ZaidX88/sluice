@@ -118,6 +118,23 @@
                 <TextBlock Text="{Binding CurrentPage.Subtitle}" Classes="PageSubtitle"/>
             </StackPanel>
 
+            <!-- A newer Sluice is out (#198): its own bar, so an error banner never hides it or the other way round -->
+            <Border DockPanel.Dock="Top" Margin="0,0,0,16" Padding="14,10" CornerRadius="8" Classes="Banner"
+                    IsVisible="{Binding HasUpdate}">
+                <DockPanel>
+                    <Button DockPanel.Dock="Right" Theme="{StaticResource IconButton}" Command="{Binding DismissUpdateCommand}" Height="28"
+                            ToolTip.Tip="Hide until the next version">
+                        <c:IconView Kind="close" Size="11"/>
+                    </Button>
+                    <Button DockPanel.Dock="Right" Theme="{StaticResource PrimaryButton}" Content="Download" Margin="6,0,6,0"
+                            Command="{Binding DownloadUpdateCommand}"/>
+                    <Button DockPanel.Dock="Right" Theme="{StaticResource GhostButton}" Content="Release notes" Margin="12,0,0,0"
+                            Command="{Binding UpdateNotesCommand}"/>
+                    <c:IconView Kind="download" Size="16" Margin="0,0,10,0" VerticalAlignment="Center" Foreground="{DynamicResource Text}"/>
+                    <TextBlock Text="{Binding UpdateText}" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                </DockPanel>
+            </Border>
+
             <!-- Banner -->
             <Border DockPanel.Dock="Top" Margin="0,0,0,16" Padding="14,10" CornerRadius="8" Classes="Banner"
                     Classes.Error="{Binding BannerIsError}" IsVisible="{Binding HasBanner}">

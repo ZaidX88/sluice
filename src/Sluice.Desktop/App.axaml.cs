@@ -84,6 +84,7 @@ public partial class App : Application
         _host.StartSocks();
         if (args.Contains("--intercept") || settings.StartInterceptionOnLaunch) vm.TurnOn();
         if (Arg(args, "--crash-test") is { } where) CrashTest(where);
+        vm.StartUpdateChecks();   // about a minute from now, then daily, while the setting is on (#198)
     }
 
     /// <summary>
@@ -213,6 +214,12 @@ public partial class App : Application
 
     public static Task<string?> GetClipboardTextAsync() =>
         Top?.Clipboard is { } clipboard ? clipboard.TryGetTextAsync() : Task.FromResult<string?>(null);
+
+    /// <summary>Opens a web page or a download link in the user's browser.</summary>
+    public static void OpenUrl(Uri uri)
+    {
+        if (Top?.Launcher is { } launcher) _ = launcher.LaunchUriAsync(uri);
+    }
 
     public static void OpenFolder(string path)
     {

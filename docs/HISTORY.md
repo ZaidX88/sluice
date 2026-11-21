@@ -222,3 +222,6 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   published release newer than `SluiceVersion` (drafts skipped, candidates only on request), with the package for
   this system (Windows installer, Ubuntu `.deb` from `/etc/os-release`, else the tar.gz); `SemVersion` compares
   versions. Never throws. Tests in `UpdateCheckTests` from a saved sample of the API's JSON. The UI part is #198.
+- Update notice (2026-11-22, #198): `MainViewModel.StartUpdateChecks` runs `UpdateCheck` a minute after start and
+  daily while `CheckForUpdates` is on; a newer version shows its own bar above the banner (Download, Release notes,
+  close = `DismissedUpdate`) and a tray item. Settings → General has the switch. `banner-update.png` in screenshots.

@@ -109,6 +109,13 @@ public sealed class SettingsViewModel : PageViewModel
         set { Host.Settings.TunnelNotifications = value; Host.Settings.Save(); Raise(); }
     }
 
+    /// <summary>The daily update check (#198); when it's turned off, no request is made.</summary>
+    public bool CheckForUpdates
+    {
+        get => Host.Settings.CheckForUpdates;
+        set { Host.Settings.CheckForUpdates = value; Host.Settings.Save(); Raise(); }
+    }
+
     // ----- UDP (app-wide), worded without "UDP" or "QUIC" -----
     // Linux can't tunnel UDP yet (#47): there "through the tunnel" blocks it, so the choice is shown as "Block it".
     private static readonly UdpMode[] UdpOrder = OperatingSystem.IsLinux()

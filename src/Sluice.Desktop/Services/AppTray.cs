@@ -39,8 +39,25 @@ public sealed class AppTray : IDisposable
         vm.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName is nameof(MainViewModel.Intercepting) or nameof(MainViewModel.Status)) Update();
+            if (e.PropertyName is nameof(MainViewModel.Update)) ShowUpdateItem();
         };
         Update();
+    }
+
+    private NativeMenuItem? _updateItem;
+    private NativeMenuItemSeparator? _updateSeparator;
+
+    /// <summary>"Sluice 1.1.0 is available…" at the top of the menu while an update is waiting (#198).</summary>
+    private void ShowUpdateItem()
+    {
+        var items = _icon.Menu!.Items;
+        if (_updateItem is not null) { items.Remove(_updateItem); items.Remove(_updateSeparator!); _updateItem = null; }
+        if (_vm.Update is not { } u) return;
+        _updateItem = new NativeMenuItem($"Sluice {u.Version} is available…");
+        _updateItem.Click += (_, _) => _vm.DownloadUpdateCommand.Execute(null);
+        _updateSeparator = new NativeMenuItemSeparator();
+        items.Insert(0, _updateSeparator);
+        items.Insert(0, _updateItem);
     }
 
     private void Update()

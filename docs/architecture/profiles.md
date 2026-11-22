@@ -86,7 +86,7 @@ them. `EngineHost` copies them into `Profile.Options` whenever a profile is load
 `ApplyNetworkSettings` does the same after a change on the Settings page. The engine and `SluiceProfileSerializer`
 read `Profile.Options` as before, so the saved profile file carries the app's values and `sluice-cli` running it
 behaves as the app did. `Network` is null until the first profile Sluice opens (or the first change on the page): that
-profile's values carry over once, and from then on the app's win over a file's. Password protection stays in each
+profile's values carry over once (a new profile looks names up through the tunnel, #167), and from then on the app's win over a file's. Password protection stays in each
 profile.
 
 ## Editing a profile in the app

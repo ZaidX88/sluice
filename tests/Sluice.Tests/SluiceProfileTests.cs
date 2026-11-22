@@ -10,7 +10,7 @@ public class SluiceProfileTests
         var p = Profile.CreateDefault();
         p.Options.PasswordEncryption = mode;
         p.MasterPassword = master;
-        p.Options.Resolve.ViaProxy = true;
+        p.Options.Resolve.ViaProxy = false;                    // not the default, so the round trip shows it is written
         p.Options.Udp = UdpMode.BlockQuic;
         p.Tunnels.Add(new Tunnel { Id = 100, Type = TunnelType.Socks5, Address = "10.0.0.1", Port = 1080, Username = "alice", Password = "s3cret", Label = "Office" });
         var vless = new Tunnel { Id = 101, Type = TunnelType.VLess, Address = "edge.example", Port = 443, Label = "Edge" };
@@ -36,7 +36,7 @@ public class SluiceProfileTests
         var json = SluiceProfileSerializer.Serialize(Sample(mode, master));
         var back = SluiceProfileSerializer.Parse(json, (_, _) => master);
 
-        Assert.True(back.Options.Resolve.ViaProxy);
+        Assert.False(back.Options.Resolve.ViaProxy);
         Assert.Equal(UdpMode.BlockQuic, back.Options.Udp);
         Assert.Equal(mode, back.Options.PasswordEncryption);
 
@@ -80,6 +80,24 @@ public class SluiceProfileTests
         Assert.Equal("vless", root.GetProperty("tunnels")[1].GetProperty("type").GetString());
         Assert.Equal("tunnel", root.GetProperty("rules")[0].GetProperty("action").GetProperty("type").GetString());
         Assert.False(root.GetProperty("rules")[0].TryGetProperty("isDefault", out _));
+    }
+
+    [Fact]
+    public void NewProfiles_ResolveThroughTheTunnel_AndASavedChoiceIsKept()
+    {
+        // Issue #167: new profiles look names up through the tunnel, so the default policy fakes them.
+        Assert.True(new ResolveOptions().ViaProxy);
+        var fresh = Profile.CreateDefault();
+        Assert.True(fresh.Options.Resolve.ViaProxy);
+        Assert.True(new Sluice.Core.Dns.DnsPolicyCache(() => fresh, "pc").Current.ShouldFake("example.com"));
+
+        // A profile saved with "On this PC" says so in the file and still loads that way.
+        var local = Profile.CreateDefault();
+        local.Options.Resolve.ViaProxy = false;
+        var json = SluiceProfileSerializer.Serialize(local);
+        using (var doc = JsonDocument.Parse(json))
+            Assert.False(doc.RootElement.GetProperty("options").GetProperty("resolve").GetProperty("viaProxy").GetBoolean());
+        Assert.False(SluiceProfileSerializer.Parse(json).Options.Resolve.ViaProxy);
     }
 
     [Fact]

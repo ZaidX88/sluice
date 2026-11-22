@@ -112,7 +112,7 @@ Key points:
 ## The DNS path
 
 Rules can name hosts (`*.example.com`), but a captured packet only carries an IP address. Sluice keeps names intact
-with **fake IPs**: when the profile resolves names through tunnels (`ResolveOptions.ViaProxy` or leak prevention), DNS
+with **fake IPs**: when the profile resolves names through tunnels (`ResolveOptions.ViaProxy`, on by default, or leak prevention), DNS
 queries for such names are answered locally with a placeholder address from 198.18.0.0/15, and the name is remembered.
 
 ```

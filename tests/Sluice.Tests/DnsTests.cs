@@ -110,11 +110,11 @@ public class DnsTests
         Assert.True(p.ShouldFake("git.corp"));
         Assert.False(p.ShouldFake("example.com"));
 
-        Assert.False(new DnsPolicy(new ResolveOptions(), false).ShouldFake("example.com"));
+        Assert.False(new DnsPolicy(new ResolveOptions { ViaProxy = false }, false).ShouldFake("example.com"));
         // Built-in local names stay local even when the user lists them for proxy resolution.
         var listed = new DnsPolicy(new ResolveOptions { ViaProxy = true, OnlyFromListMode = true, ExclusionList = "*.localhost" }, false);
         Assert.False(listed.ShouldFake("wsl.localhost"));
-        Assert.True(new DnsPolicy(new ResolveOptions(), leakPrevention: true).ShouldFake("example.com"));
+        Assert.True(new DnsPolicy(new ResolveOptions { ViaProxy = false }, leakPrevention: true).ShouldFake("example.com"));
     }
 
     // ---------------- redirector (packet level) ----------------

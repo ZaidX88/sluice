@@ -185,6 +185,10 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
 - Version in the app (2026-11-21, #96): Settings → General ends with "Version …" (`SluiceVersion.Text`, a
   `SelectableTextBlock`, with Copy); the Log page's first line is `SluiceVersion.Banner`, queued by `LogViewModel` (the
   host logs before the page subscribes, and `FileLog` already writes the banner to each file).
+- Names through the tunnel by default (2026-11-21, #167): `ResolveOptions.ViaProxy` defaults to `true`, so
+  `Profile.CreateDefault()`, new profiles, a fresh app (no `AppSettings.Network`) and `sluice-cli` fake names. Saved
+  files keep their value: the `.sluice` writer and `settings.json` always write the bool. Shared tests that expect local
+  lookups set `ViaProxy = false`.
 - Linux notification icon (2026-11-21, #178): `LinuxPlatform.NotifyArguments` builds notify-send's arguments, with
   `--icon=sluice` when install.sh's `/usr/share/icons/hicolor/256x256/apps/sluice.png` exists (otherwise
   `network-vpn`, as before). No `desktop-entry` hint: GNOME Shell ties such a notification to the app and removes it

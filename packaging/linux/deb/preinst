@@ -1,0 +1,16 @@
+#!/bin/sh
+# Before the package's files are unpacked. A copy installed from the tar.gz by install.sh (which has uninstall.sh; the
+# package doesn't) is removed first, so the two don't mix and its /usr/local/bin commands don't hide the package's.
+set -e
+
+if [ "$1" = install ] && [ -f /opt/sluice/uninstall.sh ]; then
+    echo "Removing the copy of Sluice that install.sh put in /opt/sluice (profiles in ~/.config/Sluice are kept)"
+    command -v nft >/dev/null 2>&1 && nft delete table inet sluice 2>/dev/null || true
+    for l in /usr/local/bin/sluice /usr/local/bin/sluice-cli; do
+        if [ "$(readlink "$l" 2>/dev/null)" = /opt/sluice/sluice ]; then rm -f "$l"; fi
+    done
+    rm -f /usr/share/applications/sluice.desktop /usr/share/icons/hicolor/256x256/apps/sluice.png
+    rm -rf /opt/sluice
+fi
+
+exit 0

@@ -1,0 +1,13 @@
+#!/bin/sh
+# Before the files are removed: a capture left by a crash would keep redirecting DNS, so Sluice's nftables table goes,
+# and the launcher loses its capture rights.
+set -e
+
+case "$1" in
+remove|deconfigure)
+    command -v nft >/dev/null 2>&1 && nft delete table inet sluice 2>/dev/null || true
+    setcap -r /opt/sluice/sluice 2>/dev/null || true
+    ;;
+esac
+
+exit 0

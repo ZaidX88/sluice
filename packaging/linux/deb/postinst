@@ -1,0 +1,46 @@
+#!/bin/sh
+# After the files are unpacked: install.sh's remaining steps. The launcher finds .NET through /etc/dotnet and
+# /opt/sluice/sluice gets the capture rights; Depends: brought in everything else.
+set -e
+
+CAPS="cap_net_admin,cap_setgid,cap_sys_ptrace,cap_dac_read_search+ep"
+DOTNET=/usr/lib/dotnet               # where Ubuntu's dotnet-runtime-10.0 is
+STATE=/var/lib/sluice                # what this script changed in /etc/dotnet, so postrm undoes only that
+
+# The first line of an /etc/dotnet/install_location* file, without trailing blanks.
+location_file() { head -n 1 "$1" 2>/dev/null | tr -d '\r' | sed 's/[[:space:]]*$//'; }
+
+case "$1" in
+configure)
+    # The .NET host (and Sluice's launcher) looks in install_location_x64, then install_location, otherwise
+    # /usr/share/dotnet. Ubuntu's dotnet-host names /usr/lib/dotnet in install_location, so usually nothing changes.
+    loc=$(location_file /etc/dotnet/install_location_x64)
+    [ -n "$loc" ] || loc=$(location_file /etc/dotnet/install_location)
+    [ -n "$loc" ] || loc=/usr/share/dotnet
+    if ! ls -d "$loc"/shared/Microsoft.NETCore.App/10.0.* >/dev/null 2>&1; then
+        mkdir -p "$STATE"
+        if [ -f /etc/dotnet/install_location_x64 ] && [ ! -f "$STATE/install_location_x64.orig" ]; then
+            cp -p /etc/dotnet/install_location_x64 "$STATE/install_location_x64.orig"
+        fi
+        mkdir -p /etc/dotnet
+        echo "$DOTNET" > /etc/dotnet/install_location_x64
+        echo "$DOTNET" > "$STATE/install_location_x64"
+        echo "Sluice: registered $DOTNET in /etc/dotnet/install_location_x64"
+    fi
+    # The launcher refuses to run unless root alone can change /etc/dotnet and these files.
+    for f in /etc/dotnet /etc/dotnet/install_location /etc/dotnet/install_location_x64; do
+        if [ -e "$f" ]; then chown root:root "$f"; chmod go-w "$f"; fi
+    done
+
+    #   cap_net_admin        nftables rules and the NFQUEUE netlink socket
+    #   cap_setgid           Sluice's private network group (its own traffic is never captured)
+    #   cap_sys_ptrace,
+    #   cap_dac_read_search  see which app (of any user) owns a connection, for rules by application
+    # Only the launcher gets them; it passes them on to the app it starts.
+    if ! setcap "$CAPS" /opt/sluice/sluice; then
+        echo "WARNING: setcap failed on /opt/sluice/sluice; capturing traffic will need: sudo sluice" >&2
+    fi
+    ;;
+esac
+
+exit 0

@@ -225,3 +225,9 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
 - Update notice (2026-11-22, #198): `MainViewModel.StartUpdateChecks` runs `UpdateCheck` a minute after start and
   daily while `CheckForUpdates` is on; a newer version shows its own bar above the banner (Download, Release notes,
   close = `DismissedUpdate`) and a tray item. Settings → General has the switch. `banner-update.png` in screenshots.
+- Ubuntu `.deb` (2026-11-22, #67): `scripts/package-linux.sh --deb` builds `sluice_<version>_amd64.deb` with
+  `dpkg-deb --root-owner-group` from the tar.gz's files: `/opt/sluice` with the launcher and the bundled sing-box (pin
+  read from `install.sh`), `/usr/bin` links, menu entry, icon; `packaging/linux/deb/` holds the control file and
+  `preinst` (replaces an `install.sh` copy), `postinst` (`/etc/dotnet` only if needed, setcap on the launcher),
+  `prerm`/`postrm` (undo). Lowest release 24.04 (22.04's archive has no `dotnet-runtime-10.0`). Checked in Docker on
+  24.04 and 26.04 without .NET: install, capture as a normal user, remove, purge.

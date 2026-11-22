@@ -42,7 +42,7 @@ Take one at a time; each says what "done" means in the linked doc.
 |---|---|---|
 | Linux versions of the tests moved to the Windows project (issue #18): application rules with Linux paths (`WindowsRuleEngineTests`), UDP routing by app (`WindowsUdpRoutingTests`), loop prevention with a local tunnel host and the own-process rule with the `/proc` lookup (`WindowsEngineTests`) | `tests/Sluice.Tests.Linux` | write them as `Linux…Tests`; they may find real Linux bugs (full-path application rules) |
 | DNS not captured without a non-loopback upstream (dnsmasq without systemd-resolved) | [FIXES §1](FIXES.md#1-linux-capture-limitations) | test on a distribution without systemd-resolved |
-| Installer paths on Ubuntu, Fedora, Arch; `.deb` / AppImage (ARM64: not planned for now) | [REQUIRED §5](../REQUIRED.md#5-linux-release-remaining) | `packaging/linux/` and `scripts/package-linux.sh` on `main` ([BUILD.md](BUILD.md#release-package)) |
+| Installer paths on Ubuntu, Fedora, Arch; `.deb` for Ubuntu (done, #67; AppImage after 1.0, #144; ARM64: not planned for now) | [REQUIRED §5](../REQUIRED.md#5-linux-release-remaining) | `packaging/linux/` and `scripts/package-linux.sh` on `main` ([BUILD.md](BUILD.md#release-package)) |
 
 **IPv6 extension headers** (FIXES §1), fixed on 2026-11-18: `PacketInfo.TryParse` read only the IPv6 header's next-header
 field, so a first packet with Hop-by-Hop, Destination Options, Routing, Fragment or AH headers before TCP/UDP passed

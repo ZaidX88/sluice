@@ -3,6 +3,7 @@ using System.Security;
 using Sluice.Core.Engine;
 using Sluice.Core.Interception;
 using Sluice.Core.Platform;
+using Sluice.Platform.Windows.Capture;
 using Windows.Data.Xml.Dom;
 using Windows.UI.Notifications;
 

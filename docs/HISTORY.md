@@ -232,3 +232,9 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   sing-box helpers in the kill-on-close job object (`HelperJob`, out of `SingBoxSession`), `WindowsPlatform.FlushDnsCache`
   calls `DnsFlushResolverCache` (`DnsCache`, out of `Interceptor`). No change in the desktop app; the Windows CLI gets
   both back with #58.
+- WinDivert capture in the Windows module (2026-11-22, #53): `Interceptor`, `WinDivertNative` and `CaptureFilter` moved
+  to `Sluice.Platform.Windows/Capture/`; Windows UDP goes through Core's `UdpFlows` (adapter `WinDivertUdp`), so `UdpNat`
+  and `UdpNatTests` are gone and a Direct app's UDP to a faked name now reaches the real host, as on Linux. `TcpPacket`
+  is public. The CLI part of #58 came along: `Sluice.Cli` is multi-targeted, picks its platform module with
+  `#if WINDOWS` and takes its capture from `CreateCapture`; Windows packet diagnostics follow the tracker's Debug level.
+  A failed DNS cache flush is logged again (`DnsCache.Flush`).

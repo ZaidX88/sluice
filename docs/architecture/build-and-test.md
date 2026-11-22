@@ -6,7 +6,8 @@ put together.
 
 ## `Sluice.Cli`
 
-`src/Sluice.Cli/Program.cs` (top-level statements, `net10.0`, references `Sluice.Core` and `Sluice.Platform.Linux`) is
+`src/Sluice.Cli/Program.cs` (top-level statements; one build per OS like the desktop app, `net10.0-windows10.0.19041.0`
+with `Sluice.Platform.Windows` and `net10.0` with `Sluice.Platform.Linux`, so run it with `-f`) is
 the headless front end. Commands:
 
 | Command | What it does |

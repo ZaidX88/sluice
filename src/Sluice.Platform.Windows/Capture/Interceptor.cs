@@ -8,10 +8,11 @@ using System.Runtime.InteropServices;
 using Sluice.Core.Dns;
 using Sluice.Core.Engine;
 using Sluice.Core.Inbound;
+using Sluice.Core.Interception;
 using Sluice.Core.Platform;
 using Sluice.Core.Profiles;
 
-namespace Sluice.Core.Interception;
+namespace Sluice.Platform.Windows.Capture;
 
 /// <summary>
 /// Transparent TCP interception with WinDivert. Requires Administrator rights and
@@ -61,9 +62,10 @@ public sealed class Interceptor : ITrafficCapture
     private DnsResolver? _resolver;
     private DnsRedirector? _dns;
     private readonly DnsPolicyCache _policies;
-    private UdpNat? _udp;
+    private WinDivertUdp? _udp;
 
-    /// <summary>Log the headers of this many packets at Debug level (troubleshooting).</summary>
+    /// <summary>Log the headers of this many packets at Debug level (troubleshooting): 20 when the tracker logs at Debug
+    /// level (the CLI's <c>--log debug</c>), otherwise none.</summary>
     public int DiagnosticPackets;
 
     // New flows' first SYNs, decided off the packet thread (process lookup and rules can take milliseconds,
@@ -100,6 +102,7 @@ public sealed class Interceptor : ITrafficCapture
     public Interceptor(RoutingEngine engine)
     {
         _engine = engine;
+        DiagnosticPackets = engine.Tracker.Level == LogLevel.Debug ? 20 : 0;
         _policies = new DnsPolicyCache(() => _engine.Profile);
         _policies.Changed += OnDnsPolicyChanged;
     }
@@ -164,7 +167,7 @@ public sealed class Interceptor : ITrafficCapture
         // stay in the kernel.
         _net = OpenOrThrow(CaptureFilter.Main(port, captureUdp), WinDivertNative.Layer.Network, WinDivertNative.OpenFlags.None);
         EnlargeQueue(_net);
-        if (captureUdp) _udp = new UdpNat(_engine, _fakeIps, InjectInbound);
+        if (captureUdp) _udp = new WinDivertUdp(_engine, _fakeIps, InjectInbound);
 
         var policy = CurrentPolicy();
         if (policy.Enabled)
@@ -627,7 +630,7 @@ public sealed class Interceptor : ITrafficCapture
             {
                 try
                 {
-                    if (_udp.ProcessOutbound(buf.AsSpan(0, (int)len), addr) == UdpNat.Verdict.Drop) return;
+                    if (_udp.ProcessOutbound(buf, (int)len, addr) == UdpFlows.Verdict.Drop) return;
                 }
                 catch (Exception ex)
                 {
@@ -954,18 +957,10 @@ public sealed class Interceptor : ITrafficCapture
         if (_handling.Total.Count > 0) _engine.Tracker.Write(LogLevel.Normal, $"Capture timing: {TimingSummary()}");
     }
 
-    /// <summary>The Windows module flushes the cache (<c>WindowsPlatform.FlushDnsCache</c>, #56). The Windows CLI loads no
-    /// platform module until #58, so there it is left as it is, and the log says so.</summary>
     private void FlushOsDnsCache(string why)
     {
-        var platform = PlatformServices.Current;
-        if (platform.Name != "Windows")
-        {
-            _engine.Tracker.Write(LogLevel.Normal, $"The Windows DNS cache was not flushed ({why}): no Windows platform module is loaded");
-            return;
-        }
-        platform.FlushDnsCache();
-        _engine.Tracker.Write(LogLevel.Normal, $"Flushed the Windows DNS cache ({why})");
+        if (DnsCache.Flush()) _engine.Tracker.Write(LogLevel.Normal, $"Flushed the Windows DNS cache ({why})");
+        else _engine.Tracker.Write(LogLevel.Error, $"Could not flush the Windows DNS cache ({why})");
     }
 
     /// <summary>

@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Net;
 using Sluice.Core.Engine;
 using Sluice.Core.Interception;
+using Sluice.Platform.Windows.Capture;
 using Sluice.Core.Profiles;
 using Sluice.Core.Proxy;
 

@@ -242,3 +242,8 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   is public. The CLI part of #58 came along: `Sluice.Cli` is multi-targeted, picks its platform module with
   `#if WINDOWS` and takes its capture from `CreateCapture`; Windows packet diagnostics follow the tracker's Debug level.
   A failed DNS cache flush is logged again (`DnsCache.Flush`).
+- Linux UDP to placeholders when UDP goes direct (2026-11-22, #209, part of #207): in `UdpMode.Bypass`
+  `LinuxCapture` starts the UDP tproxy too, and `NftRules` (`UdpToPlaceholdersOnly`, `PlaceholderRange`) queues only
+  new UDP flows to 198.18.0.0/15, which `UdpFlows` sends Direct by name; other UDP stays untouched, and without tproxy
+  nothing changes. `LinuxCapture.UdpRules` picks the UDP settings per mode. Tests in `LinuxCaptureTests` and a netns
+  test.

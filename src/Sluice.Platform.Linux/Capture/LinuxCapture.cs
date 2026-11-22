@@ -19,7 +19,8 @@ namespace Sluice.Platform.Linux.Capture;
 /// Linux traffic capture: nftables queues the first packet of each new outbound flow to Sluice (NFQUEUE), which
 /// looks up the owning process and asks the rules, as the Windows capture does on each SYN. Connections to be
 /// handled are marked and redirected by nftables to the transparent relay; the rest are never touched again.
-/// UDP flows Sluice takes are marked too and reach <see cref="UdpFlows"/> through a tproxy (<see cref="TransparentUdp"/>).
+/// UDP flows Sluice takes are marked too and reach <see cref="UdpFlows"/> through a tproxy (<see cref="TransparentUdp"/>);
+/// with UDP set to go direct (<see cref="UdpMode.Bypass"/>), only flows to name placeholders are queued and taken (#209).
 /// DNS (UDP/53) is redirected to <see cref="LinuxDnsServer"/>, which hands out fake addresses for hostnames
 /// that go through tunnels. See <see cref="NftRules"/> for the ruleset.
 ///
@@ -161,9 +162,10 @@ public sealed class LinuxCapture : ITrafficCapture
 
         _queue = NfQueue.Open(QueueNumber);
         UdpMode = _engine.Profile.Options.Udp;
-        if (UdpMode != UdpMode.Bypass) StartUdpTproxy();
-        NftRules.Apply(new NftRules.Settings(QueueNumber, RedirectMark, gid, _relay.Port, dnsPort, QueueUdp: UdpMode != UdpMode.Bypass, RejectMark,
-            UdpMark: _tproxy is null ? 0 : UdpMark, UdpPort: _tproxy?.Port ?? 0));
+        // In Bypass too: UDP to a placeholder can't go out as it is, UdpFlows sends it direct by name (#209).
+        StartUdpTproxy();
+        NftRules.Apply(UdpRules(new NftRules.Settings(QueueNumber, RedirectMark, gid, _relay.Port, dnsPort, QueueUdp: false, RejectMark),
+            UdpMode, _tproxy?.Port));
         _rulesApplied = true;
         _exitSignals = [.. new[] { PosixSignal.SIGTERM, PosixSignal.SIGINT, PosixSignal.SIGHUP }
             .Select(s => PosixSignalRegistration.Create(s, OnExitSignal))];
@@ -190,9 +192,25 @@ public sealed class LinuxCapture : ITrafficCapture
                     : $"tunneled through transparent UDP port {_tproxy.Port}",
                 UdpMode.BlockQuic => "QUIC of tunneled apps blocked",
                 UdpMode.BlockAll => "blocked for tunneled apps",
-                _ => "not captured",
+                _ => _tproxy is null
+                    ? "not captured"
+                    : $"not captured, except to name placeholders (sent direct by name through transparent UDP port {_tproxy.Port})",
             }})");
     }
+
+    /// <summary>
+    /// The UDP part of the rules for <paramref name="mode"/>, <paramref name="tproxyPort"/> being the transparent UDP
+    /// socket's port (null: it couldn't be set up). Every new UDP flow is queued, except in <see cref="UdpMode.Bypass"/>:
+    /// only flows to placeholders, and none without the socket (they'd have nowhere to go but out, as before #209).
+    /// </summary>
+    internal static NftRules.Settings UdpRules(NftRules.Settings s, UdpMode mode, int? tproxyPort) =>
+        s with
+        {
+            QueueUdp = mode != UdpMode.Bypass || tproxyPort is not null,
+            UdpToPlaceholdersOnly = mode == UdpMode.Bypass,
+            UdpMark = tproxyPort is null ? 0 : LinuxCapture.UdpMark,
+            UdpPort = tproxyPort ?? 0,
+        };
 
     /// <summary>
     /// Sets up what carries the UDP flows Sluice takes: <see cref="UdpFlows"/> (Core) behind a transparent socket, and
@@ -207,13 +225,15 @@ public sealed class LinuxCapture : ITrafficCapture
             _tproxy = TransparentUdp.Open(OnTakenDatagram, m => _engine.Tracker.Write(LogLevel.Error, m));
             PolicyRoutes.Add(UdpMark, out var ipv6Problem);
             _routesAdded = true;
-            if ((ipv6Problem ?? _tproxy.Ipv6Problem) is { } why)
+            if ((ipv6Problem ?? _tproxy.Ipv6Problem) is { } why && UdpMode != UdpMode.Bypass)   // placeholders are IPv4
                 _engine.Tracker.Write(LogLevel.Normal, $"UDP is taken for IPv4 only ({why})");
             _tproxy.Start();
         }
         catch (InvalidOperationException ex)
         {
-            _engine.Tracker.Write(LogLevel.Error, $"UDP can't be taken through tunnels: {ex.Message}. UDP of tunneled apps is blocked, so browsers fall back from QUIC to TCP.");
+            _engine.Tracker.Write(LogLevel.Error, UdpMode == UdpMode.Bypass
+                ? $"UDP to name placeholders can't be sent direct by name: {ex.Message}. Apps' UDP to names looked up through tunnels goes nowhere."
+                : $"UDP can't be taken through tunnels: {ex.Message}. UDP of tunneled apps is blocked, so browsers fall back from QUIC to TCP.");
             StopUdpTproxy();
         }
     }

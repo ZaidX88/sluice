@@ -135,6 +135,66 @@ public class LinuxCaptureTests
         Assert.DoesNotContain('\r', noUdp);
     }
 
+    private static readonly NftRules.Settings Base = new(Queue: 1473, Mark: 0x5C1CE, Gid: 378318, RelayPort: 41000, DnsPort: 42000, QueueUdp: false);
+
+    [Fact]
+    public void Udp_set_to_go_direct_queues_and_takes_only_udp_to_placeholders()
+    {
+        // #209: in "Let it go direct" UDP to a placeholder can only reach its host by name, through UdpFlows.
+        var s = LinuxCapture.UdpRules(Base, UdpMode.Bypass, tproxyPort: 43000);
+        Assert.True(s.QueueUdp);
+        Assert.True(s.UdpToPlaceholdersOnly);
+        var r = NftRules.Build(s);
+
+        Assert.Contains("meta l4proto udp ip daddr 198.18.0.0/15 udp dport != 53 ct state new queue num 1473 bypass", r);
+        Assert.Single(r.Split('\n'), l => l.Contains("meta l4proto udp") && l.Contains("queue num"));   // no rule for other UDP
+        Assert.Contains("tproxy to :43000 accept", r);                                                   // taken as in Tunnel mode
+        Assert.Contains("udp dport 53 redirect to :42000", r);                                           // DNS still answered
+        Assert.DoesNotContain('\r', r);
+    }
+
+    [Fact]
+    public void Udp_set_to_go_direct_without_a_transparent_socket_queues_no_udp_as_before()
+    {
+        var r = NftRules.Build(LinuxCapture.UdpRules(Base, UdpMode.Bypass, tproxyPort: null));
+
+        Assert.DoesNotContain("meta l4proto udp udp dport != 53", r);
+        Assert.DoesNotContain("ip daddr", r);
+        Assert.DoesNotContain("tproxy", r);
+        Assert.Contains("udp dport 53 redirect to :42000", r);
+    }
+
+    [Theory]
+    [InlineData(UdpMode.Tunnel, 43000)]
+    [InlineData(UdpMode.Tunnel, null)]
+    [InlineData(UdpMode.BlockQuic, 43000)]
+    [InlineData(UdpMode.BlockAll, 43000)]
+    public void Other_udp_modes_still_queue_every_new_udp_flow(UdpMode mode, int? tproxyPort)
+    {
+        var r = NftRules.Build(LinuxCapture.UdpRules(Base, mode, tproxyPort));
+
+        Assert.Contains("meta l4proto udp udp dport != 53 ct state new queue num 1473 bypass", r);
+        Assert.DoesNotContain("ip daddr", r);
+        Assert.Equal(tproxyPort is not null, r.Contains("tproxy to :43000 accept", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("198.18.0.0", true)]
+    [InlineData("198.18.0.1", true)]
+    [InlineData("198.19.255.255", true)]
+    [InlineData("198.17.255.255", false)]
+    [InlineData("198.20.0.0", false)]
+    public void Placeholder_range_in_the_rules_is_the_pools(string address, bool inRange)
+    {
+        var parts = NftRules.PlaceholderRange.Split('/');
+        var net = BinaryPrimitives.ReadUInt32BigEndian(IPAddress.Parse(parts[0]).GetAddressBytes());
+        var mask = uint.MaxValue << (32 - int.Parse(parts[1]));
+        var ip = IPAddress.Parse(address);
+
+        Assert.Equal(inRange, (BinaryPrimitives.ReadUInt32BigEndian(ip.GetAddressBytes()) & mask) == net);
+        Assert.Equal(inRange, FakeIpPool.IsFake(ip));
+    }
+
     [Fact]
     public void Upstream_dns_skips_local_stubs()
     {

@@ -2,13 +2,20 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Sluice.Core\Sluice.Core.csproj" />
-    <!-- Linux capture; on Windows the CLI uses the WinDivert interceptor in Core. -->
+  </ItemGroup>
+  <!-- One build per OS, like the desktop app: the Windows build uses Sluice.Platform.Windows, the plain net10.0 build
+       (Linux) uses Sluice.Platform.Linux. -->
+  <ItemGroup Condition="$(TargetFramework.Contains('-windows'))">
+    <ProjectReference Include="..\Sluice.Platform.Windows\Sluice.Platform.Windows.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="!$(TargetFramework.Contains('-windows'))">
     <ProjectReference Include="..\Sluice.Platform.Linux\Sluice.Platform.Linux.csproj" />
   </ItemGroup>
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFrameworks>net10.0-windows10.0.19041.0;net10.0</TargetFrameworks>
+    <WindowsSdkPackageVersion>10.0.19041.57</WindowsSdkPackageVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <!-- Ignore DOTNET_STARTUP_HOOKS: the runtime must not load assemblies named by whoever starts Sluice. -->

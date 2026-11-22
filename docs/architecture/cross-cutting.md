@@ -12,7 +12,7 @@ dedicated threads are blocking packet loops:
 | WinDivert socket and network loops (`Interceptor.SocketLoop`, `NetworkLoop`) | two background `Thread`s | blocking `WinDivertRecv`; every outbound packet passes through `NetworkLoop`, so per-packet work must stay short. The SYN decision (`Decide`: PID lookup + `Classify`) runs inline here |
 | NFQUEUE loop (`LinuxCapture.QueueLoop`) | one background `Thread` | only first packets of flows arrive, each needs a verdict before it moves on |
 | Sweepers (`Interceptor.SweepLoop`, `LinuxCapture.SweepLoop`), tunnel monitor (`TunnelBackends.MonitorLoop`) | `PeriodicTimer` tasks | 5 s / 10 s / 2 s |
-| Inbound accept loops, each accepted connection, `LinuxDnsServer` queries, UDP sends in `UdpNat` | thread-pool tasks (`Task.Run`, fire-and-forget with their own error handling) | |
+| Inbound accept loops, each accepted connection, `LinuxDnsServer` queries, UDP sends in `UdpFlows` | thread-pool tasks (`Task.Run`, fire-and-forget with their own error handling) | |
 | UI | Avalonia UI thread | see below |
 
 Shared state follows a few patterns:

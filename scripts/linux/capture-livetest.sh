@@ -3,7 +3,7 @@
 #
 #   sudo scripts/linux/capture-livetest.sh <dir with Sluice.Cli.dll> <profile.sluice> [upstream-dns]
 #
-# Build the CLI first (framework-dependent, any OS):  dotnet build src/Sluice.Cli -o out/cli
+# Build the CLI first (framework-dependent, any OS):  dotnet build src/Sluice.Cli -f net10.0 -o out/cli
 # Make the profile:                                   dotnet run scripts/linux/make-test-profile.cs -- linux-test.sluice
 # The optional upstream-dns (e.g. 8.8.8.8) is given to Sluice only, through a private mount namespace; use it when the
 # machine's resolver is unusable (WSL behind a Windows Sluice that fakes DNS answers).

@@ -15,6 +15,8 @@ into the version's section, and that section, with the install links, becomes th
 - Linux: UDP goes through tunnels that carry it (SOCKS5 and the sing-box protocols), so QUIC, calls and games work
   through them instead of being blocked. Apps with a Direct rule can also use UDP to names looked up through the
   tunnel (#60).
+- Windows: apps with a Direct rule can use UDP (QUIC, NTP, games) to names looked up through the tunnel; before, Sluice
+  dropped it and the app had to fall back to TCP (#53).
 - The version is shown at the bottom of Settings → General, with a Copy button for bug reports, and the Log page
   starts with the same version line as the log files (#96).
 - Sluice tells you when a new version is out: a notice with a Download link for your system, checked once a day on

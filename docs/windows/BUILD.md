@@ -24,9 +24,9 @@ dotnet run --project src/Sluice.Desktop -f net10.0-windows10.0.19041.0
 ## Command line
 
 ```powershell
-dotnet run --project src/Sluice.Cli -- --help
-dotnet run --project src/Sluice.Cli -- myprofile.sluice --intercept      # as administrator
-dotnet run --project src/Sluice.Cli -- check "vless://..."               # test a tunnel or share link
+dotnet run --project src/Sluice.Cli -f net10.0-windows10.0.19041.0 -- --help
+dotnet run --project src/Sluice.Cli -f net10.0-windows10.0.19041.0 -- myprofile.sluice --intercept      # as administrator
+dotnet run --project src/Sluice.Cli -f net10.0-windows10.0.19041.0 -- check "vless://..."               # test a tunnel or share link
 ```
 
 ## Testing on Windows

@@ -7,7 +7,7 @@ namespace Sluice.Core.Interception;
 /// Minimal in-place view over an IPv4/IPv6 + TCP packet: read endpoints, swap addresses,
 /// set ports. Checksums are recalculated by WinDivert afterwards.
 /// </summary>
-internal readonly ref struct TcpPacket
+public readonly ref struct TcpPacket
 {
     private readonly Span<byte> _p;
     private readonly bool _v6;

@@ -1,7 +1,7 @@
 using System.Net;
 using System.Net.Sockets;
 
-namespace Sluice.Core.Interception;
+namespace Sluice.Platform.Windows.Capture;
 
 /// <summary>
 /// WinDivert network-layer filters for <see cref="Interceptor"/>. Only packets Sluice may have to rewrite are captured,

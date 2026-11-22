@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Net;
 using Sluice.Core.Dns;
 using Sluice.Core.Interception;
+using Sluice.Platform.Windows.Capture;
 
 namespace Sluice.Tests;
 

@@ -12,7 +12,7 @@ dedicated threads are blocking packet loops:
 | WinDivert socket and network loops (`Interceptor.SocketLoop`, `NetworkLoop`) | two background `Thread`s | blocking `WinDivertRecv`; every outbound packet passes through `NetworkLoop`, so per-packet work must stay short. The SYN decision (`Decide`: PID lookup + `Classify`) runs inline here |
 | NFQUEUE loop (`LinuxCapture.QueueLoop`) | one background `Thread` | only first packets of flows arrive, each needs a verdict before it moves on |
 | Sweepers (`Interceptor.SweepLoop`, `LinuxCapture.SweepLoop`), tunnel monitor (`TunnelBackends.MonitorLoop`) | `PeriodicTimer` tasks | 5 s / 10 s / 2 s |
-| Inbound accept loops, each accepted connection, `LinuxDnsServer` queries, UDP sends in `UdpNat` | thread-pool tasks (`Task.Run`, fire-and-forget with their own error handling) | |
+| Inbound accept loops, each accepted connection, `LinuxDnsServer` queries, UDP sends in `UdpFlows` | thread-pool tasks (`Task.Run`, fire-and-forget with their own error handling) | |
 | UI | Avalonia UI thread | see below |
 
 Shared state follows a few patterns:
@@ -97,10 +97,18 @@ headers (`Interceptor.DiagnosticPackets`). Helper output (sing-box) is logged li
   closing clients it has no redirect record for, and needs an inbound firewall allow rule because reflected connections
   arrive as incoming. On Linux it binds only `127.0.0.1` and `[::1]` on one port (`LoopbackRelay`): nftables' redirect
   of a local connection goes to loopback, so nothing on the network can reach it.
-- **Helper lifetime.** On Windows a kill-on-close job object ends helpers with Sluice. Linux has no such object for a
+- **Helper lifetime.** On Windows `WindowsPlatform.TieChildProcess` puts helpers in a kill-on-close job object
+  (`HelperJob`), which Windows closes when Sluice ends, however it ends, so the helpers end too. Linux has no such object for a
   running process, so `LinuxPlatform.TieChildProcess` sends the helpers SIGTERM when Sluice exits on a signal or an
   unhandled exception, and records them in a file in the helper folder, so the next Sluice ends the helpers of one
   killed with SIGKILL or crashed (`HelperTies`, [linux/FIXES.md §6](../linux/FIXES.md#6-sing-box-helpers-outlived-sluice--fixed)).
+- **Update check** (#196): `Sluice.Core.Updates.UpdateCheck` sends one `GET` to GitHub's public releases API
+  (`api.github.com/repos/ZaidX88/sluice/releases`, no token, `User-Agent: Sluice/<version>`), so GitHub sees the
+  user's IP address and Sluice's version; nothing else is sent. It only reports a newer release and its download link:
+  Sluice never downloads or runs an update itself. The desktop app checks about once a day while the setting is on (on
+  by default, #198). The request is Sluice's own, so it isn't captured and goes out directly; where that is blocked it
+  fails quietly. Versions compare by Semantic Versioning (`SemVersion`; `1.0.0-rc.2` < `1.0.0` < `1.0.1`), drafts are
+  skipped, and release candidates are offered only to someone running one.
 - **SSH host keys** are trusted on first use and pinned in the profile; a changed key fails the connection.
 - **Supply chain.** WinDivert and sing-box are pinned to exact releases and SHA-256 checked at build and install time.
 
@@ -111,7 +119,6 @@ Not restated here; the plan of record is:
 - [REQUIRED.md §1](../REQUIRED.md#1-move-windows-only-code-out-of-core): Windows-only code still in `Sluice.Core`,
   and `Sluice.Cli` not multi-targeted.
 - [REQUIRED.md §2](../REQUIRED.md#2-udp-through-tunnels-on-linux): UDP through tunnels on Linux (TPROXY).
-- [REQUIRED.md §3](../REQUIRED.md#3-retire-the-wpf-app): retiring the WPF app (`Sluice.App`).
 - Known bugs, by area: [core](../core/FIXES.md) (helper log levels, machine-dependent tests, IPv6 through tunnels),
   [windows](../windows/FIXES.md) (WSL/VM DNS, fake answers after capture), [linux](../linux/FIXES.md) (capture
   limits), [ui](../ui/FIXES.md) (layout, UI gaps, log file).

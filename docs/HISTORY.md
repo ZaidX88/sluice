@@ -189,3 +189,56 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   `Profile.CreateDefault()`, new profiles, a fresh app (no `AppSettings.Network`) and `sluice-cli` fake names. Saved
   files keep their value: the `.sluice` writer and `settings.json` always write the bool. Shared tests that expect local
   lookups set `ViaProxy = false`.
+- Linux notification icon (2026-11-21, #178): `LinuxPlatform.NotifyArguments` builds notify-send's arguments, with
+  `--icon=sluice` when install.sh's `/usr/share/icons/hicolor/256x256/apps/sluice.png` exists (otherwise
+  `network-vpn`, as before). No `desktop-entry` hint: GNOME Shell ties such a notification to the app and removes it
+  when the sender leaves the bus, which notify-send does at once, so it never showed. Tests in `LinuxNotifyTests`.
+- Import dialog crash (2026-11-21, #181): adding a subscription closed Sluice. `ImportDialog.ShowStatus` (was `Show`)
+  looked up the palette's per-theme brushes without the theme variant and cast `UnsetValue` to `IBrush`; it now uses
+  `TryFindResource(key, ActualThemeVariant, …)`. `--screenshot` adds `dialog-import-error.png`.
+- Single instance (2026-11-22, #171): a second launch started a second Sluice. The running copy closed the pipe without
+  reading, so the new copy's write failed and it took that for "nobody listening"; it now reads the request to its end,
+  and the new copy counts a successful connect as "another Sluice runs". On Windows the pipe allows the same user from
+  a non-elevated process (`NamedPipeServerStreamAcl`), so a normal launch reaches a Sluice running as administrator.
+- WPF app retired (2026-11-22, #63, #48): `src/Sluice.App` and its `Sluice.slnx` entry are deleted, after the hand check
+  of the Avalonia app on Windows (#61). The UI area, CODEOWNERS and the area check no longer list it; REQUIRED.md §3 is
+  marked done.
+- UDP flow logic in Core (2026-11-22, #59): `UdpFlows` with `AppDatagram` / `IDatagramSender` (platforms.md §6.4), the
+  flow logic of `UdpNat` with no packet format in it, beside the unchanged `UdpNat` until #53 switches Windows over.
+  New: a Direct rule to a placeholder address sends the datagram by name through the flow's own UDP socket (replies
+  from the placeholder), where `UdpNat` dropped it. Tests in `UdpFlowsTests` with a fake sender and a local echo server.
+- Windows installer (2026-11-22, #64): `scripts/package-windows.ps1` publishes `Sluice.Desktop` and `Sluice.Cli`
+  self-contained for win-x64 and compiles `packaging/windows/Sluice.iss` (Inno Setup, adapted from the unreleased 0.1.0
+  installer without its .NET download): Start Menu shortcut with the app ID "Sluice", firewall rules, WinDivert
+  unloaded before an upgrade and on uninstall. `docs/windows/INSTALL.md`.
+- Release workflow (2026-11-22, #74): `.github/workflows/release.yml` checks a `vX.Y.Z[-rc.N]` tag against
+  `<Version>` and `main`, builds the Linux tar.gz and the Windows installer (Inno Setup 7.1.1 pinned by SHA-256),
+  renames them with the version and drafts a GitHub Release whose notes come from `scripts/release-notes.sh`
+  (the CHANGELOG section, comments removed, plus download links). A manual run only builds. Signing (#65) is a
+  marked step for later.
+- UDP through tunnels on Linux (2026-11-22, #60): `DecideUdp` passes, drops or takes a flow; a taken one (tunnel, or
+  Direct to a placeholder) gets mark 0x5C1D0 with its NFQUEUE verdict, kept in conntrack and put back on later packets
+  by a route chain; `PolicyRoutes` (rtnetlink: fwmark rule + "local default dev lo" in table 1473, IPv4 and IPv6) sends
+  them back in through `lo`, where `tproxy` hands them to `TransparentUdp` (IP_RECVORIGDSTADDR) and on to `UdpFlows`.
+  Replies leave from a transparent socket bound to the original destination. Without tproxy support capture starts and
+  drops those flows as before. `LinuxUdpTproxyNetnsTests` checks the kernel path in a throwaway network namespace.
+- Update check in Core (2026-11-22, #197): `UpdateCheck.GetNewerAsync` asks GitHub's releases API for the latest
+  published release newer than `SluiceVersion` (drafts skipped, candidates only on request), with the package for
+  this system (Windows installer, Ubuntu `.deb` from `/etc/os-release`, else the tar.gz); `SemVersion` compares
+  versions. Never throws. Tests in `UpdateCheckTests` from a saved sample of the API's JSON. The UI part is #198.
+- Update notice (2026-11-22, #198): `MainViewModel.StartUpdateChecks` runs `UpdateCheck` a minute after start and
+  daily while `CheckForUpdates` is on; a newer version shows its own bar above the banner (Download, Release notes,
+  close = `DismissedUpdate`) and a tray item. Settings → General has the switch. `banner-update.png` in screenshots.
+- Linux UDP choice in Settings (2026-11-22, #200): `SettingsViewModel.UdpOrder` is the same four choices on both
+  systems ("Through the tunnel" first); the Linux branch and the `Shown` mapping (Tunnel shown as "Block it", from before
+  #60) are gone, so the selected index and the saved value are `UdpMode` itself.
+- Windows job object and DNS flush in the Windows module (2026-11-22, #56): `WindowsPlatform.TieChildProcess` puts
+  sing-box helpers in the kill-on-close job object (`HelperJob`, out of `SingBoxSession`), `WindowsPlatform.FlushDnsCache`
+  calls `DnsFlushResolverCache` (`DnsCache`, out of `Interceptor`). No change in the desktop app; the Windows CLI gets
+  both back with #58.
+- WinDivert capture in the Windows module (2026-11-22, #53): `Interceptor`, `WinDivertNative` and `CaptureFilter` moved
+  to `Sluice.Platform.Windows/Capture/`; Windows UDP goes through Core's `UdpFlows` (adapter `WinDivertUdp`), so `UdpNat`
+  and `UdpNatTests` are gone and a Direct app's UDP to a faked name now reaches the real host, as on Linux. `TcpPacket`
+  is public. The CLI part of #58 came along: `Sluice.Cli` is multi-targeted, picks its platform module with
+  `#if WINDOWS` and takes its capture from `CreateCapture`; Windows packet diagnostics follow the tracker's Debug level.
+  A failed DNS cache flush is logged again (`DnsCache.Flush`).

@@ -11,15 +11,11 @@ interface it hands out). Still in Core:
 
 | File | Move to / replace with |
 |---|---|
-| `Interception/WinDivertNative.cs`, `Interceptor.cs`, WinDivert I/O in `UdpNat.cs` | `Sluice.Platform.Windows`. `PacketReflector`, `DnsRedirector`, `TcpPacket`, `UdpPacket` are pure packet logic and can stay. |
 | `Platform/ProcessLookup.cs` (iphlpapi/kernel32 code) | `WindowsProcessLookup : IProcessLookup`; Core keeps the interface and `Backend`. |
 | `Profiles/Dpapi.cs` (used by `ProxifierPasswordCodec`) | an `ISecretProtector` in Core. Linux: a clear "not supported" for "account"-mode (DPAPI) passwords. |
-| Job object in `Tunnels/SingBoxSession.cs` | `IPlatformServices.TieChildProcess(Process)`. Windows: Job object. Linux: done (#57): SIGTERM to the helpers on exit, and the next start ends those of a Sluice killed with SIGKILL. |
-| `Interceptor.FlushOsDnsCache` (dnsapi) | platform method; Linux uses `resolvectl flush-caches`. |
 | WinDivert entries in `build/Dependencies.targets` | import from the Windows module instead of Core. |
 
-Then make `Sluice.Cli` multi-target like the desktop app and take its capture from the platform module instead of the
-`OperatingSystem.IsLinux()` branch in `Program.cs`.
+`Sluice.Cli` is multi-targeted like the desktop app and takes its capture from the platform module (done in #53).
 
 The interfaces every part uses (`PlatformServices`, the new `IPlatformServices` members, `ISecretProtector`,
 `UdpFlows` / `IDatagramSender`) are fixed in [architecture/platforms.md §6](architecture/platforms.md#6-interfaces-for-the-core-split-decided-in-52).
@@ -28,38 +24,21 @@ The interfaces every part uses (`PlatformServices`, the new `IPlatformServices` 
 
 ## 2. UDP through tunnels on Linux
 
-Today a UDP flow whose rule says "tunnel" is dropped (browsers fall back from QUIC to TCP). Design that fits the current
-capture (TPROXY):
-
-- In `queue_new`, mark UDP flows to tunnel with a second mark (e.g. `0x5C1CF`).
-- Chain `mangle/prerouting`: `meta mark 0x5C1CF tproxy to :UDPPORT`; locally generated packets need rerouting through
-  `lo`: `ip rule add fwmark 0x5C1CF lookup 100` + `ip route add local default dev lo table 100` (and IPv6), with a
-  `type route hook output` chain setting the mark.
-- A UDP socket with `IP_TRANSPARENT` + `IP_RECVORIGDSTADDR` (and IPv6 equivalents) receives the original destination;
-  replies go out from a transparent socket bound to that address.
-- Reuse `UdpNat`'s flow logic (per-flow association via `RoutingEngine.OpenUdpAsync`) by splitting off its WinDivert I/O.
-- Remove the `ip rule` / route on stop, like the nft table. This also fixes DNS capture when only a loopback resolver exists.
-
-**Done when:** `UdpMode.Tunnel` carries `curl --http3` and a DNS query through a SOCKS5 tunnel in the Linux live test.
+**Done** (#60, on Core's `UdpFlows` from #59): a UDP flow Sluice takes (through a tunnel, or Direct to a placeholder
+address) gets a mark with its NFQUEUE verdict, kept in conntrack for its later packets; a policy routing rule sends
+marked packets back in through `lo`, where nftables' `tproxy` hands them to a transparent socket that reads the original
+destination and passes them to `UdpFlows` ([architecture/capture.md](architecture/capture.md#linux-linuxcapture)).
 
 ## 3. Retire the WPF app
 
-Check by hand on Windows that the Avalonia app does everything `src/Sluice.App` did:
-- tray (show, hide, exit, capture toggle); single instance (a second launch shows the window);
-- "Restart as administrator" with `--intercept`; firewall banner and Allow button;
-- tunnel notifications (title "Sluice" + icon);
-- open / save / recent profile, master password; import links and subscriptions;
-- closing the window goes to the tray with the hint toast;
-- `--profile`, `--log-file`, `--theme`, `--screenshot`.
-
-Then remove `Sluice.App` from `Sluice.slnx` and delete it. The Start Menu shortcut / AUMID code is already in the
-Windows module (`StartMenuShortcut`, #62); only the WPF app's own copy goes with it.
+**Done** (#48): the Avalonia app was checked against the WPF app by hand on Windows (#61; its gaps are issues of
+their own), and `src/Sluice.App` was deleted (#63).
 
 ## 4. Windows release package
 
-There is no Windows package yet (Linux has one: [linux/INSTALL.md](linux/INSTALL.md)). Needed: a self-contained or
-framework-dependent build of `Sluice.Desktop` + `Sluice.Cli` with WinDivert and sing-box, an installer (MSIX or Inno Setup)
-that adds the Start Menu shortcut and the firewall rule, and a guide in `docs/windows/`. Code signing avoids SmartScreen
+There is no Windows package yet (Linux has one: [linux/INSTALL.md](linux/INSTALL.md)). Needed (DECISIONS.md, 2026-11-22):
+a self-contained build of `Sluice.Desktop` + `Sluice.Cli` with WinDivert and sing-box, an Inno Setup installer that adds
+the Start Menu shortcut and the firewall rule (#64; a WiX MSI after 1.0, #186), and a guide in `docs/windows/`. Code signing avoids SmartScreen
 warnings and antivirus complaints about the WinDivert driver.
 
 ## 5. Linux release, remaining

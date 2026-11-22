@@ -103,6 +103,13 @@ internal static class ScreenshotMode
             Save(window, Path.Combine(dir, $"{page.Title.ToLowerInvariant()}.png"));
             if (page is SettingsViewModel settingsPage)
             {
+                // The Tunnels section with the UDP choice (#200), below the first screen.
+                if (window.GetVisualDescendants().OfType<ComboBox>().FirstOrDefault(c => ReferenceEquals(c.ItemsSource, settingsPage.UdpModes)) is { } udp)
+                {
+                    udp.BringIntoView(new Rect(0, 0, udp.Bounds.Width, 200));
+                    await Pump(500);
+                    Save(window, Path.Combine(dir, "settings-tunnels.png"));
+                }
                 // Advanced opened (#149): its top, then the end of the page.
                 settingsPage.AdvancedOpen = true;
                 await Pump(500);
@@ -128,6 +135,13 @@ internal static class ScreenshotMode
         await Pump(700);
         Save(window, Path.Combine(dir, "banner-rights.png"));
         vm.DismissBannerCommand.Execute(null);
+
+        // The update notice (#198), as with a newer release out; nothing is fetched.
+        vm.ShowUpdateForScreenshot(new Sluice.Core.Updates.UpdateInfo("1.1.0",
+            new Uri("https://github.com/ZaidX88/sluice/releases/tag/v1.1.0"), null));
+        await Pump(700);
+        Save(window, Path.Combine(dir, "banner-update.png"));
+        vm.ShowUpdateForScreenshot(null);
 
         // The profile menu (#134), drawn in a window of its own: a flyout's popup can't be rendered off-screen.
         window.BuildProfileMenu();
@@ -159,6 +173,7 @@ internal static class ScreenshotMode
                          Dialogs.FileDialogFailedText("the system's file chooser didn't answer."), ["OK"], primary: 0)),
                      ("dialog-import", new Views.ImportDialog(Profile.CreateDefault(), null,
                          "vless://b831381d-6324-4d53-ad4f-8cda48b30811@edge.example:443?security=reality&pbk=PUB&sni=www.microsoft.com#Edge\ntrojan://secret@tr.example:443#Trojan")),
+                     ("dialog-import-error", ImportWithStatus("No share links found.", error: true)),
                  })
         {
             dialog.WindowStartupLocation = WindowStartupLocation.Manual;
@@ -193,6 +208,14 @@ internal static class ScreenshotMode
         public bool CanGrantCaptureRights => true;
         public bool AutostartSupported => true;
         public bool Autostart { get => _autostart; set => _autostart = value; }
+    }
+
+    /// <summary>The import dialog showing a status line once it's open, the path that crashed in #181.</summary>
+    private static Views.ImportDialog ImportWithStatus(string text, bool error)
+    {
+        var d = new Views.ImportDialog(Profile.CreateDefault(), null, "not a link");
+        d.Opened += (_, _) => d.ShowStatus(text, error);
+        return d;
     }
 
     private static async Task Pump(int ms)

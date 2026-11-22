@@ -27,7 +27,7 @@ They follow the same model:
 | Steering to the relay | **Reflection**: `PacketReflector` rewrites the packets of a redirected flow and reinjects them inbound, in both directions, for the whole connection | **Mark + REDIRECT**: the verdict sets mark `0x5C1CE`; nftables' nat chain redirects marked SYNs to the relay port; the kernel does the rest |
 | Original destination | `PacketReflector` flow table, keyed by (remote address, app port) | `LinuxCapture.FlowTable` over `FlowRecords`, keyed by (app endpoint, original destination); the relay looks the connection up in conntrack (`Conntrack`) by the reply tuple, so a source port renumbered after a clash still finds its record |
 | DNS | `DnsRedirector.TryAnswer` on captured UDP/53 packets; an answer is injected, the query dropped. Unfaked queries pass | nftables redirects UDP/53 to `LinuxDnsServer` (127.0.0.1:P and [::1]:P); unfaked queries are forwarded to the real upstreams (`UpstreamServers`, skipping loopback stubs) |
-| UDP | `UdpNat`: tunneled through SOCKS5 UDP associations | pass or drop only (tunneling planned, [REQUIRED.md §2](../REQUIRED.md#2-udp-through-tunnels-on-linux)) |
+| UDP | `WinDivertUdp` hands each captured packet to `UdpFlows` (#53) and injects the replies | taken flows are marked, routed back in through `lo` and handed by `tproxy` to `TransparentUdp`, then `UdpFlows` (#60) |
 | Self-exclusion | filters skip Sluice's PID; helpers by PID in `Classify` | Sluice switches to a private group (`SluiceGroup.Pick`, `setresgid`) inherited by helpers; nftables skips `meta skgid` |
 | Fail-open | WinDivert handles close with the process; packets with errors are re-sent unchanged | `queue … bypass`; on stop or start failure the table is removed first (`Cleanup`) |
 | Rights | administrator (`Environment.IsPrivilegedProcess`) | root, or `CAP_NET_ADMIN` + `CAP_SETGID`, passed on by the launcher that holds them (setcap); `NftRules` raises `CAP_NET_ADMIN` as an ambient capability so the `nft` child keeps it, and lowers it once `nft` has started (#99) |
@@ -38,7 +38,7 @@ They follow the same model:
   WinDivert socket layer (sniff) ──CONNECT events──▶ _socketPids (local port, remote) → PID
   WinDivert network layer, main handle ── new SYNs, relay port, fake range, UDP ──▶ NetworkLoop (own thread) → HandlePacket
   WinDivert network layer, followers' handle ── later packets to redirected real addresses ──▶ NetworkLoop (own thread)
-        ├─ UDP: DnsRedirector.TryAnswer → inject reply ;  else UdpNat.ProcessOutbound → drop or re-send
+        ├─ UDP: DnsRedirector.TryAnswer → inject reply ;  else WinDivertUdp.ProcessOutbound (UdpFlows) → drop or re-send
         └─ TCP: PacketReflector.ProcessOutbound
                ├─ first SYN of a new flow → Defer: copy queued ──▶ DecisionLoop (4 worker threads)
                │       └─ CompleteDeferred → Interceptor.Decide(local, remote) → redirect? (Classify) → send
@@ -80,7 +80,7 @@ They follow the same model:
   `EngineHost.AllowThroughFirewall` (a `netsh advfirewall` rule for this executable), only when the user presses it.
 - `WarnAboutConflicts` logs when another traffic redirector is running (it would capture connections before WinDivert).
 - `SweepLoop` also saves fake IPs, expires idle reflector flows (10 min) and UDP flows (60 s), and logs counters at Debug.
-- Stopping (`DisposeAsync`) shuts all handles, joins the threads, stops the relay and `UdpNat`, saves fake IPs, removes
+- Stopping (`DisposeAsync`) shuts all handles, joins the threads, stops the relay and `WinDivertUdp`, saves fake IPs, removes
   `HostResolver`, and flushes the OS DNS cache if fakes were handed out.
 
 ## Linux: `LinuxCapture`
@@ -91,11 +91,25 @@ They follow the same model:
                                                      bounded hand-off (1024) ── full ──▶ accept unmarked at once
                                                                                          │
             LinuxCapture.Decide (4 worker threads) ── TCP: DecideTcp → accept with mark 0x5C1CE or 0x5C1CF, or plain accept
-                                                   └─ UDP: DecideUdpDrop → accept or drop (cached 30 s)
+                                                   └─ UDP: DecideUdp → accept, drop, or accept with mark 0x5C1D0 (cached 30 s)
   nftables  to_sluice (nat output, dstnat) ── mark 0x5C1CE ──▶ redirect to relay port
                                            └─ UDP/53 ─────────▶ redirect to LinuxDnsServer port
   nftables  refuse (filter output) ── mark 0x5C1CF ──▶ reject with tcp reset
+  nftables  udp_mark (route output) ── mark 0x5C1D0 → ct mark (first packet); ct mark → mark (later packets, rerouted)
+  ip rule   fwmark 0x5C1D0 lookup 1473 ── table 1473: local default dev lo ──▶ back in through lo
+  nftables  udp_tproxy (prerouting) ── mark 0x5C1D0 ──▶ tproxy to TransparentUdp's port (IPv4 and IPv6 sockets)
+            TransparentUdp (IP_RECVORIGDSTADDR) → UdpFlows.Handle → tunnel / Direct by name
+            replies: UdpFlows → IDatagramSender → a transparent socket bound to the original destination → the app
 ```
+
+- **UDP tproxy** (#60): a flow is taken when its rule sends it through a tunnel that carries UDP, or when it is Direct to
+  a placeholder (which can't go out as it is; `UdpFlows` sends it by name). `PolicyRoutes` adds the rule and route over
+  rtnetlink (IPv4 and IPv6; priority and table 1473) at start and removes them on stop and on an exit signal; a start
+  first removes any an earlier run left. If the transparent socket or the routes can't be set up (no tproxy in the
+  kernel), capture starts anyway and those flows are dropped, as before. Sluice's sockets (the replies, `UdpFlows`'
+  Direct sockets, tunnel helpers) carry its group, so the rules never mark them. Known limit: a flow already marked
+  stays taken until its conntrack entry expires, so after a profile change that makes it Direct its datagrams are
+  dropped until it is idle.
 
 - **IPv6 fallback** ([core FIXES §6](../core/FIXES.md), #30): a SYN to a real IPv6 address whose rule sends it
   through a tunnel or chain that Core marked (`RoutingEngine.Ipv6Fallback.ShouldRefuse(route)`, see
@@ -116,5 +130,5 @@ They follow the same model:
 - `RelayUnreachable` is never raised: no firewall stands between a local REDIRECT and a loopback relay.
 - The nft script is normalised to LF line endings (a CRLF checkout once broke capture), and chain names avoid nft
   keywords.
-- Known limits (UDP of tunneled apps, DNS without a non-loopback upstream, `/proc` scan cost, root GUIs):
+- Known limits (DNS without a non-loopback upstream, `/proc` scan cost, root GUIs):
   [linux/FIXES.md §1](../linux/FIXES.md#1-linux-capture-limitations).

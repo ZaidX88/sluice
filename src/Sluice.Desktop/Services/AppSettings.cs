@@ -27,6 +27,12 @@ public sealed class AppSettings
 
     /// <summary>Windows notifications when tunnels connect, disconnect or give up.</summary>
     public bool TunnelNotifications { get; set; } = true;
+
+    /// <summary>Look for a newer Sluice on GitHub about once a day and show a notice (#196, #198); on by default.</summary>
+    public bool CheckForUpdates { get; set; } = true;
+
+    /// <summary>The version whose update notice the user closed; it stays hidden until a newer version is out.</summary>
+    public string? DismissedUpdate { get; set; }
     public string LogDirectory { get; set; } = Path.Combine(Folder, "Logs");
 
     /// <summary>Name resolution, connection and UDP options for every profile (#148). Null until the first profile

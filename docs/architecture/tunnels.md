@@ -36,7 +36,7 @@ Each running session implements the internal `IBackendSession` (`StartAsync`, `S
 `IsAlive`, `ProcessId`).
 
 ```
- TunnelConnector / UdpNat / TunnelChecker
+ TunnelConnector / UdpFlows / TunnelChecker
           │ GetLocalSocksAsync(tunnel)  (one start at a time per tunnel: SemaphoreSlim)
           ▼
  TunnelBackends ── session for tunnel.Id alive and same Fingerprint? ── yes ──▶ 127.0.0.1:port

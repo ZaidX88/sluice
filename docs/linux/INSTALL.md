@@ -170,9 +170,11 @@ Sluice's tray icon needs a desktop with a system tray. On KDE, XFCE and Cinnamon
 background; start `sluice` again to bring the window back.
 
 **A website loads slowly or a call/game doesn't connect while its app goes through a tunnel**
-UDP through tunnels isn't available on Linux yet, so UDP from apps whose rule says "tunnel" is blocked. Browsers then
-fall back from QUIC (HTTP/3) to normal HTTPS automatically. Voice and video calls and games that need UDP should get a
-**Direct** rule.
+UDP goes through tunnels that can carry it: SOCKS5 and the sing-box protocols (Shadowsocks, VMess, VLESS, Trojan,
+Hysteria2, TUIC). SSH and HTTP tunnels can't, so UDP from apps sent through them is blocked; browsers then fall back
+from QUIC (HTTP/3) to normal HTTPS automatically. Voice and video calls and games that need UDP should go through a
+tunnel that carries it, or get a **Direct** rule. If the log says "UDP can't be taken through tunnels", the kernel lacks
+tproxy support (`nft_tproxy`), and UDP of tunneled apps is blocked as well.
 
 **The window doesn't open on a Wayland desktop**
 Make sure XWayland is installed (`xwayland` / `xorg-x11-server-Xwayland`), then run `sluice` from a terminal to see

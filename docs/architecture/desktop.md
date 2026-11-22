@@ -28,7 +28,7 @@ Program.cs ──▶ App (App.axaml.cs)
 | `Services/TrayHost.cs` | Whether a tray can show Sluice's icon (#45): always on Windows; on Linux a `org.kde.StatusNotifierWatcher` with `IsStatusNotifierHostRegistered`, asked over the session bus (`Tmds.DBus.Protocol`, which Avalonia already uses) when the window is closed |
 | `Services/AppTray.cs` | Tray icon: open, "Capture traffic" toggle, exit; tooltip with status and rates; icon changes with capture state (`AppIcon`) |
 | `Services/Dialogs.cs` | Modal dialogs (`MessageDialog`, tunnel / rule / import / password dialogs, file pickers) |
-| `Services/ScreenshotMode.cs` | `--screenshot DIR`: a demo profile in memory, real traffic through the app's own SOCKS5 listener, every page rendered to PNG (Settings also with Advanced open, plus the capture-rights banner and the profile menu with demo profiles, never the real folder's); touches no user files, never captures. It replaces `OsPlatform.Current` with a demo platform that offers granting rights and autostart, so both show in the images |
+| `Services/ScreenshotMode.cs` | `--screenshot DIR`: a demo profile in memory, real traffic through the app's own SOCKS5 listener, every page rendered to PNG (Settings also with Advanced open, plus the capture-rights banner, the update bar and the profile menu with demo profiles, never the real folder's); touches no user files, never captures. It replaces `OsPlatform.Current` with a demo platform that offers granting rights and autostart, so both show in the images |
 | `ViewModels/` | `MainViewModel` and one `PageViewModel` per page |
 | `Views/` | The pages (`ConnectionsView`, `StatisticsView`, `LogView`, `TunnelsView`, `RulesView`, `SettingsView`; code-behind in `PageViews.axaml.cs`) and dialogs (`TunnelDialog`, `RuleDialog`, `ImportDialog`, `PasswordDialog`) |
 | `Mvvm/ObservableObject.cs` | A minimal MVVM kit: `ObservableObject`, `RelayCommand`, `AsyncCommand` (no MVVM library) |
@@ -41,8 +41,11 @@ Program.cs ──▶ App (App.axaml.cs)
 `OnFrameworkInitializationCompleted` runs, in order:
 
 1. `--theme dark|light`; `--screenshot DIR` short-circuits into `ScreenshotMode` and exits.
-2. **Single instance:** connect to the named pipe `Sluice-<user name>`; if another Sluice answers, send `show` and exit.
-   Otherwise listen on that pipe (`ListenForShowRequestsAsync`) and show the window on each request.
+2. **Single instance:** connect to the named pipe `Sluice-<user name>`; if the connect succeeds, another Sluice runs:
+   send `show` and exit, even if the write fails (#171). Otherwise listen on that pipe (`ListenForShowRequestsAsync`),
+   read each request to its end before closing it, and show the window. On Windows the pipe (`CreatePipeServer`) also
+   lets the same user connect from a process without admin rights, so a normal launch reaches a Sluice running as
+   administrator.
 3. `OsPlatform.Current.OnAppStart()` (Windows: Start Menu shortcut and app ID for notifications; Linux: `/proc` process
    lookup).
 4. Create `EngineHost` and install `CrashGuard` on it (below), then `MainViewModel`, `MainWindow`, `AppTray`; route
@@ -102,7 +105,7 @@ banner.
 
 The **Settings page** (#149, rules in #147) shows what most people change in three short sections: General (start-up,
 tray, tunnel notifications), Privacy (one choice: names looked up through the tunnel or on this PC) and Tunnels (idle
-stop, and UDP worded without "UDP"; on Linux "through the tunnel" shows as "Block it" until #47). Everything else is
+stop, and UDP worded without "UDP", with the same four choices on Windows and Linux since #200). Everything else is
 under **Advanced**, closed by default and remembered in `AppSettings.SettingsAdvancedOpen`: the names list and invert,
 leak prevention, other DNS query types, the connection switches, the log and the SOCKS5 port (applied when the field
 loses focus or on Enter). General ends with the version (`SluiceVersion.Text`, selectable, with Copy; #96).
@@ -133,6 +136,14 @@ visible page (`PageViewModel.Refresh`) and updates rates and status. `TunnelsVie
   - capture impossible (Linux without `nft`) → `CaptureUnavailableReason`;
   - `FirewallBlocked` (from `RelayUnreachable`) → "Allow" button running `AllowThroughFirewall`;
   - neutral notices (`ShowInfo`), e.g. "Sluice is now allowed in Windows Firewall".
+- **The update bar** (#198), a separate bar above the banner so neither hides the other: `MainViewModel.StartUpdateChecks`
+  (called by `App` after start-up) checks about a minute after start and then once a day while Sluice runs, if
+  `AppSettings.CheckForUpdates` is on (default on; Settings → General). It calls `UpdateCheck.GetNewerAsync` (Core,
+  #197) with release candidates only when the running version is one; a failure is a verbose log line. A newer
+  version shows "Sluice X is available." with **Download** (the package for this system, else the release page) and
+  **Release notes**; closing it stores `AppSettings.DismissedUpdate`, so it stays hidden until a newer version. The
+  tray menu gets "Sluice X is available…" at the top while it shows (`AppTray.ShowUpdateItem`). Nothing is downloaded
+  or installed by the app. `--screenshot` renders it as `banner-update.png`.
 
 Checking UI changes: `Sluice.Desktop --screenshot <dir> [--theme dark]`, light and dark (see
 [windows/BUILD.md](../windows/BUILD.md)). Known UI gaps: [ui/FIXES.md §1 and §2](../ui/FIXES.md).

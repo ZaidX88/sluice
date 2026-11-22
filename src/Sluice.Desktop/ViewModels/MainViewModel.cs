@@ -3,7 +3,9 @@ using System.Windows.Input;
 using Avalonia.Threading;
 using Sluice.Desktop.Mvvm;
 using Sluice.Desktop.Services;
+using Sluice.Core;
 using Sluice.Core.Engine;
+using Sluice.Core.Updates;
 
 namespace Sluice.Desktop.ViewModels;
 
@@ -77,6 +79,15 @@ public sealed class MainViewModel : ObservableObject
             App.OpenFolder(_host.Profiles.Folder);
         });
         DismissBannerCommand = new RelayCommand(() => Banner = null);
+        DownloadUpdateCommand = new RelayCommand(() => { if (_update is { } u) App.OpenUrl(u.Download ?? u.ReleasePage); });
+        UpdateNotesCommand = new RelayCommand(() => { if (_update is { } u) App.OpenUrl(u.ReleasePage); });
+        DismissUpdateCommand = new RelayCommand(() =>
+        {
+            if (_update is null) return;
+            _host.Settings.DismissedUpdate = _update.Version;
+            _host.Settings.Save();
+            Update = null;
+        });
         GrantRightsCommand = new AsyncCommand(GrantRightsAsync);
         RestartElevatedCommand = new RelayCommand(() =>
         {
@@ -294,6 +305,61 @@ public sealed class MainViewModel : ObservableObject
     }
 
     public bool BannerIsError { get; private set; } = true;
+
+    // ---------------- update notice (#198) ----------------
+
+    private UpdateInfo? _update;
+    private DispatcherTimer? _updateTimer;
+    private DateTime _lastUpdateCheck = DateTime.MinValue;
+    private bool _checkingUpdate;
+
+    /// <summary>A newer release the user hasn't dismissed; shown above the page and in the tray menu.</summary>
+    public UpdateInfo? Update
+    {
+        get => _update;
+        private set { Set(ref _update, value); Raise(nameof(HasUpdate)); Raise(nameof(UpdateText)); }
+    }
+
+    public bool HasUpdate => _update is not null;
+    public string UpdateText => _update is { } u ? $"Sluice {u.Version} is available." : "";
+    public ICommand DownloadUpdateCommand { get; }
+    public ICommand UpdateNotesCommand { get; }
+    public ICommand DismissUpdateCommand { get; }
+
+    /// <summary>
+    /// Checks about a minute after start and then once a day while Sluice runs, while the setting is on. One request
+    /// to GitHub's releases API (<see cref="UpdateCheck"/>); a failure is a log line, never a message.
+    /// </summary>
+    public void StartUpdateChecks()
+    {
+        _updateTimer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromMinutes(1) };
+        _updateTimer.Tick += async (_, _) =>
+        {
+            _updateTimer.Interval = TimeSpan.FromHours(1);   // after the first minute, look hourly whether a day has passed
+            if (DateTime.UtcNow - _lastUpdateCheck >= TimeSpan.FromDays(1)) await CheckForUpdateAsync();
+        };
+        _updateTimer.Start();
+    }
+
+    private async Task CheckForUpdateAsync()
+    {
+        if (_checkingUpdate || !_host.Settings.CheckForUpdates) return;
+        _checkingUpdate = true;
+        try
+        {
+            _lastUpdateCheck = DateTime.UtcNow;
+            // Release candidates are offered only to someone running one (or a development build).
+            var preRelease = SluiceVersion.Text.Split('+')[0].Contains('-');
+            var found = await UpdateCheck.GetNewerAsync(preRelease, CancellationToken.None, m => _host.Tracker.Write(LogLevel.Verbose, m));
+            if (found is null) return;
+            _host.Tracker.Write(LogLevel.Normal, $"Sluice {found.Version} is available: {found.ReleasePage}");
+            if (found.Version != _host.Settings.DismissedUpdate) Update = found;
+        }
+        finally { _checkingUpdate = false; }
+    }
+
+    /// <summary>Screenshots only: the notice as it looks with a release out.</summary>
+    internal void ShowUpdateForScreenshot(UpdateInfo? info) => Update = info;
 
     private void Tick()
     {

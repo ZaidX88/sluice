@@ -11,7 +11,7 @@ requests don't conflict. Contributors may work in any area, one claimed issue at
 |---|---|---|
 | **Linux** | `src/Sluice.Platform.Linux/`, `scripts/linux/`, `packaging/linux/`, `scripts/package-linux.sh`, `docs/linux/`, `tests/Sluice.Tests.Linux/` | capture (nftables, NFQUEUE), DNS, process lookup, notifications, testing on real distributions: [linux/WORK.md](linux/WORK.md) |
 | **Windows** | `src/Sluice.Platform.Windows/`, `docs/windows/`, the Windows-only files still in Core (listed in `AGENTS.md`), `scripts/*.ps1` (including `scripts/package-windows.ps1`), `packaging/windows/`, `tests/Sluice.Tests.Windows/` | WinDivert capture, Windows integration, the Windows installer |
-| **UI** | `src/Sluice.Desktop/` (legacy `src/Sluice.App/`), `docs/ui/`, `docs/architecture/desktop.md` | the Avalonia app on both OSes |
+| **UI** | `src/Sluice.Desktop/`, `docs/ui/`, `docs/architecture/desktop.md` | the Avalonia app on both OSes |
 | **Core** (owner; `help wanted` issues: anyone) | everything else (`src/Sluice.Core/` shared engine, `src/Sluice.Cli/`, shared tests `tests/Sluice.Tests/` and `tests/Sluice.Tests.Support/`, `docs/core/`, `.github/`, build files) | the repository owner |
 | **Shared docs** | `docs/*.md` (`STATUS.md`, `REQUIRED.md`, `ARCHITECTURE.md`, `HISTORY.md`, …), `docs/architecture/` and `CHANGELOG.md` | every area, in the pull request whose change they describe |
 
@@ -289,12 +289,16 @@ the repository**:
 - **Bumping it** is the owner's job, in its own small pull request: `1.0.0-dev` while working towards a release,
   `1.0.0-rc.1`, `-rc.2` … for release candidates, `1.0.0` for the release, then the next `-dev`. Never change it in a
   feature pull request.
-- **A release tag** `vX.Y.Z` (or `vX.Y.Z-rc.N`) on `main` must match `<Version>`; release CI (#74) checks that and
-  builds the packages, whose file names take the version (`sluice-1.0.0-linux-x64.tar.gz`). Built packages are never
-  committed.
+- **A release tag** `vX.Y.Z` (or `vX.Y.Z-rc.N`) on `main` must match `<Version>`. Pushing it runs the release workflow
+  (`.github/workflows/release.yml`, #74): it checks the tag, builds the Linux tar.gz and the Windows installer from
+  it, whose file names take the version (`sluice-1.0.0-linux-x64.tar.gz`, `Sluice-Setup-1.0.0-x64.exe`), each with
+  a `.sha256`, and creates a **draft** GitHub Release with them; the owner reviews it and publishes it (a `-rc` tag
+  becomes a pre-release). Run by hand from the Actions tab, the workflow only builds the packages and keeps them as
+  workflow artifacts (a dry run, or a test installer). Built packages are never committed.
 - **Release notes** are the version's section of [CHANGELOG.md](../CHANGELOG.md), plus the install links. Before
-  tagging, the owner turns `Unreleased` into that section (with the date) and checks its known limitations; release CI
-  (#74) can copy the section into the GitHub Release.
+  tagging, the owner turns `Unreleased` into that section (with the date) and checks its known limitations; the
+  release workflow copies the section into the draft (`scripts/release-notes.sh`) and refuses a release whose section
+  is still marked "not released yet".
 - **Packaging scripts are code on `main`**, reviewed like any other change: `packaging/linux/` and
   `scripts/package-linux.sh` belong to the Linux area, `packaging/windows/` and `scripts/package-windows.ps1` to the
   Windows area. Packages are built only from a clean checkout of a tag.

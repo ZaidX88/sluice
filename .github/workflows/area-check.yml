@@ -39,7 +39,7 @@ jobs:
               src/Sluice.Core/Platform/ProcessLookup.cs|src/Sluice.Core/Profiles/Dpapi.cs) echo windows ;;
               scripts/*/*) echo core ;;
               scripts/*.ps1) echo windows ;;
-              src/Sluice.Desktop/*|src/Sluice.App/*|docs/ui/*|docs/architecture/desktop.md) echo ui ;;
+              src/Sluice.Desktop/*|docs/ui/*|docs/architecture/desktop.md) echo ui ;;
               docs/architecture/*) echo shared ;;
               docs/*/*) echo core ;;
               docs/*.md|CHANGELOG.md) echo shared ;;

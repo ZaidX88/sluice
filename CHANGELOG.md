@@ -12,8 +12,15 @@ into the version's section, and that section, with the install links, becomes th
 ## [Unreleased]
 
 ### Added
+- Linux: UDP goes through tunnels that carry it (SOCKS5 and the sing-box protocols), so QUIC, calls and games work
+  through them instead of being blocked. Apps with a Direct rule can also use UDP to names looked up through the
+  tunnel (#60).
+- Windows: apps with a Direct rule can use UDP (QUIC, NTP, games) to names looked up through the tunnel; before, Sluice
+  dropped it and the app had to fall back to TCP (#53).
 - The version is shown at the bottom of Settings → General, with a Copy button for bug reports, and the Log page
   starts with the same version line as the log files (#96).
+- Sluice tells you when a new version is out: a notice with a Download link for your system, checked once a day on
+  GitHub. It never downloads or installs anything itself; turn it off in Settings → General (#198).
 
 ### Changed
 - Linux: Sluice's windows have their own title bar and border in the app's theme, like on Windows, instead of the
@@ -32,6 +39,8 @@ into the version's section, and that section, with the install links, becomes th
   profiles you already have keep their choice, and "On this PC" is still in Settings → Privacy (#167).
 
 ### Fixed
+- Linux: Settings → Tunnels shows and saves "Through the tunnel" for UDP again, instead of showing it as "Block it"
+  and leaving it out of the list, now that Linux tunnels UDP (#200).
 - Linux: on Arch, when pacman can't install the packages Sluice needs (an old or never-synced package database),
   install.sh stops with what to run (`sudo pacman -Syu`) instead of carrying on without them (#140).
 - Linux: install.sh no longer ends with "Sluice starts." when the desktop app's libraries are missing; it names
@@ -43,6 +52,8 @@ into the version's section, and that section, with the install links, becomes th
 - Text buttons such as Clear, Disconnect all and Reset statistics, and the small icon buttons, no longer look
   disabled: they use the normal text colour and show a fill on hover (#136).
 - Pressing a text or icon button shows it again: it fades while held, instead of looking the same as a hover (#160).
+- Linux: notifications show Sluice's icon instead of a generic VPN icon when Sluice was installed with install.sh
+  (#178).
 
 <!-- Add a line under one of these headings; create the heading if it isn't here yet:
 ### Added
@@ -80,7 +91,9 @@ settings.
 - **Linux:** a package with `install.sh`, which installs what Sluice needs (.NET, nftables and the rest). It gives the
   capture rights to a small launcher, so Sluice captures without running as root. A copy run without the installer can
   get the same rights from the app, and Sluice can start at login (#69).
-- **Windows:** <!-- the installer and package (#64), if it is in this release --> run as administrator for capture.
+- **Windows:** an installer (`Sluice-Setup-<version>-x64.exe`) with everything Sluice needs, .NET included, so it
+  installs offline: Start Menu shortcut, firewall rules, and a clean uninstall (#64). Run Sluice as administrator for
+  capture.
 
 ### Known limitations
 

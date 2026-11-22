@@ -9,9 +9,24 @@
 #include "sluice-launcher.c"
 #undef main
 
+#include <ftw.h>
 #include <sys/wait.h>
 
 static int failures;
+
+/* Whether everything in a folder (links not followed) is owned by root and not writable by group or others: only then
+   should the launcher accept it. */
+static int root_only_entry(const char *path, const struct stat *st, int type, struct FTW *ftw)
+{
+    (void)path; (void)ftw;
+    if (type == FTW_SL) return 0;
+    return st->st_uid != 0 || (st->st_mode & (S_IWGRP | S_IWOTH)) ? 1 : 0;
+}
+
+static int root_only_tree(const char *path)
+{
+    return nftw(path, root_only_entry, 32, FTW_PHYS) == 0;
+}
 
 static void expect(int ok, const char *what)
 {
@@ -72,8 +87,11 @@ int main(void)
     /* A real .NET folder with internal links, if one is installed */
     const char *dotnet = access("/usr/lib/dotnet/shared", F_OK) == 0 ? "/usr/lib/dotnet"
                        : access("/usr/share/dotnet/shared", F_OK) == 0 ? "/usr/share/dotnet" : NULL;
-    if (dotnet) {
+    if (dotnet && root_only_tree(dotnet)) {
         expect(passes(check_folder, dotnet, 1), "the system's .NET folder passes with its own links allowed");
+    } else if (dotnet) {
+        /* e.g. a CI runner, where the .NET folder isn't root-only: the launcher rightly refuses it (#193) */
+        printf("skip  the system's .NET folder (%s) isn't root-only here\n", dotnet);
     }
 
     printf("%s\n", failures ? "launcher tests FAILED" : "launcher tests passed");

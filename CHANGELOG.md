@@ -39,6 +39,8 @@ into the version's section, and that section, with the install links, becomes th
   profiles you already have keep their choice, and "On this PC" is still in Settings → Privacy (#167).
 
 ### Fixed
+- Windows: with UDP set to "Let it go direct", apps' UDP to names looked up through the tunnel (QUIC, NTP, games,
+  calls) reaches the real host again instead of going nowhere; UDP to other addresses still isn't captured (#208).
 - Linux: Settings → Tunnels shows and saves "Through the tunnel" for UDP again, instead of showing it as "Block it"
   and leaving it out of the list, now that Linux tunnels UDP (#200).
 - Linux: on Arch, when pacman can't install the packages Sluice needs (an old or never-synced package database),

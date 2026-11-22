@@ -242,3 +242,9 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   is public. The CLI part of #58 came along: `Sluice.Cli` is multi-targeted, picks its platform module with
   `#if WINDOWS` and takes its capture from `CreateCapture`; Windows packet diagnostics follow the tracker's Debug level.
   A failed DNS cache flush is logged again (`DnsCache.Flush`).
+- Windows UDP to placeholders in "let it go direct" (2026-11-22, #208, part of #207): `CaptureFilter.Main` without UDP
+  capture now takes `udp.DstPort == 53` or the fake range (still not UDP from port 53), and `Interceptor` creates
+  `WinDivertUdp` in every mode, so `UdpFlows` sends those datagrams direct by name; UDP to real addresses stays in the
+  kernel. `WinDivertNative.TakesOutbound` (WinDivertHelperEvalFilter) lets `CaptureFilterTests` check which packets the
+  filter takes. Live: `localtest.me` echo through `--udp bypass` came back from its placeholder; a datagram to
+  192.0.2.1 left no flow.

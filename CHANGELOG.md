@@ -98,8 +98,9 @@ settings.
 ### Known limitations
 
 <!-- At release time: keep only what is still true, and add anything else still open. -->
-- **No UDP through tunnels on Linux** (QUIC, games, calls): tunneled apps' UDP is blocked, so they fall back to TCP
-  where they can (#47). Windows tunnels UDP.
+- **UDP needs a tunnel that carries it:** SOCKS5 and the sing-box protocols do; SSH, SOCKS4 and HTTP(S) tunnels
+  don't, so apps' UDP through them is blocked and falls back to TCP where it can. On Linux, UDP through tunnels also
+  needs the kernel's tproxy support (#60).
 - **x86-64 only**, on both Windows and Linux.
 - **Not supported:** Xray-only features that sing-box doesn't implement, namely the `xhttp` transport and VLESS
   post-quantum encryption (`mlkem768x25519plus`). Sluice shows an error for such links.

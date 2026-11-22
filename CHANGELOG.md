@@ -35,6 +35,8 @@ into the version's section, and that section, with the install links, becomes th
   a profile saved that way is saved with basic encryption from now on (#150).
 
 ### Fixed
+- Linux: Settings → Tunnels shows and saves "Through the tunnel" for UDP again, instead of showing it as "Block it"
+  and leaving it out of the list, now that Linux tunnels UDP (#200).
 - Linux: on Arch, when pacman can't install the packages Sluice needs (an old or never-synced package database),
   install.sh stops with what to run (`sudo pacman -Syu`) instead of carrying on without them (#140).
 - Linux: install.sh no longer ends with "Sluice starts." when the desktop app's libraries are missing; it names

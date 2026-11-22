@@ -105,7 +105,7 @@ banner.
 
 The **Settings page** (#149, rules in #147) shows what most people change in three short sections: General (start-up,
 tray, tunnel notifications), Privacy (one choice: names looked up through the tunnel or on this PC) and Tunnels (idle
-stop, and UDP worded without "UDP"; on Linux "through the tunnel" shows as "Block it" until #47). Everything else is
+stop, and UDP worded without "UDP", with the same four choices on Windows and Linux since #200). Everything else is
 under **Advanced**, closed by default and remembered in `AppSettings.SettingsAdvancedOpen`: the names list and invert,
 leak prevention, other DNS query types, the connection switches, the log and the SOCKS5 port (applied when the field
 loses focus or on Enter). General ends with the version (`SluiceVersion.Text`, selectable, with Copy; #96).

@@ -117,10 +117,8 @@ public sealed class SettingsViewModel : PageViewModel
     }
 
     // ----- UDP (app-wide), worded without "UDP" or "QUIC" -----
-    // Linux can't tunnel UDP yet (#47): there "through the tunnel" blocks it, so the choice is shown as "Block it".
-    private static readonly UdpMode[] UdpOrder = OperatingSystem.IsLinux()
-        ? [UdpMode.BlockAll, UdpMode.BlockQuic, UdpMode.Bypass]
-        : [UdpMode.Tunnel, UdpMode.BlockQuic, UdpMode.BlockAll, UdpMode.Bypass];
+    // The same four choices on Windows and Linux (Linux tunnels UDP since #60).
+    private static readonly UdpMode[] UdpOrder = [UdpMode.Tunnel, UdpMode.BlockQuic, UdpMode.BlockAll, UdpMode.Bypass];
 
     private static string UdpLabel(UdpMode mode) => mode switch
     {
@@ -132,15 +130,12 @@ public sealed class SettingsViewModel : PageViewModel
 
     public string[] UdpModes { get; } = UdpOrder.Select(UdpLabel).ToArray();
 
-    private static UdpMode Shown(UdpMode mode) =>
-        OperatingSystem.IsLinux() && mode == UdpMode.Tunnel ? UdpMode.BlockAll : mode;
-
     public int UdpIndex
     {
-        get => Array.IndexOf(UdpOrder, Shown(O.Udp));
+        get => Array.IndexOf(UdpOrder, O.Udp);
         set
         {
-            if (value < 0 || UdpOrder[value] == Shown(O.Udp)) return;
+            if (value < 0 || UdpOrder[value] == O.Udp) return;
             SetNetwork(n => n.Udp = UdpOrder[value]);
         }
     }

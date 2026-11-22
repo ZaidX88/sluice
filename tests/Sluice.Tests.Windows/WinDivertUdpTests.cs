@@ -53,6 +53,36 @@ public class WinDivertUdpTests
         Assert.Equal(0, udp.FlowCount);
     }
 
+    /// <summary>
+    /// "Let it go direct" (#208): the capture now hands datagrams to placeholders to the adapter in that mode too. Even an
+    /// app with a tunnel rule gets them sent direct by name, and the reply comes back from the placeholder.
+    /// </summary>
+    [Fact]
+    public async Task In_let_it_go_direct_a_placeholder_datagram_is_sent_by_name()
+    {
+        using var echo = new UdpEchoServer();
+        var p = Profile.CreateDefault();
+        p.Options.Udp = UdpMode.Bypass;
+        p.Tunnels.Add(new Tunnel { Id = 100, Type = TunnelType.Socks5, Address = "127.0.0.1", Port = 9 });   // never used
+        p.Rules.Single(r => r.IsDefault).Action = RuleAction.ViaTunnel(100);
+        await using var engine = new RoutingEngine(p) { HostResolver = (_, _) => Task.FromResult(new[] { IPAddress.Loopback }) };
+        var fakes = new FakeIpPool();
+        var dst = new IPEndPoint(fakes.GetOrAdd("ntp.example"), echo.Port);
+
+        var injected = new TaskCompletionSource<byte[]>();
+        await using var udp = new WinDivertUdp(engine, fakes, (pkt, _) => injected.TrySetResult(pkt), _ => 4242);
+        var packet = UdpPacket.Build(App, dst, "time?"u8);
+        Assert.Equal(UdpFlows.Verdict.Drop, udp.ProcessOutbound(packet, packet.Length, null));   // taken: Sluice sends it
+
+        var reply = await injected.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.True(UdpPacket.TryParse(reply, out var from, out var to, out var off, out var len));
+        Assert.Equal(dst, from);
+        Assert.Equal(App, to);
+        Assert.Equal("time?", Encoding.ASCII.GetString(reply, off, len));
+        Assert.Equal(1, echo.Received);
+        Assert.Equal(1, udp.DatagramsTunneled);   // counts what Sluice sent on itself, by name included
+    }
+
     [Fact]
     public async Task Direct_traffic_and_packets_that_are_not_UDP_pass()
     {

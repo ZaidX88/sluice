@@ -96,6 +96,17 @@ internal static class WinDivertNative
             ? null
             : $"{Marshal.PtrToStringAnsi(err) ?? "invalid filter"} (at {pos})";
 
+    [DllImport(Dll, EntryPoint = "WinDivertHelperEvalFilter", CharSet = CharSet.Ansi)]
+    private static extern bool EvalFilter(string filter, byte[] packet, uint packetLen, ref Address addr);
+
+    /// <summary>True when <paramref name="filter"/> (network layer) takes this outbound, non-loopback packet. Needs only
+    /// WinDivert.dll, no handle or driver: for tests.</summary>
+    public static bool TakesOutbound(string filter, byte[] packet, bool ipv6 = false)
+    {
+        var addr = new Address { Bits = (uint)Layer.Network | (1u << 17) | (ipv6 ? 1u << 20 : 0) };
+        return EvalFilter(filter, packet, (uint)packet.Length, ref addr);
+    }
+
     [DllImport(Dll, EntryPoint = "WinDivertHelperFormatIPv6Address", CharSet = CharSet.Ansi)]
     private static extern bool FormatIPv6(ref Ipv6Words addr, StringBuilder buffer, uint bufLen);
 

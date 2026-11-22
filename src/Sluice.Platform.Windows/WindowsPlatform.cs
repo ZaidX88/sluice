@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Security;
 using Sluice.Core.Engine;
 using Sluice.Core.Interception;
@@ -43,4 +44,13 @@ public sealed class WindowsPlatform : IPlatformServices
     public bool CanRestartElevated => true;
 
     public ITrafficCapture CreateCapture(RoutingEngine engine) => new Interceptor(engine);
+
+    /// <summary>
+    /// Puts <paramref name="process"/> (a helper Sluice just started) in Sluice's kill-on-close job object
+    /// (<see cref="HelperJob"/>): Windows ends it when Sluice ends, also when Sluice crashes or is killed. Never throws.
+    /// </summary>
+    public void TieChildProcess(Process process) => HelperJob.Shared?.Assign(process);
+
+    /// <summary>Drops the Windows DNS cache (<c>DnsFlushResolverCache</c>, as <c>ipconfig /flushdns</c>). Never throws.</summary>
+    public void FlushDnsCache() => DnsCache.Flush();
 }

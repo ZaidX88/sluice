@@ -954,20 +954,18 @@ public sealed class Interceptor : ITrafficCapture
         if (_handling.Total.Count > 0) _engine.Tracker.Write(LogLevel.Normal, $"Capture timing: {TimingSummary()}");
     }
 
-    [DllImport("dnsapi.dll", EntryPoint = "DnsFlushResolverCache")]
-    private static extern bool DnsFlushResolverCache();
-
+    /// <summary>The Windows module flushes the cache (<c>WindowsPlatform.FlushDnsCache</c>, #56). The Windows CLI loads no
+    /// platform module until #58, so there it is left as it is, and the log says so.</summary>
     private void FlushOsDnsCache(string why)
     {
-        try
+        var platform = PlatformServices.Current;
+        if (platform.Name != "Windows")
         {
-            if (DnsFlushResolverCache()) _engine.Tracker.Write(LogLevel.Normal, $"Flushed the Windows DNS cache ({why})");
-            else _engine.Tracker.Write(LogLevel.Error, $"Could not flush the Windows DNS cache ({why})");
+            _engine.Tracker.Write(LogLevel.Normal, $"The Windows DNS cache was not flushed ({why}): no Windows platform module is loaded");
+            return;
         }
-        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
-        {
-            _engine.Tracker.Write(LogLevel.Error, "Could not flush the Windows DNS cache (ipconfig /flushdns)");
-        }
+        platform.FlushDnsCache();
+        _engine.Tracker.Write(LogLevel.Normal, $"Flushed the Windows DNS cache ({why})");
     }
 
     /// <summary>

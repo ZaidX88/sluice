@@ -39,7 +39,7 @@ How the modules fit together: [ARCHITECTURE.md](ARCHITECTURE.md); how each build
 
 | Project | Target | Role |
 |---|---|---|
-| `src/Sluice.Core` | net10.0 | Everything shared: engine, tunnels, DNS, profiles, inbound listeners, the interfaces `Platform/IPlatformServices.cs`, `Interception/ITrafficCapture.cs` and `IProcessLookup` (in `Platform/ProcessLookup.cs`). **Still contains Windows-only code** (WinDivert interceptor, iphlpapi lookups, DPAPI, Job object); see [REQUIRED.md](REQUIRED.md#1-move-windows-only-code-out-of-core). |
+| `src/Sluice.Core` | net10.0 | Everything shared: engine, tunnels, DNS, profiles, inbound listeners, the interfaces `Platform/IPlatformServices.cs`, `Interception/ITrafficCapture.cs` and `IProcessLookup` (in `Platform/ProcessLookup.cs`). **Still contains Windows-only code** (WinDivert interceptor, iphlpapi lookups, DPAPI); see [REQUIRED.md](REQUIRED.md#1-move-windows-only-code-out-of-core). |
 | `src/Sluice.Platform.Windows` | net10.0-windows10.0.19041.0 | Toast notifications (Start Menu shortcut with AUMID "Sluice"); creates the WinDivert `Interceptor`. |
 | `src/Sluice.Platform.Linux` | net10.0 | notify-send notifications, `/proc` process lookup, nftables/NFQUEUE capture (`Capture/`), loopback DNS server. |
 | `src/Sluice.Desktop` | net10.0-windows…; net10.0 | The Avalonia app. `#if WINDOWS` in `Services/Platform.cs` picks the platform module. |

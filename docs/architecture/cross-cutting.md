@@ -97,7 +97,8 @@ headers (`Interceptor.DiagnosticPackets`). Helper output (sing-box) is logged li
   closing clients it has no redirect record for, and needs an inbound firewall allow rule because reflected connections
   arrive as incoming. On Linux it binds only `127.0.0.1` and `[::1]` on one port (`LoopbackRelay`): nftables' redirect
   of a local connection goes to loopback, so nothing on the network can reach it.
-- **Helper lifetime.** On Windows a kill-on-close job object ends helpers with Sluice. Linux has no such object for a
+- **Helper lifetime.** On Windows `WindowsPlatform.TieChildProcess` puts helpers in a kill-on-close job object
+  (`HelperJob`), which Windows closes when Sluice ends, however it ends, so the helpers end too. Linux has no such object for a
   running process, so `LinuxPlatform.TieChildProcess` sends the helpers SIGTERM when Sluice exits on a signal or an
   unhandled exception, and records them in a file in the helper folder, so the next Sluice ends the helpers of one
   killed with SIGKILL or crashed (`HelperTies`, [linux/FIXES.md §6](../linux/FIXES.md#6-sing-box-helpers-outlived-sluice--fixed)).

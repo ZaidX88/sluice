@@ -38,8 +38,7 @@ All paths below are relative to `src/` unless they start with another top-level 
                   Tunnels/       TunnelBackends, SingBoxConfig, SingBoxSession, SshSingBoxSession, SshSession,
                                  TunnelTransport, ShareLinks, Subscriptions
                   Dns/           DnsResolver, DnsPolicy, FakeIpPool, DnsMessage
-                  Interception/  ITrafficCapture, Interceptor + WinDivertNative (Windows), PacketReflector,
-                                 DnsRedirector, UdpNat
+                  Interception/  ITrafficCapture, PacketReflector, DnsRedirector, UdpFlows, TcpPacket, UdpPacket
                   Profiles/      Profile, SluiceProfileSerializer, ProxifierPasswordCodec
                   Platform/      IPlatformServices, ProcessLookup
                   Checker/       TunnelChecker
@@ -49,7 +48,7 @@ All paths below are relative to `src/` unless they start with another top-level 
 
 `Sluice.Core` has no UI and is shared by every build. The platform modules implement `IPlatformServices`; the desktop
 app picks one at compile time ([platforms.md](architecture/platforms.md)). Some Windows-only code still sits in Core
-(`Interceptor`, `WinDivertNative`, the iphlpapi part of `ProcessLookup`, `Dpapi`, the job object in `SingBoxSession`);
+(the iphlpapi part of `ProcessLookup`, `Dpapi`); the WinDivert capture is in `Sluice.Platform.Windows/Capture/` (#53);
 see [REQUIRED.md §1](REQUIRED.md#1-move-windows-only-code-out-of-core).
 
 ## The life of one connection
@@ -107,13 +106,13 @@ Key points:
   always go direct, as do programs that host a tunnel of the profile on this machine (loop prevention).
 - **Encrypted tunnels look like SOCKS5 to the engine.** `TunnelBackends` runs one session per tunnel and exposes it on
   `127.0.0.1:<port>`; `TunnelConnector` swaps the tunnel for that endpoint and speaks plain SOCKS5 to it.
-- UDP takes a different path: per-flow decisions in `UdpNat` (Windows) or a drop/pass verdict (Linux). See
+- UDP takes a different path: per-flow decisions in `UdpFlows`, fed by `WinDivertUdp` (Windows) or `TransparentUdp` (Linux). See
   [engine.md](architecture/engine.md#udp).
 
 ## The DNS path
 
 Rules can name hosts (`*.example.com`), but a captured packet only carries an IP address. Sluice keeps names intact
-with **fake IPs**: when the profile resolves names through tunnels (`ResolveOptions.ViaProxy` or leak prevention), DNS
+with **fake IPs**: when the profile resolves names through tunnels (`ResolveOptions.ViaProxy`, on by default, or leak prevention), DNS
 queries for such names are answered locally with a placeholder address from 198.18.0.0/15, and the name is remembered.
 
 ```

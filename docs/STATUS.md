@@ -39,21 +39,21 @@ How the modules fit together: [ARCHITECTURE.md](ARCHITECTURE.md); how each build
 
 | Project | Target | Role |
 |---|---|---|
-| `src/Sluice.Core` | net10.0 | Everything shared: engine, tunnels, DNS, profiles, inbound listeners, the interfaces `Platform/IPlatformServices.cs`, `Interception/ITrafficCapture.cs` and `IProcessLookup` (in `Platform/ProcessLookup.cs`). **Still contains Windows-only code** (WinDivert interceptor, iphlpapi lookups, DPAPI, Job object); see [REQUIRED.md](REQUIRED.md#1-move-windows-only-code-out-of-core). |
-| `src/Sluice.Platform.Windows` | net10.0-windows10.0.19041.0 | Toast notifications (Start Menu shortcut with AUMID "Sluice"); creates the WinDivert `Interceptor`. |
+| `src/Sluice.Core` | net10.0 | Everything shared: engine, tunnels, DNS, profiles, inbound listeners, the interfaces `Platform/IPlatformServices.cs`, `Interception/ITrafficCapture.cs` and `IProcessLookup` (in `Platform/ProcessLookup.cs`). **Still contains Windows-only code** (iphlpapi lookups, DPAPI); see [REQUIRED.md](REQUIRED.md#1-move-windows-only-code-out-of-core). |
+| `src/Sluice.Platform.Windows` | net10.0-windows10.0.19041.0 | Toast notifications (Start Menu shortcut with AUMID "Sluice"), the WinDivert capture (`Capture/`: `Interceptor`, `WinDivertNative`, `CaptureFilter`, `WinDivertUdp`), the helpers' job object, the DNS cache flush. |
 | `src/Sluice.Platform.Linux` | net10.0 | notify-send notifications, `/proc` process lookup, nftables/NFQUEUE capture (`Capture/`), loopback DNS server. |
 | `src/Sluice.Desktop` | net10.0-windows…; net10.0 | The Avalonia app. `#if WINDOWS` in `Services/Platform.cs` picks the platform module. |
-| `src/Sluice.Cli` | net10.0 | Headless engine; `--intercept` uses WinDivert on Windows and `LinuxPlatform` on Linux. |
+| `src/Sluice.Cli` | net10.0-windows…; net10.0 | Headless engine; `#if WINDOWS` picks the platform module, and `--intercept` takes its capture from it. |
 | `tests/Sluice.Tests` (+ `.Linux`, `.Windows`, `.Support`) | net10.0 (Windows tests: net10.0-windows) | xUnit: shared tests plus one project per platform; run with `Sluice.Linux.slnf` / `Sluice.Windows.slnf`. |
 | `build/Dependencies.targets` | — | Fetches WinDivert and sing-box on the first build (pinned, SHA-256 checked) into `.deps/`. |
 | `scripts/` | — | Live-test helpers (`scripts/linux/`), sing-box download scripts. Linux release packaging: `scripts/package-linux.sh` and `packaging/linux/`. |
 
 ## How capture works
 
-**Windows** (`src/Sluice.Core/Interception/`): WinDivert sees each new outbound connection's first packet. `Interceptor`
+**Windows** (`src/Sluice.Platform.Windows/Capture/`): WinDivert sees each new outbound connection's first packet. `Interceptor`
 finds the owning process (iphlpapi), asks `RoutingEngine.Classify`, and reflects connections to handle into the local
 `TransparentInbound` relay (`PacketReflector`). UDP/53 queries are answered with fake addresses by `DnsRedirector`; other
-UDP of tunneled apps goes through `UdpNat`.
+UDP of tunneled apps goes through `UdpFlows` (`WinDivertUdp`).
 
 - **Only packets Sluice may rewrite** reach user mode (`CaptureFilter`). WinDivert can't redirect a whole connection,
   so each packet of a handled flow is rewritten, but nothing else is captured:

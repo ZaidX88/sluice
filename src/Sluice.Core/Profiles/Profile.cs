@@ -134,7 +134,8 @@ public sealed class Rule
 public sealed class ResolveOptions
 {
     public bool AutoModeDetection { get; set; } = true;
-    public bool ViaProxy { get; set; }
+    /// <summary>Look up names through the tunnel (fake addresses) instead of on this PC; on by default, so new profiles don't leak DNS.</summary>
+    public bool ViaProxy { get; set; } = true;
     public bool TryLocalFirst { get; set; }
     public bool BlockNonATypes { get; set; }
     public string ExclusionList { get; set; } = "%ComputerName%; localhost; *.local";

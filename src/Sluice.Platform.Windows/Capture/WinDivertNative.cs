@@ -2,7 +2,7 @@ using System.Net;
 using System.Runtime.InteropServices;
 using System.Text;
 
-namespace Sluice.Core.Interception;
+namespace Sluice.Platform.Windows.Capture;
 
 /// <summary>P/Invoke surface for WinDivert 2.2 (WinDivert.dll + WinDivert64.sys next to the exe).</summary>
 internal static class WinDivertNative

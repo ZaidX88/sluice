@@ -13,6 +13,7 @@ public class DnsPolicyCacheTests
     public void In_place_edits_rebuild_the_policy_and_report_the_change()
     {
         var profile = Profile.CreateDefault();
+        profile.Options.Resolve.ViaProxy = false;              // start with names looked up on this PC
         var cache = new DnsPolicyCache(() => profile, "pc");
         var changes = new List<(bool Now, bool Before)>();
         cache.Changed += (now, before) => changes.Add((now.Enabled, before.Enabled));

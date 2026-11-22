@@ -185,6 +185,10 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
 - Version in the app (2026-11-21, #96): Settings → General ends with "Version …" (`SluiceVersion.Text`, a
   `SelectableTextBlock`, with Copy); the Log page's first line is `SluiceVersion.Banner`, queued by `LogViewModel` (the
   host logs before the page subscribes, and `FileLog` already writes the banner to each file).
+- Names through the tunnel by default (2026-11-21, #167): `ResolveOptions.ViaProxy` defaults to `true`, so
+  `Profile.CreateDefault()`, new profiles, a fresh app (no `AppSettings.Network`) and `sluice-cli` fake names. Saved
+  files keep their value: the `.sluice` writer and `settings.json` always write the bool. Shared tests that expect local
+  lookups set `ViaProxy = false`.
 - Linux notification icon (2026-11-21, #178): `LinuxPlatform.NotifyArguments` builds notify-send's arguments, with
   `--icon=sluice` when install.sh's `/usr/share/icons/hicolor/256x256/apps/sluice.png` exists (otherwise
   `network-vpn`, as before). No `desktop-entry` hint: GNOME Shell ties such a notification to the app and removes it
@@ -228,6 +232,16 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
 - Linux UDP choice in Settings (2026-11-22, #200): `SettingsViewModel.UdpOrder` is the same four choices on both
   systems ("Through the tunnel" first); the Linux branch and the `Shown` mapping (Tunnel shown as "Block it", from before
   #60) are gone, so the selected index and the saved value are `UdpMode` itself.
+- Windows job object and DNS flush in the Windows module (2026-11-22, #56): `WindowsPlatform.TieChildProcess` puts
+  sing-box helpers in the kill-on-close job object (`HelperJob`, out of `SingBoxSession`), `WindowsPlatform.FlushDnsCache`
+  calls `DnsFlushResolverCache` (`DnsCache`, out of `Interceptor`). No change in the desktop app; the Windows CLI gets
+  both back with #58.
+- WinDivert capture in the Windows module (2026-11-22, #53): `Interceptor`, `WinDivertNative` and `CaptureFilter` moved
+  to `Sluice.Platform.Windows/Capture/`; Windows UDP goes through Core's `UdpFlows` (adapter `WinDivertUdp`), so `UdpNat`
+  and `UdpNatTests` are gone and a Direct app's UDP to a faked name now reaches the real host, as on Linux. `TcpPacket`
+  is public. The CLI part of #58 came along: `Sluice.Cli` is multi-targeted, picks its platform module with
+  `#if WINDOWS` and takes its capture from `CreateCapture`; Windows packet diagnostics follow the tracker's Debug level.
+  A failed DNS cache flush is logged again (`DnsCache.Flush`).
 - Ubuntu `.deb` (2026-11-22, #67): `scripts/package-linux.sh --deb` builds `sluice_<version>_amd64.deb` with
   `dpkg-deb --root-owner-group` from the tar.gz's files: `/opt/sluice` with the launcher and the bundled sing-box (pin
   read from `install.sh`), `/usr/bin` links, menu entry, icon; `packaging/linux/deb/` holds the control file and

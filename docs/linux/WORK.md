@@ -22,7 +22,7 @@ Report the results in a pull request that adds them to the "Results" section bel
 2. Run the capture live test (needs root; it uses a local test SOCKS5 server, no internet tunnel):
 
    ```bash
-   dotnet build src/Sluice.Cli -o out/cli
+   dotnet build src/Sluice.Cli -f net10.0 -o out/cli
    dotnet run scripts/linux/make-test-profile.cs -- local/linux-test.sluice
    sudo scripts/linux/capture-livetest.sh out/cli local/linux-test.sluice
    ```

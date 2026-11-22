@@ -37,7 +37,7 @@ Write-Host "Sluice ${version}: publishing to $publish"
 if (Test-Path $publish) { Remove-Item $publish -Recurse -Force }
 dotnet publish (Join-Path $repo 'src\Sluice.Desktop\Sluice.Desktop.csproj') -f net10.0-windows10.0.19041.0 -r win-x64 --self-contained true -c Release -o $publish
 if ($LASTEXITCODE) { throw "publishing Sluice.Desktop failed" }
-dotnet publish (Join-Path $repo 'src\Sluice.Cli\Sluice.Cli.csproj') -r win-x64 --self-contained true -c Release -o $publish
+dotnet publish (Join-Path $repo 'src\Sluice.Cli\Sluice.Cli.csproj') -f net10.0-windows10.0.19041.0 -r win-x64 --self-contained true -c Release -o $publish
 if ($LASTEXITCODE) { throw "publishing Sluice.Cli failed" }
 foreach ($f in 'Sluice.Desktop.exe', 'Sluice.Cli.exe', 'coreclr.dll', 'WinDivert.dll', 'WinDivert64.sys', 'sing-box.exe') {
     if (-not (Test-Path (Join-Path $publish $f))) { throw "$f is missing from the publish output" }

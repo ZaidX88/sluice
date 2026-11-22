@@ -71,7 +71,7 @@ jobs:
           set -euo pipefail
           # Framework-dependent; sing-box is downloaded by install.sh (DECISIONS.md, 2026-11-14).
           dotnet publish src/Sluice.Desktop -f net10.0 -r linux-x64 --self-contained false -c Release -p:SluiceFetchDependencies=false -o out/app
-          dotnet publish src/Sluice.Cli -r linux-x64 --self-contained false -c Release -p:SluiceFetchDependencies=false -o out/app
+          dotnet publish src/Sluice.Cli -f net10.0 -r linux-x64 --self-contained false -c Release -p:SluiceFetchDependencies=false -o out/app
           scripts/package-linux.sh out/app out/pkg
           # Release file names carry the version (CONTRIBUTING.md → Releases).
           mkdir -p dist

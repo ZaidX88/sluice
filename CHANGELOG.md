@@ -15,6 +15,8 @@ into the version's section, and that section, with the install links, becomes th
 - Linux: UDP goes through tunnels that carry it (SOCKS5 and the sing-box protocols), so QUIC, calls and games work
   through them instead of being blocked. Apps with a Direct rule can also use UDP to names looked up through the
   tunnel (#60).
+- Windows: apps with a Direct rule can use UDP (QUIC, NTP, games) to names looked up through the tunnel; before, Sluice
+  dropped it and the app had to fall back to TCP (#53).
 - The version is shown at the bottom of Settings → General, with a Copy button for bug reports, and the Log page
   starts with the same version line as the log files (#96).
 - Sluice tells you when a new version is out: a notice with a Download link for your system, checked once a day on
@@ -33,6 +35,8 @@ into the version's section, and that section, with the install links, becomes th
 - Password protection moved from Settings to the profile menu, since it belongs to each profile: one switch for a
   master password, and on Windows the option to tie passwords to your Windows account. Plain text is no longer offered;
   a profile saved that way is saved with basic encryption from now on (#150).
+- Website names are looked up through the tunnel by default, so a new install doesn't leak DNS. Settings and
+  profiles you already have keep their choice, and "On this PC" is still in Settings → Privacy (#167).
 
 ### Fixed
 - Linux: Settings → Tunnels shows and saves "Through the tunnel" for UDP again, instead of showing it as "Block it"

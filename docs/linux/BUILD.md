@@ -10,7 +10,7 @@ build downloads the Linux sing-box into `.deps/`.
 ```bash
 dotnet build src/Sluice.Desktop -f net10.0
 dotnet run --project src/Sluice.Desktop -f net10.0
-dotnet run --project src/Sluice.Cli -- --help
+dotnet run --project src/Sluice.Cli -f net10.0 -- --help
 ```
 
 These work as written on Linux: `Directory.Build.props` sets `EnableWindowsTargeting`, because restore also restores
@@ -32,7 +32,7 @@ are never committed.
 
 ```bash
 dotnet publish src/Sluice.Desktop -f net10.0 -r linux-x64 --self-contained false -c Release -p:SluiceFetchDependencies=false -o out/app
-dotnet publish src/Sluice.Cli             -r linux-x64 --self-contained false -c Release -p:SluiceFetchDependencies=false -o out/app
+dotnet publish src/Sluice.Cli -f net10.0  -r linux-x64 --self-contained false -c Release -p:SluiceFetchDependencies=false -o out/app
 scripts/package-linux.sh out/app out/dist          # run on Linux or WSL (sets permissions, extracts the icon)
 scripts/package-linux.sh --deb out/app out/dist    # the same, plus sluice_<version>_amd64.deb (needs dpkg-deb)
 ```
@@ -112,7 +112,7 @@ sing-box through `PrepareHelperStart`), and doesn't start the program if that fa
 - **Capture live test** (root; WSL works):
 
   ```bash
-  dotnet build src/Sluice.Cli -o out/cli
+  dotnet build src/Sluice.Cli -f net10.0 -o out/cli
   dotnet run scripts/linux/make-test-profile.cs -- local/linux-test.sluice
   sudo scripts/linux/capture-livetest.sh out/cli local/linux-test.sluice [upstream-dns]
   ```

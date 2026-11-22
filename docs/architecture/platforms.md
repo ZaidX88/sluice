@@ -127,13 +127,12 @@ The button, the banner and the rules engine are the same code on both; only the 
 
 ## Not finished yet
 
-- **Windows capture code still lives in `Sluice.Core`** (`Interceptor`, `WinDivertNative`, iphlpapi process lookup,
-  DPAPI, the Job object), guarded by `OperatingSystem.IsWindows()` checks. Core is built once for both, so this code is
-  also compiled into the Linux build; it is never called there (`LinuxPlatform.CreateCapture` uses nftables), but it
-  should move to `Sluice.Platform.Windows`. The plan is in [REQUIRED.md §1](../REQUIRED.md#1-move-windows-only-code-out-of-core)
-  and the interfaces it uses are fixed below.
-- **`Sluice.Cli` is not multi-targeted yet**: it picks its capture with a run-time `OperatingSystem.IsLinux()` branch
-  instead of the platform module (same section of REQUIRED.md).
+- **Some Windows code still lives in `Sluice.Core`** (iphlpapi process lookup, #54; DPAPI, #55), guarded by
+  `OperatingSystem.IsWindows()` checks. Core is built once for both, so this code is also compiled into the Linux
+  build; it is never called there, but it should move to `Sluice.Platform.Windows`. The plan is in
+  [REQUIRED.md §1](../REQUIRED.md#1-move-windows-only-code-out-of-core) and the interfaces it uses are fixed below.
+  The WinDivert capture moved in #53 (`Sluice.Platform.Windows/Capture/`); WinDivert is still downloaded by Core's
+  `build/Dependencies.targets` (#58).
 
 ## 6. Interfaces for the Core split (decided in #52)
 
@@ -143,8 +142,8 @@ doesn't fit stops and raises it on #46; the owner changes this section first. Ev
 part lands.
 
 **The Core side is in (#104):** `PlatformServices`, the four members of 6.2 and `ISecretProtector` exist in Core;
-`App` and the CLI call `PlatformServices.Use`; `SingBoxSession` calls `TieChildProcess` (it still assigns its own job
-object until #56) and `ProxifierPasswordCodec` uses `SecretProtector` when there is one (otherwise the DPAPI code still
+`App` and the CLI call `PlatformServices.Use`; `SingBoxSession` calls `TieChildProcess` (the job object moved to the Windows module in
+#56) and `ProxifierPasswordCodec` uses `SecretProtector` when there is one (otherwise the DPAPI code still
 in Core, until #55). So each platform part changes only its own area's files.
 
 ### 6.1 Reaching the platform from Core: `PlatformServices`
@@ -199,9 +198,9 @@ public interface IPlatformServices
 | Member | Windows | Linux | Called by |
 |---|---|---|---|
 | `ProcessLookup` | `WindowsProcessLookup` (iphlpapi + kernel32, moved out of `ProcessLookup.cs`, #54) | `LinuxProcessLookup` (sock_diag + `/proc`; this property since #57, no longer set in `OnAppStart`) | `PlatformServices.Use` sets `ProcessLookup.Backend` |
-| `TieChildProcess` | the kill-on-close job object, moved out of `SingBoxSession` (#56) | ends helpers on exit signals and cleans up helpers left by a crashed run (`HelperTies`, #57) | `SingBoxSession`, right after `Process.Start` |
+| `TieChildProcess` | the kill-on-close job object (`HelperJob`), moved out of `SingBoxSession` (#56) | ends helpers on exit signals and cleans up helpers left by a crashed run (`HelperTies`, #57) | `SingBoxSession`, right after `Process.Start` |
 | `PrepareHelperStart` | nothing | clears the thread's ambient and inheritable capability sets (`Libc.ClearPassedOn`), so sing-box gets none of the capabilities the launcher passed on; throws if they can't be cleared | `SingBoxSession`, on the same thread right before `Process.Start`; an exception stops the start |
-| `FlushDnsCache` | `DnsFlushResolverCache` (dnsapi), moved out of `Interceptor` (#56) | `resolvectl flush-caches` (`LinuxCapture.FlushResolverCache`, which the capture calls too, #57) | each capture, where it flushes today |
+| `FlushDnsCache` | `DnsFlushResolverCache` (dnsapi, `DnsCache`), moved out of `Interceptor` (#56); the moved `Interceptor` calls `DnsCache.Flush()` directly and logs a failure (#53) | `resolvectl flush-caches` (`LinuxCapture.FlushResolverCache`, which the capture calls too, #57) | each capture, where it flushes today |
 | `SecretProtector` | `WindowsSecretProtector` (DPAPI, moved from `Profiles/Dpapi.cs`, #55) | `null` | `ProxifierPasswordCodec` |
 
 `ProcessLookup` (the static class in Core) keeps `Backend` and its forwarding methods; with no backend they return
@@ -265,7 +264,9 @@ public sealed class UdpFlows : IAsyncDisposable
 - **Done in #59:** `UdpFlows` is in Core beside the unchanged `UdpNat` (`UdpNat.cs` and its tests are Windows files, so
   #53 switches `Interceptor` over and deletes them); its tests are `UdpFlowsTests` in the shared tests. It also takes
   Direct UDP to a placeholder address, which `UdpNat` and Linux drop: it goes out through a plain UDP socket to the
-  name's real address, with replies from the placeholder (engine.md → UDP). Linux uses it since #60 (`TransparentUdp`); #167 waits for #53.
+  name's real address, with replies from the placeholder (engine.md → UDP). Linux uses it since #60 (`TransparentUdp`).
+- **Done in #53:** Windows uses it through `WinDivertUdp` (`Sluice.Platform.Windows/Capture/`); `UdpNat` and its tests
+  are gone.
 
 ### 6.5 The CLI takes its capture from the platform
 
@@ -275,6 +276,10 @@ gets its capture from `CreateCapture(engine)` after checking `CaptureUnavailable
 The `OperatingSystem.IsLinux()` branch and the direct `new Interceptor(...)` go. The Windows packet diagnostics behind
 `--log debug` (`Interceptor.DiagnosticPackets`) become the Windows capture's own choice: it enables them when the
 tracker's level is Debug.
+
+**Done in #53** (pulled forward from #58, because moving `Interceptor` out of Core needed it): the multi-targeting, the
+platform choice and `CreateCapture`. Scripts and docs that build, run or publish the CLI pass `-f`. What is left of
+#58 is moving the WinDivert entries of `build/Dependencies.targets` to the Windows module.
 
 ### 6.6 Capture rights and autostart (#68, for #69 and #70)
 

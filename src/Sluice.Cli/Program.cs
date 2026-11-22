@@ -47,9 +47,14 @@ if (args.Length > 0 && args[0] is "-h" or "--help" or "help")
     return 0;
 }
 
-// The OS module, before anything else: every command may start helpers (sing-box), and Core reaches the platform
-// through PlatformServices for them (PrepareHelperStart, TieChildProcess). Windows: until #58, as before.
-if (OperatingSystem.IsLinux()) Sluice.Core.Platform.PlatformServices.Use(new Sluice.Platform.Linux.LinuxPlatform());
+// The OS module this build was made for, before anything else: every command may start helpers (sing-box), and Core
+// reaches the platform through PlatformServices for them (PrepareHelperStart, TieChildProcess).
+Sluice.Core.Platform.PlatformServices.Use(
+#if WINDOWS
+    new Sluice.Platform.Windows.WindowsPlatform());
+#else
+    new Sluice.Platform.Linux.LinuxPlatform());
+#endif
 
 return args.Length > 0 ? args[0] switch
 {
@@ -130,19 +135,11 @@ static async Task<int> RunEngineAsync(string[] args)
     ITrafficCapture? interceptor = null;
     if (intercept)
     {
-        if (OperatingSystem.IsLinux())
-        {
-            // nftables + NFQUEUE (Sluice.Platform.Linux); process lookups read /proc.
-            var linux = Sluice.Core.Platform.PlatformServices.Current;   // set at start-up
-            linux.OnAppStart();
-            if (linux.CaptureUnavailableReason is { } why) { Console.Error.WriteLine(why); return 2; }
-            if (!linux.HasCaptureRights) { Console.Error.WriteLine(linux.CaptureRightsHint); return 2; }
-            interceptor = linux.CreateCapture(engine);
-        }
-        else
-        {
-            interceptor = new Interceptor(engine) { DiagnosticPackets = screenLevel == LogLevel.Debug ? 20 : 0 };
-        }
+        // From the platform module: WinDivert on Windows, nftables + NFQUEUE on Linux.
+        var platform = Sluice.Core.Platform.PlatformServices.Current;   // set at start-up
+        if (platform.CaptureUnavailableReason is { } why) { Console.Error.WriteLine(why); return 2; }
+        if (!platform.HasCaptureRights) { Console.Error.WriteLine(platform.CaptureRightsHint); return 2; }
+        interceptor = platform.CreateCapture(engine);
         try
         {
             interceptor.Start();

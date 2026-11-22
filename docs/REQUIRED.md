@@ -11,15 +11,11 @@ interface it hands out). Still in Core:
 
 | File | Move to / replace with |
 |---|---|
-| `Interception/WinDivertNative.cs`, `Interceptor.cs`, WinDivert I/O in `UdpNat.cs` | `Sluice.Platform.Windows`. `PacketReflector`, `DnsRedirector`, `TcpPacket`, `UdpPacket` are pure packet logic and can stay. |
 | `Platform/ProcessLookup.cs` (iphlpapi/kernel32 code) | `WindowsProcessLookup : IProcessLookup`; Core keeps the interface and `Backend`. |
 | `Profiles/Dpapi.cs` (used by `ProxifierPasswordCodec`) | an `ISecretProtector` in Core. Linux: a clear "not supported" for "account"-mode (DPAPI) passwords. |
-| Job object in `Tunnels/SingBoxSession.cs` | `IPlatformServices.TieChildProcess(Process)`. Windows: Job object. Linux: done (#57): SIGTERM to the helpers on exit, and the next start ends those of a Sluice killed with SIGKILL. |
-| `Interceptor.FlushOsDnsCache` (dnsapi) | platform method; Linux uses `resolvectl flush-caches`. |
 | WinDivert entries in `build/Dependencies.targets` | import from the Windows module instead of Core. |
 
-Then make `Sluice.Cli` multi-target like the desktop app and take its capture from the platform module instead of the
-`OperatingSystem.IsLinux()` branch in `Program.cs`.
+`Sluice.Cli` is multi-targeted like the desktop app and takes its capture from the platform module (done in #53).
 
 The interfaces every part uses (`PlatformServices`, the new `IPlatformServices` members, `ISecretProtector`,
 `UdpFlows` / `IDatagramSender`) are fixed in [architecture/platforms.md §6](architecture/platforms.md#6-interfaces-for-the-core-split-decided-in-52).

@@ -141,7 +141,7 @@ The flow is drawn in [ARCHITECTURE.md](../ARCHITECTURE.md#the-dns-path).
 
 | Class | Role |
 |---|---|
-| `DnsPolicy` | Built from `ResolveOptions` + `LeakPreventionMode`. Faking is on with `ViaProxy` or leak prevention ("auto-detect" counts as local). `ShouldFake(name)` honours the exclusion list (`OnlyFromListMode` inverts it) and never fakes `localhost`, `.localhost`, `.local`, `.arpa` or IP literals. `BlockNonATypes` answers other record types with no data. |
+| `DnsPolicy` | Built from `ResolveOptions` + `LeakPreventionMode`. Faking is on with `ViaProxy` (the default since #167) or leak prevention ("auto-detect" counts as local). `ShouldFake(name)` honours the exclusion list (`OnlyFromListMode` inverts it) and never fakes `localhost`, `.localhost`, `.local`, `.arpa` or IP literals. `BlockNonATypes` answers other record types with no data. |
 | `DnsPolicyCache` | The current `DnsPolicy` for a profile, rebuilt when the setting values change (`Settings` record), with a `Changed` event (new, old) so a capture can flush the system DNS cache. Used by both captures on every query, and checked by a timer (Windows every 5 s, Linux every second) so a change applies even when no app asks. |
 | `FakeIpPool` | Maps names ↔ 198.18.0.0/15 (131 070 usable addresses, round-robin, the oldest recycled when full). `IsFake(ip)` is a static range check. `Save`/`Load` write `fake-dns.json` atomically (temp file + rename) under `FakeIpPool.DefaultStatePath` (`<ApplicationData>/Sluice/`); a damaged file is ignored. |
 | `DnsRedirector` | Pure packet logic: `TryAnswer(ip packet)` (Windows) or `TryAnswerQuery(dns message)` (Linux server) returns a reply, or null to let the query go to a real resolver. Faked A → one fake address, TTL 5 s; AAAA / HTTPS / SVCB → no data (no IPv6 fakes, and those records can carry real address hints). Queries from `DnsResolver`'s own port are never touched. |
@@ -171,15 +171,15 @@ UDP is only captured while capture runs and the profile's `UdpMode` is not `Bypa
 it is: the flow gets its own UDP socket to the name's real address (looked up like a Direct TCP connection:
 `RoutingEngine.HostResolver`, else the OS; the app's address family first), and replies reach the app from the
 placeholder. Only datagrams from that address and port are passed on; a failed lookup is retried at most every 5 s.
-Linux uses it since #60; Windows switches to it in #53 (which deletes `UdpNat`).
+Linux uses it since #60, Windows since #53 (which deleted `UdpNat`).
 
-**Windows: `Interception/UdpNat.cs`.** For each outbound datagram `Interceptor` calls `UdpNat.ProcessOutbound`. Flows
-are keyed by (app socket, destination) and classified once (again after a profile change). Tunneled datagrams are taken
-out of the network and sent through one `Socks5UdpAssociation` per app socket and tunnel (`RoutingEngine.OpenUdpAsync`,
-which starts an encrypted tunnel's session and uses its local SOCKS5); replies are rebuilt as inbound packets from the
-original destination (`UdpPacket`) and injected through the `Injector` delegate. Fake destinations are sent by name.
-Multicast, broadcast, link-local, DNS and DHCP are never captured; idle flows end after 60 s; a failed association is
-retried at most every 5 s. Each tunneled flow appears in the Connections list (`BeginUdp`).
+**Windows: `Sluice.Platform.Windows/Capture/WinDivertUdp.cs` (#53).** For each outbound datagram `Interceptor` calls
+`WinDivertUdp.ProcessOutbound`, which parses it (`UdpPacket.TryParse`) into an `AppDatagram` whose context is its
+WinDivert address and hands it to `UdpFlows`. Replies are rebuilt as inbound packets from the original destination
+(`UdpPacket.Build`) and injected with that address. Flows are keyed by (app socket, destination) and classified once
+(again after a profile change); tunneled datagrams go through one `Socks5UdpAssociation` per app socket and tunnel
+(`RoutingEngine.OpenUdpAsync`). Multicast, broadcast, link-local, DNS and DHCP are never captured; idle flows end after
+60 s; a failed association is retried at most every 5 s. Each tunneled flow appears in the Connections list.
 
 **Linux:** `LinuxCapture` passes, drops or takes each new flow (verdict cached 30 s). Taken flows (tunnel, or Direct
 to a placeholder) reach `UdpFlows` through a tproxy and the transparent socket `TransparentUdp`, which also delivers

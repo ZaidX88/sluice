@@ -16,13 +16,17 @@ public sealed record RuleMatch(Rule Rule, RuleAction Action);
 
 /// <summary>
 /// Proxifier semantics: enabled rules are evaluated top to bottom, first match wins.
-/// Empty Applications / Targets / Ports mean "any". The rule named "Default" always
+/// Empty Applications / Targets / Ports mean "any"; a Ports value with nothing that parses
+/// matches nothing (see <see cref="TryParsePorts"/>). The rule named "Default" always
 /// matches and is evaluated last regardless of its position.
 /// </summary>
 public sealed class RuleEngine
 {
     private readonly List<CompiledRule> _rules;
     private readonly CompiledRule _default;
+
+    /// <summary>What is wrong with the enabled rules' values, one line per rule, for the log when the profile loads.</summary>
+    public IReadOnlyList<string> Problems { get; }
 
     public RuleEngine(IEnumerable<Rule> rules, string? computerName = null)
     {
@@ -31,6 +35,7 @@ public sealed class RuleEngine
         _rules = all.Where(r => r.Enabled && !r.IsDefault).Select(r => new CompiledRule(r, env)).ToList();
         var def = all.FirstOrDefault(r => r.IsDefault) ?? new Rule { Name = "Default", Action = RuleAction.Direct };
         _default = new CompiledRule(def, env);
+        Problems = _rules.Select(r => r.Problem).OfType<string>().ToList();
     }
 
     public RuleMatch Match(ConnectionInfo c)
@@ -50,12 +55,21 @@ public sealed class RuleEngine
         private readonly List<TargetPattern>? _targets;
         private readonly List<(int From, int To)>? _ports;
 
+        /// <summary>What is wrong with this rule's values, or null.</summary>
+        public string? Problem { get; }
+
         public CompiledRule(Rule rule, MacroContext env)
         {
             Rule = rule;
             _apps = ParseApps(rule.Applications);
             _targets = ParseTargets(rule.Targets, env);
-            _ports = ParsePorts(rule.Ports);
+            // A Ports value that doesn't parse must not mean "any port" (#230): what parsed is kept, and with nothing
+            // left the rule matches no connection.
+            if (!TryParsePorts(rule.Ports, out var ports, out var invalid))
+                Problem = $"Rule \"{rule.Name}\": Ports {string.Join(", ", invalid.Select(t => $"\"{t}\""))} " +
+                          (invalid.Count == 1 ? "is not a port or range" : "are not ports or ranges") +
+                          (ports!.Count == 0 ? "; the rule matches no connection" : "; ignored");
+            _ports = ports?.ToList();
         }
 
         public bool Matches(ConnectionInfo c)
@@ -91,21 +105,45 @@ public sealed class RuleEngine
 
     // ---------- ports ----------
 
-    internal static List<(int, int)>? ParsePorts(string? spec)
+    /// <summary>
+    /// Parses a rule's Ports value: ports and ranges (<c>80; 443, 8000-9000</c>) separated by <c>;</c>, <c>,</c>,
+    /// newlines or spaces, each port 0–65535. <paramref name="ranges"/> is null for an empty value ("any port"),
+    /// otherwise the ranges that parsed: an empty list when none did, so the rule matches no connection.
+    /// <paramref name="invalid"/> lists the parts that are not a port or range (<c>https</c>, <c>70000</c>).
+    /// Returns false when there are any. The rule engine and the rule dialog's check both use it.
+    /// </summary>
+    public static bool TryParsePorts(string? spec, out IReadOnlyList<(int From, int To)>? ranges, out IReadOnlyList<string> invalid)
     {
+        var bad = new List<string>();
+        invalid = bad;
         var tokens = Tokenize(spec);
-        if (tokens.Count == 0) return null;
-        var list = new List<(int, int)>();
-        foreach (var tok in tokens)
+        if (tokens.Count == 0)
+        {
+            ranges = null;
+            return true;
+        }
+        var list = new List<(int From, int To)>();
+        foreach (var tok in tokens.SelectMany(SplitPortToken))
         {
             var dash = tok.IndexOf('-');
-            if (dash > 0 && int.TryParse(tok[..dash], out var a) && int.TryParse(tok[(dash + 1)..], out var b))
+            if (dash > 0 && TryParsePort(tok[..dash], out var a) && TryParsePort(tok[(dash + 1)..], out var b))
                 list.Add((Math.Min(a, b), Math.Max(a, b)));
-            else if (int.TryParse(tok, out var p))
+            else if (TryParsePort(tok, out var p))
                 list.Add((p, p));
+            else
+                bad.Add(tok);
         }
-        return list.Count == 0 ? null : list;
+        ranges = list;
+        return bad.Count == 0;
     }
+
+    /// <summary>Ports never contain spaces, so <c>80 443</c> is two ports; <c>8000 - 9000</c> stays one range.</summary>
+    private static IEnumerable<string> SplitPortToken(string tok) =>
+        Regex.Replace(tok, @"\s*-\s*", "-").Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+
+    private static bool TryParsePort(string s, out int port) =>
+        int.TryParse(s, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out port)
+        && port <= 65535;
 
     // ---------- targets ----------
 

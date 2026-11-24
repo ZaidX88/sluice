@@ -53,6 +53,7 @@ public sealed class RoutingEngine : IAsyncDisposable
         Tracker = tracker ?? new ConnectionTracker();
         Backends = new Tunnels.TunnelBackends(line => Tracker.Write(LogLevel.Normal, line));
         _state = Build(profile);
+        ReportRuleProblems();
         _ = Backends.PruneAsync(profile);   // learn the tunnels (and which are turned off)
         _relayLog = new Timer(_ => LogRelay(), null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
         Ipv6Fallback.Marked += (route, span) => Tracker.Write(LogLevel.Normal,
@@ -100,6 +101,14 @@ public sealed class RoutingEngine : IAsyncDisposable
         Ipv6Fallback.Clear();
         _ = Backends.PruneAsync(profile);
         Tracker.Write(LogLevel.Normal, $"Profile loaded: {profile.Tunnels.Count} tunnels, {profile.Chains.Count} chains, {profile.Rules.Count} rules");
+        ReportRuleProblems();
+    }
+
+    /// <summary>Rule values that don't parse (#230), once per loaded profile, not per connection.</summary>
+    private void ReportRuleProblems()
+    {
+        foreach (var problem in _state.Rules.Problems)
+            Tracker.Write(LogLevel.Error, problem);
     }
 
     private Snapshot Build(Profile p) => new(p, new RuleEngine(p.Rules), new TunnelConnector(p, Backends) { Resolver = _resolver });

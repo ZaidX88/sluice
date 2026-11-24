@@ -275,3 +275,6 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   ports; those are dropped, and a non-empty value with nothing left gives an empty list that matches nothing.
   `RuleEngine.Problems` names the rule and parts; `RoutingEngine` writes them at Error when a profile loads, not per
   connection. Tests in `RuleEngineTests`.
+- Linux tarball name in the docs (2026-11-24, #217): `docs/linux/INSTALL.md` (check and install steps) and
+  `packaging/linux/README.txt` use `sluice-<version>-linux-x64.tar.gz`, the name `release.yml` publishes and its
+  `.sha256` checks; the folder inside stays `sluice-linux-x64`.

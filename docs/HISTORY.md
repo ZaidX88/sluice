@@ -269,3 +269,6 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   byte 0, then the count as a little-endian `int32`), which `Decode` reads next to Proxifier's layout. Shorter values
   are written as before. `LongSecretTests` round-trips a 4096-bit RSA key in every mode (account mode with a stand-in
   `ISecretProtector`).
+- Linux tarball name in the docs (2026-11-24, #217): `docs/linux/INSTALL.md` (check and install steps) and
+  `packaging/linux/README.txt` use `sluice-<version>-linux-x64.tar.gz`, the name `release.yml` publishes and its
+  `.sha256` checks; the folder inside stays `sluice-linux-x64`.

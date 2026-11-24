@@ -6,7 +6,7 @@ tunnel (SSH, SOCKS, HTTP(S), VLESS, VMess, Trojan, Shadowsocks, Hysteria2, TUIC)
 
 Install
 -------
-    tar -xzf sluice-linux-x64.tar.gz
+    tar -xzf sluice-<version>-linux-x64.tar.gz
     cd sluice-linux-x64
     sudo ./install.sh
 

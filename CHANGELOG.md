@@ -6,8 +6,9 @@ fixes) is [docs/HISTORY.md](docs/HISTORY.md).
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/). Each pull request with a change users would notice adds one line under
 **Unreleased**, in one of the groups **Added**, **Changed**, **Fixed**, **Removed** or **Security**, with its issue
-number ([docs/CONTRIBUTING.md](docs/CONTRIBUTING.md#from-idea-to-merge)). At a release the owner turns **Unreleased**
-into the version's section, and that section, with the install links, becomes the GitHub Release notes.
+number ([docs/CONTRIBUTING.md](docs/CONTRIBUTING.md#from-idea-to-merge)). A release candidate's GitHub Release notes
+are **Unreleased** together with the coming version's section, with the install links; at the release the owner moves
+**Unreleased** into that section, dated, and the section becomes the notes.
 
 ## [Unreleased]
 

@@ -295,10 +295,13 @@ the repository**:
   a `.sha256`, and creates a **draft** GitHub Release with them; the owner reviews it and publishes it (a `-rc` tag
   becomes a pre-release). Run by hand from the Actions tab, the workflow only builds the packages and keeps them as
   workflow artifacts (a dry run, or a test installer). Built packages are never committed.
-- **Release notes** are the version's section of [CHANGELOG.md](../CHANGELOG.md), plus the install links. Before
-  tagging, the owner turns `Unreleased` into that section (with the date) and checks its known limitations; the
-  release workflow copies the section into the draft (`scripts/release-notes.sh`) and refuses a release whose section
-  is still marked "not released yet".
+- **Release notes** come from [CHANGELOG.md](../CHANGELOG.md), plus the install links, written into the draft by
+  `scripts/release-notes.sh`. A release candidate (`1.0.0-rc.1`) gets `Unreleased` joined with the version's section
+  while that one is still marked "not released yet" (one list per group), or `Unreleased` alone if there is no such
+  section, so pull requests keep adding their lines under `Unreleased` between candidates. Before tagging the release
+  (`1.0.0`), the owner moves the `Unreleased` lines into the version's section, gives it the date and checks its known
+  limitations; the script refuses a release whose section is still marked "not released yet" or while `Unreleased`
+  still has lines.
 - **Packaging scripts are code on `main`**, reviewed like any other change: `packaging/linux/` and
   `scripts/package-linux.sh` belong to the Linux area, `packaging/windows/` and `scripts/package-windows.ps1` to the
   Windows area. Packages are built only from a clean checkout of a tag.

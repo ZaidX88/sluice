@@ -2,7 +2,7 @@
 #
 # A tag vX.Y.Z or vX.Y.Z-rc.N pushed on main: check it matches <Version> in Directory.Build.props, build the Linux
 # tar.gz and the Windows installer from that tag, and create a **draft** GitHub Release with them, their .sha256 files
-# and the version's CHANGELOG.md section as notes. The owner reviews the draft and publishes it.
+# and notes from CHANGELOG.md (scripts/release-notes.sh). The owner reviews the draft and publishes it.
 #
 # Run by hand (Actions → Release → Run workflow) it only builds the packages from the chosen ref and keeps them as
 # workflow artifacts: a dry run, and a way to get a release-candidate installer for testing.

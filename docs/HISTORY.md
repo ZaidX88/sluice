@@ -280,3 +280,7 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
 - Linux tarball name in the docs (2026-11-24, #217): `docs/linux/INSTALL.md` (check and install steps) and
   `packaging/linux/README.txt` use `sluice-<version>-linux-x64.tar.gz`, the name `release.yml` publishes and its
   `.sha256` checks; the folder inside stays `sluice-linux-x64`.
+- Release-candidate notes (2026-11-25, #214): `scripts/release-notes.sh` took only `[1.0.0]` for `1.0.0-rc.1`
+  because the section exists, leaving out everything under `[Unreleased]`. A candidate now joins `[Unreleased]` with a
+  version section still marked "not released yet", merging the `### ` groups (Keep a Changelog order, Known
+  limitations last); a release refuses a non-empty `[Unreleased]`. The prerelease argument defaults from the version.

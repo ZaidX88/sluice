@@ -43,6 +43,8 @@ are **Unreleased** together with the coming version's section, with the install 
 - Cancelling the master password when Sluice starts no longer runs an empty profile that sends everything
   Direct without a word: a banner says the profile wasn't opened and to choose it from the profile menu, and capture
   isn't turned on at launch until a profile is open (#248).
+- Linux: capture starts on a system with IPv6 disabled (`net.ipv6.conf.all.disable_ipv6=1`) and works over IPv4,
+  UDP through tunnels included; before, it failed with "Cannot assign requested address" (#216).
 - A rule's Ports value that isn't a list of ports (`https`, `70000`) no longer makes the rule apply to every port,
   so a Block rule can't block everything by mistake: those parts are ignored, a rule with no valid port matches no
   connection, and the Log page says which rule and value. Ports may also be separated by spaces (`80 443`) (#230).

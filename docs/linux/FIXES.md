@@ -10,6 +10,11 @@ is worth keeping.
 ## 1. Linux capture limitations
 
 - ~~UDP of tunneled apps is dropped~~ **fixed** (#60): taken through a tproxy into `UdpFlows` (REQUIRED.md §2).
+- ~~Capture fails when IPv6 is disabled~~ **fixed** (#216): with `net.ipv6.conf.*.disable_ipv6=1`, `::1` is gone,
+  so `LinuxDnsServer` couldn't bind it ("Cannot assign requested address") and capture didn't start; and adding the
+  IPv6 policy route fails with EACCES, which lost UDP tunnelling for IPv4 too and left the IPv4 rule behind. Both now
+  carry on with IPv4 only, and IPv6 UDP of tunneled apps is dropped rather than leaked (`LinuxIpv6DisabledNetnsTests`,
+  `LinuxCapture.CanTake`).
 - ~~IPv6 extension headers aren't parsed in `PacketInfo.TryParse`~~ **fixed** (issue #35, PR #27): the parser follows
   the chain; ESP, later fragments and Routing headers with segments left still pass uncaptured.
 - With no non-loopback upstream DNS (e.g. dnsmasq without systemd-resolved), DNS isn't captured (a log line says so).

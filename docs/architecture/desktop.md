@@ -8,6 +8,7 @@ JetBrains Mono (`Assets/Fonts/`), pill buttons, cards, light and dark themes.
 
 ```
 Program.cs ──▶ App (App.axaml.cs)
+                 ├─ PlatformServices.Use(OsPlatform.Current)
                  ├─ single-instance pipe, OsPlatform.Current.OnAppStart()
                  ├─ AppSettings.Load()
                  ├─ EngineHost(settings)  ──owns──▶ RoutingEngine, ConnectionTracker, Statistics, FileLog,
@@ -40,20 +41,24 @@ Program.cs ──▶ App (App.axaml.cs)
 
 `OnFrameworkInitializationCompleted` runs, in order:
 
-1. `--theme dark|light`; `--screenshot DIR` short-circuits into `ScreenshotMode` and exits.
-2. **Single instance:** connect to the named pipe `Sluice-<user name>`; if the connect succeeds, another Sluice runs:
+1. `PlatformServices.Use(OsPlatform.Current)`, before anything else: Core reaches the OS module through it, and the
+   call points `ProcessLookup.Backend` at the platform's process lookup (`IPlatformServices.ProcessLookup`; #104).
+   Until then `PlatformServices.Current` is a platform that does nothing
+   ([platforms.md §6.1](platforms.md#61-reaching-the-platform-from-core-platformservices)).
+2. `--theme dark|light`; `--screenshot DIR` short-circuits into `ScreenshotMode` and exits.
+3. **Single instance:** connect to the named pipe `Sluice-<user name>`; if the connect succeeds, another Sluice runs:
    send `show` and exit, even if the write fails (#171). Otherwise listen on that pipe (`ListenForShowRequestsAsync`),
    read each request to its end before closing it, and show the window. On Windows the pipe (`CreatePipeServer`) also
    lets the same user connect from a process without admin rights, so a normal launch reaches a Sluice running as
    administrator.
-3. `OsPlatform.Current.OnAppStart()` (Windows: Start Menu shortcut and app ID for notifications; Linux: `/proc` process
-   lookup).
-4. Create `EngineHost` and install `CrashGuard` on it (below), then `MainViewModel`, `MainWindow`, `AppTray`; route
+4. `OsPlatform.Current.OnAppStart()` (Windows: `StartMenuShortcut.Ensure()` registers the app ID "Sluice" and a Start
+   Menu shortcut carrying it, so notifications show Sluice's name and icon; Linux: nothing).
+5. Create `EngineHost` and install `CrashGuard` on it (below), then `MainViewModel`, `MainWindow`, `AppTray`; route
    `EngineHost.TunnelNotice` to `OsPlatform.Current.Notify`.
-5. Open the profile (`EngineHost.OpenStartupProfile`, asking for a master password if needed): `--profile` as it is;
+6. Open the profile (`EngineHost.OpenStartupProfile`, asking for a master password if needed): `--profile` as it is;
    otherwise `AppSettings.LastProfilePath`, copied into the profiles folder once if it is elsewhere (#134); otherwise
    the first profile there, or a new `Default`.
-6. `--log-file DIR` (a Debug-level log for this run only), start the local SOCKS5 listener, and turn capture on with
+7. `--log-file DIR` (a Debug-level log for this run only), start the local SOCKS5 listener, and turn capture on with
    `--intercept` or `StartInterceptionOnLaunch`.
 
 `ShutdownMode` is explicit: closing the window only hides it when tray mode is on and `TrayHost` finds a tray (stock

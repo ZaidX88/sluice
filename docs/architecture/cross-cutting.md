@@ -66,6 +66,12 @@ tracker only raises its `Log` event up to its `Level`, so each consumer raises t
 Debug adds per-SYN decisions, DNS answers, periodic capture counters and (CLI `--intercept --log debug`) raw packet
 headers (`Interceptor.DiagnosticPackets`). Helper output (sing-box) is logged line by line ([core/FIXES.md §1](../core/FIXES.md#1-sing-box-output-logged-at-the-wrong-level)).
 
+`Log` handlers must not throw: the tracker calls them on relay and timer threads, where an exception ends the process,
+and a throwing handler also hides the line from the handlers after it. `FileLog` catches its own open and write errors
+(disk full, folder deleted or denied, #226): it reports `Log file stopped: …` once at Error, stops writing the file,
+tries again every `FileLog.RetryAfter` (60 s; recreating a deleted folder), and on success logs which span of lines is
+missing.
+
 ## Security points
 
 - **Secrets at rest.** Profiles encrypt tunnel passwords and secret settings by the profile's mode

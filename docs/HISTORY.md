@@ -253,3 +253,8 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   kernel. `WinDivertNative.TakesOutbound` (WinDivertHelperEvalFilter) lets `CaptureFilterTests` check which packets the
   filter takes. Live: `localtest.me` echo through `--udp bypass` came back from its placeholder; a datagram to
   192.0.2.1 left no flow.
+- Failing log file (2026-11-24, #226): `FileLog.OnLog` catches open and write errors instead of letting them leave
+  `ConnectionTracker.Write` (the relay-statistics timer ended the process on a full disk). It closes the writer
+  quietly, reports once, retries after `RetryAfter` (60 s, `Failing` while it waits), recreates a deleted folder, and
+  logs the missing span when the file is written again; `Dispose` ignores a failing final flush. Tests in
+  `FileLogFailureTests` (folder replaced by a file, read-only file, full-disk stream).

@@ -39,6 +39,8 @@ into the version's section, and that section, with the install links, becomes th
   profiles you already have keep their choice, and "On this PC" is still in Settings → Privacy (#167).
 
 ### Fixed
+- A log file that can't be written (disk full, its folder deleted or denied) no longer crashes Sluice: the Log page
+  shows one error, the log file is tried again every minute, and the on-screen log keeps working (#226).
 - Linux: with UDP set to "Let it go direct", apps' UDP (NTP, QUIC, games) to names looked up through the tunnel reaches
   them again, sent directly by name; before, it went nowhere. Other UDP is still left alone in that mode (#209).
 - Windows: with UDP set to "Let it go direct", apps' UDP to names looked up through the tunnel (QUIC, NTP, games,

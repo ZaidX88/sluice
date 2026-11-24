@@ -85,7 +85,7 @@ discussed on the issue (the parent, for a split) before code starts. The pull re
 | Label | Meaning | Set by |
 |---|---|---|
 | `triage` | new, not looked at yet; nobody works on it | the issue templates |
-| `ready` | triaged and free to claim | the owner |
+| `ready` | triaged and free to claim (work held for after 1.0 gets it once v1.0.0 is tagged) | the owner |
 | `in progress` | assigned; someone is working on it | the owner, when assigning |
 | `bug`, `enhancement` | kind of issue | the issue templates |
 | `area: core`, `area: linux`, `area: windows`, `area: ui` | the area that does the work | the owner, when triaging |

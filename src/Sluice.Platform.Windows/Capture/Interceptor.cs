@@ -164,10 +164,10 @@ public sealed class Interceptor : ITrafficCapture
         UdpMode = _engine.Profile.Options.Udp;
         var captureUdp = UdpMode != UdpMode.Bypass;
         // Only packets Sluice may rewrite (see CaptureFilter): direct traffic and the tunnel helpers' own connections
-        // stay in the kernel.
+        // stay in the kernel. In Bypass that still includes UDP to placeholders, which UdpFlows sends direct by name.
         _net = OpenOrThrow(CaptureFilter.Main(port, captureUdp), WinDivertNative.Layer.Network, WinDivertNative.OpenFlags.None);
         EnlargeQueue(_net);
-        if (captureUdp) _udp = new WinDivertUdp(_engine, _fakeIps, InjectInbound);
+        _udp = new WinDivertUdp(_engine, _fakeIps, InjectInbound);
 
         var policy = CurrentPolicy();
         if (policy.Enabled)
@@ -198,7 +198,7 @@ public sealed class Interceptor : ITrafficCapture
             UdpMode.Tunnel => "through tunnels",
             UdpMode.BlockQuic => "QUIC of tunneled apps blocked",
             UdpMode.BlockAll => "blocked for tunneled apps",
-            _ => "not captured",
+            _ => "not captured, except to name placeholders (sent direct by name)",
         }})");
         WarnAboutConflicts();
     }

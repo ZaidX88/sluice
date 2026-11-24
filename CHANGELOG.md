@@ -41,6 +41,8 @@ into the version's section, and that section, with the install links, becomes th
 ### Fixed
 - Linux: with UDP set to "Let it go direct", apps' UDP (NTP, QUIC, games) to names looked up through the tunnel reaches
   them again, sent directly by name; before, it went nowhere. Other UDP is still left alone in that mode (#209).
+- Windows: with UDP set to "Let it go direct", apps' UDP to names looked up through the tunnel (QUIC, NTP, games,
+  calls) reaches the real host again instead of going nowhere; UDP to other addresses still isn't captured (#208).
 - Linux: Settings → Tunnels shows and saves "Through the tunnel" for UDP again, instead of showing it as "Block it"
   and leaving it out of the list, now that Linux tunnels UDP (#200).
 - Linux: on Arch, when pacman can't install the packages Sluice needs (an old or never-synced package database),
@@ -100,8 +102,9 @@ settings.
 ### Known limitations
 
 <!-- At release time: keep only what is still true, and add anything else still open. -->
-- **No UDP through tunnels on Linux** (QUIC, games, calls): tunneled apps' UDP is blocked, so they fall back to TCP
-  where they can (#47). Windows tunnels UDP.
+- **UDP needs a tunnel that carries it:** SOCKS5 and the sing-box protocols do; SSH, SOCKS4 and HTTP(S) tunnels
+  don't, so apps' UDP through them is blocked and falls back to TCP where it can. On Linux, UDP through tunnels also
+  needs the kernel's tproxy support (#60).
 - **x86-64 only**, on both Windows and Linux.
 - **Not supported:** Xray-only features that sing-box doesn't implement, namely the `xhttp` transport and VLESS
   post-quantum encryption (`mlkem768x25519plus`). Sluice shows an error for such links.

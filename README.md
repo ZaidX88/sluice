@@ -22,9 +22,12 @@ Windows and Linux, and how every part works: [docs/ARCHITECTURE.md](docs/ARCHITE
 ## Getting started
 
 - **Use it:** [docs/QUICKSTART.md](docs/QUICKSTART.md)
-- **Linux:** install a release with [docs/linux/INSTALL.md](docs/linux/INSTALL.md) (`sudo ./install.sh` adds .NET,
-  nftables and the rest; packaging scripts in `packaging/linux/`); build from source with [docs/linux/BUILD.md](docs/linux/BUILD.md).
-- **Windows:** build and run from source with [docs/windows/BUILD.md](docs/windows/BUILD.md) (a release package is planned).
+- **Linux:** install a release with [docs/linux/INSTALL.md](docs/linux/INSTALL.md): on Ubuntu 24.04 or later
+  `sudo apt install ./sluice_<version>_amd64.deb`; on Debian, older Ubuntu and other distributions the tar.gz, whose
+  `sudo ./install.sh` adds .NET, nftables and the rest. Build from source with [docs/linux/BUILD.md](docs/linux/BUILD.md).
+- **Windows:** install a release with [docs/windows/INSTALL.md](docs/windows/INSTALL.md) (`Sluice-Setup-<version>-x64.exe`,
+  .NET included; 1.0.0 isn't code-signed yet, so SmartScreen may warn). Build from source with
+  [docs/windows/BUILD.md](docs/windows/BUILD.md).
 
 ## Building
 
@@ -52,7 +55,8 @@ src/Sluice.Desktop           the desktop app (Avalonia), Windows and Linux
 src/Sluice.Cli               command line
 tests/Sluice.Tests*          xUnit tests: shared, .Linux, .Windows, .Support (helpers)
 build/                       build-time dependency fetching
-scripts/                     live-test helpers, sing-box download scripts
+packaging/                   release packaging: Linux (install.sh, .deb) and Windows (Inno Setup)
+scripts/                     packaging and release scripts, live-test helpers, sing-box download scripts
 docs/                        user guides, status, plans, contributing
 AGENTS.md, CLAUDE.md         rules for AI coding agents
 ```
@@ -65,7 +69,8 @@ Work is split into areas (Linux, Windows, UI) so people can work in parallel thr
 
 ## Third-party software
 
-Not stored in this repository; downloaded by the build or the Linux installer:
+Not stored in this repository; downloaded by the build or the Linux installer, and included in the Windows installer and
+the `.deb`:
 - [WinDivert](https://github.com/basil00/WinDivert), LGPL-3.0 / GPL-2.0;
 - [sing-box](https://github.com/SagerNet/sing-box), GPL-3.0, which runs as a separate helper process.
 

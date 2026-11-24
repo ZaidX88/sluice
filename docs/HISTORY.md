@@ -295,7 +295,11 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   fails. Without IPv6 to the transparent socket, `LinuxCapture.CanTake` drops IPv6 flows it would take, so a
   tunnel-rule app's IPv6 UDP isn't marked and sent out past the tunnel. `LinuxIpv6DisabledNetnsTests` (namespace with
   IPv6 off); the namespace tests share one xUnit collection.
-- The .deb in releases (2026-11-25): the release workflow's Linux job runs `scripts/package-linux.sh --deb`, so a
+- App rules with a Linux path (2026-11-25, #212): `RuleEngine.ParseApps` turned every `/` in an Applications value
+  into `\`, so `/usr/bin/curl` never matched on Linux. It now folds `/` and `\` only for Windows paths, in both the
+  value and the process path (a `windowsPaths` switch, `OperatingSystem.IsWindows()` in the app, so tests cover both on
+  any system); Linux compares as written. Tests in `RuleEngineTests`; checked live with a `/usr/bin/curl` Block rule.
+- The .deb in releases (2026-11-25, #272): the release workflow's Linux job runs `scripts/package-linux.sh --deb`, so a
   release carries `sluice_<version>_amd64.deb` (+ `.sha256`) next to the tar.gz, and the release notes list it with
   `sudo apt install ./…deb` and Debian / older Ubuntu → tar.gz. The job is pinned to `ubuntu-24.04`, because the
   launcher compiled there sets the .deb's `libc6` dependency (2.34 now; a newer runner could raise it past 24.04's).

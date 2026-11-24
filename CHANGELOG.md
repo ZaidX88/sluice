@@ -40,6 +40,8 @@ are **Unreleased** together with the coming version's section, with the install 
   profiles you already have keep their choice, and "On this PC" is still in Settings → Privacy (#167).
 
 ### Fixed
+- Linux: an app rule written with a full path, such as `/usr/bin/curl` or `/usr/bin/*`, now matches that program;
+  before, it never matched and the traffic fell through to the Default rule (#212).
 - Cancelling the master password when Sluice starts no longer runs an empty profile that sends everything
   Direct without a word: a banner says the profile wasn't opened and to choose it from the profile menu, and capture
   isn't turned on at launch until a profile is open (#248).

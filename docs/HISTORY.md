@@ -284,3 +284,8 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   because the section exists, leaving out everything under `[Unreleased]`. A candidate now joins `[Unreleased]` with a
   version section still marked "not released yet", merging the `### ` groups (Keep a Changelog order, Known
   limitations last); a release refuses a non-empty `[Unreleased]`. The prerelease argument defaults from the version.
+- Startup profile not opened (2026-11-25, #248): `App.OnFrameworkInitializationCompleted` swallowed a cancelled master
+  password and went on with the in-memory "Untitled profile" (all Direct, `ProfilePath` null so edits never saved),
+  still turning capture on at launch. Now any failure to open the startup profile shows an error banner
+  (`MainViewModel.ShowProfileNotOpened`, naming the profile the password was asked for), capture is not started on
+  launch, and the banner clears once a profile with a file is opened. `banner-profile-not-opened.png` in screenshots.

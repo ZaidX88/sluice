@@ -136,6 +136,12 @@ internal static class ScreenshotMode
         Save(window, Path.Combine(dir, "banner-rights.png"));
         vm.DismissBannerCommand.Execute(null);
 
+        // The startup profile's master password was cancelled, with capture set to start on launch (#248).
+        vm.ShowProfileNotOpened("Work", null, captureHeld: true);
+        await Pump(700);
+        Save(window, Path.Combine(dir, "banner-profile-not-opened.png"));
+        vm.DismissBannerCommand.Execute(null);
+
         // The update notice (#198), as with a newer release out; nothing is fetched.
         vm.ShowUpdateForScreenshot(new Sluice.Core.Updates.UpdateInfo("1.1.0",
             new Uri("https://github.com/ZaidX88/sluice/releases/tag/v1.1.0"), null));

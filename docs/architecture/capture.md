@@ -103,18 +103,19 @@ They follow the same model:
             replies: UdpFlows → IDatagramSender → a transparent socket bound to the original destination → the app
 ```
 
-- **UDP tproxy** (#60): a flow is taken when its rule sends it through a tunnel that carries UDP, or when it is Direct to
-  a placeholder (which can't go out as it is; `UdpFlows` sends it by name). `PolicyRoutes` adds the rule and route over
-  rtnetlink (IPv4 and IPv6; priority and table 1473) at start and removes them on stop and on an exit signal; a start
-  first removes any an earlier run left. If the transparent socket or the routes can't be set up (no tproxy in the
-  kernel), capture starts anyway and those flows are dropped, as before. Any IPv6 failure only leaves IPv6 out: what
-  was added for it is removed again, and IPv4 keeps its rule and route (#216). With UDP set to go direct (`Bypass`,
-  #209) `queue_new` queues only new UDP flows to the placeholder range (`NftRules.PlaceholderRange`, from
-  `LinuxCapture.UdpRules`), so only Direct-by-name flows are taken and all other UDP is never touched; without the
-  transparent socket no UDP is queued in that mode, as before #209. Sluice's sockets (the replies, `UdpFlows`'
-  Direct sockets, tunnel helpers) carry its group, so the rules never mark them. Known limit: a flow already marked
-  stays taken until its conntrack entry expires, so after a profile change that makes it Direct its datagrams are
-  dropped until it is idle.
+- **UDP tproxy** (#60): a flow is taken when its rule sends it through a tunnel that carries UDP, or when it is Direct
+  to a placeholder (which can't go out as it is; `UdpFlows` sends it by name). `PolicyRoutes` adds the rule and route
+  over rtnetlink (IPv4 and IPv6; priority and table 1473) at start and removes them on stop and on an exit signal; a
+  start first removes any an earlier run left. If the transparent socket or the routes can't be set up (no tproxy in
+  the kernel), capture starts anyway and those flows are dropped, as before. Any IPv6 failure only leaves IPv6 out:
+  what was added for it is removed again, IPv4 keeps its rule and route, and IPv6 flows Sluice would take are dropped
+  instead (`LinuxCapture.CanTake`), since marked without a route they would go out past the tunnel (#216). With UDP
+  set to go direct (`Bypass`, #209) `queue_new` queues only new UDP flows to the placeholder range
+  (`NftRules.PlaceholderRange`, from `LinuxCapture.UdpRules`), so only Direct-by-name flows are taken and all other
+  UDP is never touched; without the transparent socket no UDP is queued in that mode, as before #209. Sluice's sockets
+  (the replies, `UdpFlows`' Direct sockets, tunnel helpers) carry its group, so the rules never mark them. Known
+  limit: a flow already marked stays taken until its conntrack entry expires, so after a profile change that makes it
+  Direct its datagrams are dropped until it is idle.
 
 - **IPv6 fallback** ([core FIXES §6](../core/FIXES.md), #30): a SYN to a real IPv6 address whose rule sends it
   through a tunnel or chain that Core marked (`RoutingEngine.Ipv6Fallback.ShouldRefuse(route)`, see

@@ -140,6 +140,27 @@ public class LinuxUdpTproxyTests
     public void Udp_flow_choice(UdpVerdict verdict, bool fake, bool canTake, string expected) =>
         Assert.Equal(expected, LinuxCapture.Choose(verdict, fake, canTake).ToString());
 
+    // #216: without IPv6 to the transparent socket (no IPv6 route or socket), an IPv6 flow isn't taken: marked, it would
+    // go out past the tunnel. IPv4, placeholders included, is taken as before.
+    [Theory]
+    [InlineData(true, true, "2001:db8::1", true)]
+    [InlineData(true, false, "2001:db8::1", false)]
+    [InlineData(true, false, "198.51.100.7", true)]
+    [InlineData(true, false, "198.18.0.42", true)]            // a placeholder
+    [InlineData(true, false, "::ffff:198.51.100.7", true)]    // IPv4 seen through an IPv6 socket
+    [InlineData(false, true, "198.51.100.7", false)]          // no transparent socket at all
+    [InlineData(false, true, "2001:db8::1", false)]
+    public void Ipv6_flows_are_taken_only_when_ipv6_reaches_the_transparent_socket(bool tproxyUp, bool ipv6Usable, string destination, bool expected) =>
+        Assert.Equal(expected, LinuxCapture.CanTake(tproxyUp, ipv6Usable, IPAddress.Parse(destination)));
+
+    [Theory]
+    [InlineData("2001:db8::1", UdpVerdict.Tunnel, "Drop")]    // tunnel rule, IPv6 can't be taken: dropped, not leaked
+    [InlineData("198.51.100.7", UdpVerdict.Tunnel, "Take")]
+    [InlineData("2001:db8::1", UdpVerdict.Pass, "Pass")]      // Direct to a real IPv6 address: untouched, as before
+    public void Without_ipv6_tunneled_ipv6_udp_is_dropped(string destination, UdpVerdict verdict, string expected) =>
+        Assert.Equal(expected, LinuxCapture.Choose(verdict, fake: false,
+            LinuxCapture.CanTake(tproxyUp: true, ipv6Usable: false, IPAddress.Parse(destination))).ToString());
+
     [Theory]
     [InlineData("8.8.8.8", 53, true)]
     [InlineData("192.168.1.1", 67, true)]

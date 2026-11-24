@@ -6,6 +6,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Input.Platform;
 using Avalonia.Markup.Xaml;
+using Avalonia.Platform;
 using Avalonia.Platform.Storage;
 using Avalonia.Styling;
 using Avalonia.Threading;
@@ -38,6 +39,8 @@ public partial class App : Application
 
         if (Arg(args, "--theme") is { } theme)
             RequestedThemeVariant = theme.Equals("dark", StringComparison.OrdinalIgnoreCase) ? ThemeVariant.Dark : ThemeVariant.Light;
+        else
+            StartInDesktopTheme(askAgainLater: Arg(args, "--screenshot") is null);
 
         if (Arg(args, "--screenshot") is { } shotDir)
         {
@@ -237,6 +240,56 @@ public partial class App : Application
     {
         Directory.CreateDirectory(path);
         if (Top?.Launcher is { } launcher) _ = launcher.LaunchDirectoryInfoAsync(new DirectoryInfo(path));
+    }
+
+    // ---------- the desktop's theme (#268, #253's Coordination) ----------
+
+    /// <summary>Set once the desktop has changed its colours since start-up: from then on Avalonia follows it.</summary>
+    private bool _followingDesktop;
+
+    /// <summary>How long to wait before asking the platform a second time when its first answer was null.</summary>
+    private static readonly TimeSpan AskAgainAfter = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    /// Starts in the theme the desktop asks for, as the platform reads it for the signed-in user
+    /// (<see cref="Sluice.Core.Platform.IPlatformServices.PrefersDarkTheme"/>). With raised rights, Avalonia can't see it
+    /// itself (Linux: the portal refuses a process with capabilities; Windows: an elevated administrator's own theme), so
+    /// Sluice would open light on a dark desktop. On the first change of the desktop's colours the requested variant goes
+    /// back to <see cref="ThemeVariant.Default"/>, so Avalonia follows the desktop as before. A platform that answers null
+    /// changes nothing; at login the portal may not be up yet, so a null is asked again once, a few seconds later.
+    /// </summary>
+    private void StartInDesktopTheme(bool askAgainLater)
+    {
+        if (PlatformSettings is { } settings) settings.ColorValuesChanged += OnDesktopColorsChanged;
+        var dark = Sluice.Core.Platform.PlatformServices.Current.PrefersDarkTheme();
+        if (dark is not null) RequestedThemeVariant = dark.Value ? ThemeVariant.Dark : ThemeVariant.Light;
+        else if (askAgainLater) _ = AskForDesktopThemeAgainAsync();
+    }
+
+    private async Task AskForDesktopThemeAgainAsync()
+    {
+        try
+        {
+            await Task.Delay(AskAgainAfter);
+            var dark = await Task.Run(() => Sluice.Core.Platform.PlatformServices.Current.PrefersDarkTheme());
+            if (dark is null) return;
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                if (!_followingDesktop && RequestedThemeVariant == ThemeVariant.Default)
+                    RequestedThemeVariant = dark.Value ? ThemeVariant.Dark : ThemeVariant.Light;
+            });
+        }
+        catch (Exception) { /* a convenience: the app keeps Avalonia's theme */ }
+    }
+
+    private void OnDesktopColorsChanged(object? sender, PlatformColorValues values)
+    {
+        if (PlatformSettings is { } settings) settings.ColorValuesChanged -= OnDesktopColorsChanged;
+        Dispatcher.UIThread.Post(() =>
+        {
+            _followingDesktop = true;
+            RequestedThemeVariant = ThemeVariant.Default;
+        });
     }
 
     private static string? Arg(string[] args, string name)

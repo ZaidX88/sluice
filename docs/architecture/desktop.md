@@ -45,7 +45,14 @@ Program.cs ──▶ App (App.axaml.cs)
    call points `ProcessLookup.Backend` at the platform's process lookup (`IPlatformServices.ProcessLookup`; #104).
    Until then `PlatformServices.Current` is a platform that does nothing
    ([platforms.md §6.1](platforms.md#61-reaching-the-platform-from-core-platformservices)).
-2. `--theme dark|light`; `--screenshot DIR` short-circuits into `ScreenshotMode` and exits.
+2. The theme: `--theme dark|light` wins. Without it, `StartInDesktopTheme` (#268, #253) sets `RequestedThemeVariant`
+   from `PlatformServices.Current.PrefersDarkTheme()`, the desktop's theme as the signed-in user's unprivileged process
+   reads it: with raised rights Avalonia can't see it itself (Linux: the portal refuses a process with capabilities;
+   Windows: an elevated administrator's own theme), so Sluice opened light on a dark desktop. On the first
+   `PlatformSettings.ColorValuesChanged` it goes back to `Default`, so Avalonia follows the desktop from then on. A null
+   answer changes nothing; outside screenshot mode it's asked again once, 5 s later in the background (at login the
+   portal may not be up yet), and applied only if the desktop hasn't changed meanwhile. Then `--screenshot DIR`
+   short-circuits into `ScreenshotMode` and exits (its demo platform answers null).
 3. **Single instance:** connect to the named pipe `Sluice-<user name>`; if the connect succeeds, another Sluice runs:
    send `show` and exit, even if the write fails (#171). Otherwise listen on that pipe (`ListenForShowRequestsAsync`),
    read each request to its end before closing it, and show the window. On Windows the pipe (`CreatePipeServer`) also

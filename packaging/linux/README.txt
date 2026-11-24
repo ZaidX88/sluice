@@ -38,8 +38,8 @@ bottom right (127.0.0.1:<port>).
 
 Good to know
 ------------
-- UDP through tunnels is not available on Linux yet: UDP of apps whose rule says
-  "tunnel" is blocked, so browsers fall back from QUIC to normal HTTPS.
+- UDP goes through SOCKS5 and sing-box tunnels. SSH and HTTP tunnels can't carry it, so
+  UDP of apps sent through them is blocked, and browsers fall back from QUIC to HTTPS.
 - If Sluice ever crashes while capturing and DNS stops working, run:
       sudo nft delete table inet sluice
 - The tray icon needs a desktop with a system tray (KDE, XFCE, Cinnamon...). On GNOME,

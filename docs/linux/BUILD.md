@@ -34,7 +34,33 @@ are never committed.
 dotnet publish src/Sluice.Desktop -f net10.0 -r linux-x64 --self-contained false -c Release -p:SluiceFetchDependencies=false -o out/app
 dotnet publish src/Sluice.Cli -f net10.0  -r linux-x64 --self-contained false -c Release -p:SluiceFetchDependencies=false -o out/app
 scripts/package-linux.sh out/app out/dist          # run on Linux or WSL (sets permissions, extracts the icon)
+scripts/package-linux.sh --deb out/app out/dist    # the same, plus sluice_<version>_amd64.deb (needs dpkg-deb)
 ```
+
+`--deb` (#67) also builds `sluice_<version>_amd64.deb` (and its `.sha256`) for Ubuntu 24.04 LTS and later, from the
+same files, with `dpkg-deb --root-owner-group`. `<version>` is `<Version>` from `Directory.Build.props`; the package's
+own version turns `-` into `~` (`1.0.0-rc.1` → `1.0.0~rc.1`, which apt sorts before `1.0.0`), the file name keeps it.
+The package holds:
+- `/opt/sluice`: the same files as the tar.gz's `app/` (launcher included), plus **sing-box** and its licence, the
+  version and SHA-256 that `install.sh` pins. It comes from `$SINGBOX_TGZ` (the release archive) if set, else from
+  the build's `.deps/` copy (checked by `build/Dependencies.targets`), else it is downloaded; archives are
+  SHA-256-checked;
+- `/usr/bin/sluice` and `/usr/bin/sluice-cli` (links to the launcher), the menu entry and the icon at the same paths as
+  `install.sh` (`/usr/share/applications/sluice.desktop`, `/usr/share/icons/hicolor/256x256/apps/sluice.png`), and
+  `/usr/share/doc/sluice/` (`copyright`, `THIRD-PARTY-NOTICES.md`).
+
+`Depends:` Ubuntu's `dotnet-runtime-10.0`, `nftables`, `libcap2-bin`, `libx11-6`, `libice6`, `libsm6`,
+`libfontconfig1`, `libnotify-bin`, and `libc6` at least the version the launcher was built against (from `objdump`).
+The control file and maintainer scripts are in `packaging/linux/deb/`:
+- `preinst`: removes a copy installed by `install.sh` (`/opt/sluice` with `uninstall.sh`, its `/usr/local/bin` links,
+  menu entry and icon), so the two don't mix;
+- `postinst`: if `/etc/dotnet` doesn't lead to a .NET 10 runtime, writes `/usr/lib/dotnet` into
+  `install_location_x64` (keeping the old file in `/var/lib/sluice`); keeps `/etc/dotnet` root's; `setcap` on the
+  launcher only. Ubuntu's `dotnet-host` already names `/usr/lib/dotnet` there, so usually nothing changes;
+- `prerm` (remove): closes a running Sluice (SIGTERM to `/opt/sluice/Sluice.Desktop` and `Sluice.Cli`, up to 10 s),
+  which removes its own capture rules; then deletes the `inet sluice` nftables table if a crash left it, and the
+  launcher's capabilities;
+- `postrm` (remove/purge): restores `install_location_x64` if `postinst` changed it and nobody changed it since.
 
 Package layout and installer: `packaging/linux/` (`install.sh`, `uninstall.sh`, `sluice.desktop`, `README.txt`, and the
 launcher's source in `launcher/`). `package-linux.sh` compiles the launcher with the system C compiler (`cc`, or `$CC`)

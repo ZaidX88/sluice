@@ -97,6 +97,11 @@ settings.
 - **Linux:** a package with `install.sh`, which installs what Sluice needs (.NET, nftables and the rest). It gives the
   capture rights to a small launcher, so Sluice captures without running as root. A copy run without the installer can
   get the same rights from the app, and Sluice can start at login (#69).
+- **Linux, Ubuntu 24.04 LTS or later:** a `.deb` package, installed with
+  `sudo apt install ./sluice_<version>_amd64.deb` (or by opening it in App Center). apt brings in .NET and the rest
+  from Ubuntu's own archive, and sing-box is in the package, so nothing is downloaded from GitHub.
+  `sudo apt remove sluice` removes it with its capture rights. Ubuntu 24.04 is the lowest release, the first with
+  .NET 10 in its archive; Debian and Ubuntu 22.04 or older use the tar.gz with `install.sh` (#67).
 - **Windows:** an installer (`Sluice-Setup-<version>-x64.exe`) with everything Sluice needs, .NET included, so it
   installs offline: Start Menu shortcut, firewall rules, and a clean uninstall (#64). Run Sluice as administrator for
   capture.

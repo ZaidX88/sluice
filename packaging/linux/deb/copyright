@@ -1,0 +1,18 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: Sluice
+Source: https://github.com/ZaidX88/sluice
+
+Files: *
+Copyright: the Sluice contributors
+License: GPL-3
+ On Debian and Ubuntu systems, the full text of the GNU General Public License
+ version 3 is in /usr/share/common-licenses/GPL-3.
+
+Files: opt/sluice/sing-box
+Copyright: 2022 nekohasekai
+License: GPL-3+
+ sing-box is a separate program, shipped unchanged from its official release:
+ https://github.com/SagerNet/sing-box (licence: /opt/sluice/sing-box-LICENSE.txt).
+
+The other third-party components in this package, with their licences, are
+listed in /usr/share/doc/sluice/THIRD-PARTY-NOTICES.md.

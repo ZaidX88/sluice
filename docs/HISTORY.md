@@ -303,3 +303,7 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   release carries `sluice_<version>_amd64.deb` (+ `.sha256`) next to the tar.gz, and the release notes list it with
   `sudo apt install ./…deb` and Debian / older Ubuntu → tar.gz. The job is pinned to `ubuntu-24.04`, because the
   launcher compiled there sets the .deb's `libc6` dependency (2.34 now; a newer runner could raise it past 24.04's).
+- Stale docs before the first release candidate (2026-11-25, #215): README, QUICKSTART, STATUS, REQUIRED and the
+  architecture pages describe the Windows installer (#64, unsigned in 1.0.0, #65), the Ubuntu `.deb` (#67), the
+  multi-targeted CLI (#53), the finished online-install tests (#71) and release CI (#74); `platforms.md` no longer says
+  #54/#55 moved; superseded decisions marked; the docs index lists `windows/INSTALL.md`.

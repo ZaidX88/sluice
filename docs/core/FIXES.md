@@ -17,8 +17,9 @@ Normal, one short line per distinct error, repeats collapsed.
 
 - `HappyEyeballsTests.DeadFirstAddress_DoesNotDelayTheWorkingOne` fails whenever a Sluice capture is running on the same
   machine (the relay accepts every connection). Make the test detect that and skip.
-- `Sluice.Cli.exe` has no Windows Firewall allow rule on Private networks, so CLI capture tests fail there. Give the CLI
-  `--allow-firewall` like the app's banner (`EngineHost.AllowThroughFirewall`), or document it.
+- A `Sluice.Cli.exe` built from source has no Windows Firewall allow rule on Private networks, so CLI capture tests fail
+  there (the installer adds one for its own copy, #64). Give the CLI `--allow-firewall` like the app's banner
+  (`EngineHost.AllowThroughFirewall`), or document it.
 - `scripts/linux/test-socks5.py` relays no data on Windows (fine for its Linux job). On Windows use
   `Sluice.Cli --socks 127.0.0.1:<port>` as the stand-in tunnel.
 - Any test making real connections misbehaves while a capture runs on the same machine (fake DNS and routing apply to
@@ -28,23 +29,20 @@ Normal, one short line per distinct error, repeats collapsed.
   `Udp_EchoThroughTunnel(ss)`, `Lifecycle_IdleStop_ThenRestartOnUse`, `BusyTunnel_FailedCheck_IsNotRestarted`) sometimes
   fail, often at start-up with "the tunnel started but no test connection through it worked", while
   `--filter FullyQualifiedName~LiveSingBoxTests` passes on its own. Give their waits more headroom, or run the live
-  class without parallelisation (`[Collection]` with `DisableParallelization`).
-- **On Linux, 13 of 276 tests failed** (real machine, Ubuntu 26.04; every Linux test passed). The 12 Windows-specific
-  ones moved to `tests/Sluice.Tests.Windows` when the tests were split by platform (issue #18); Linux versions are
-  Linux work ([linux/WORK.md](../linux/WORK.md)). What was found:
-  - 12 assume Windows ([issue #2](https://github.com/ZaidX88/sluice/issues/2)): 5 use DPAPI (`PasswordEncryptionTests`
-    `CurrentUser`/`Account` modes, `SluiceProfileTests…(CurrentUser)`), 5 match `C:\…\*.exe` application paths
-    (`RuleEngineTests.Applications` cases, `AllConditionsMustMatch`, a `UdpRoutingTests.ClassifyUdp` case),
-    `EngineTests.LoopPrevention_LocalProxyHostGoesDirect` starts `powershell.exe`, and
-    `EngineTests.ApplicationRule_MatchesThisTestProcess` gets PID 0 because the test never sets
-    `ProcessLookup.Backend` to the Linux `/proc` lookup (the app does in `LinuxPlatform.OnAppStart`). Skip the
-    Windows-only cases off Windows (or give them Linux paths) and set the backend in the engine test.
+  class without parallelisation (`[Collection]` with `DisableParallelization`) (#41).
+- **On Linux, 13 of 276 tests failed** (real machine, Ubuntu 26.04; every Linux test passed):
+  - 12 assumed Windows ([issue #2](https://github.com/ZaidX88/sluice/issues/2), **fixed**): DPAPI modes, `C:\…\*.exe`
+    application paths, `EngineTests.LoopPrevention_LocalProxyHostGoesDirect` (starts `powershell.exe`) and
+    `EngineTests.ApplicationRule_MatchesThisTestProcess`. They moved to `tests/Sluice.Tests.Windows` when the tests were
+    split by platform (#18, #19), so they no longer run on Linux. Linux versions of them are Linux work
+    ([linux/WORK.md](../linux/WORK.md)); the Linux process lookup is `LinuxPlatform.ProcessLookup`, set through
+    `PlatformServices.Use` (`OnAppStart` does nothing on Linux).
   - `RelayTests.SlowApp_DoesNotBlockUpstream_OnlyWithElasticBuffer(8 MB, 4 MB, drained)` fails every run, also alone
-    ([issue #3](https://github.com/ZaidX88/sluice/issues/3)): the upstream isn't drained within 3 s although the elastic
-    buffer should take all 4 MB. Not reproduced yet (no Linux SDK on the owner's PC). It matters beyond the test: SSH
-    routes use this buffer on Linux too, so check first whether the relay or only the test misbehaves (count reads and
-    `queued` during the test; compare Linux socket buffer autotuning). Split into #32 (Linux: investigate) and #33
-    (Core: fix, blocked by #32).
+    ([issue #3](https://github.com/ZaidX88/sluice/issues/3)). The Linux investigation (#32, closed) found that the
+    relay is fine: `RelayTests.PairAsync` shrinks the socket buffers to 16 KB *after* connecting, which makes Linux drop
+    loopback segments (`TcpExtTCPRcvQDrop`), so the sender stalls; with the same sizes set before connecting, the 4 MB
+    drains in 0.02 s. **To do** (#33, test only): set the buffer sizes before the connection exists, and check the
+    `expectDrained: false` case still blocks without the elastic buffer.
 
 ## 3. Health check restarts a busy tunnel — fixed
 

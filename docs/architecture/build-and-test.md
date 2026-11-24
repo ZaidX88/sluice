@@ -18,9 +18,8 @@ the headless front end. Commands:
 | `Sluice.Cli import <profile.sluice> <link / file / --subscription URL>` | `Subscriptions.ImportLinks` / `AddSubscription` + `UpdateAsync`, then saves |
 | `Sluice.Cli update <profile.sluice>` | refreshes every subscription |
 
-Unlike the desktop app, the CLI is **not multi-targeted** yet: it picks its capture with a run-time branch
-(`OperatingSystem.IsLinux()` → `LinuxPlatform.CreateCapture`, otherwise `new Interceptor(engine)`). Moving it onto the
-platform modules is in [REQUIRED.md §1](../REQUIRED.md#1-move-windows-only-code-out-of-core).
+Like the desktop app, the CLI is multi-targeted (#53): `#if WINDOWS` picks the platform module, `PlatformServices.Use`
+hands it to Core, and `--intercept` takes its capture from that module.
 
 ## Tests
 
@@ -43,7 +42,7 @@ Kinds of tests (file names; the platform projects are marked):
 | Kind | Files | Needs |
 |---|---|---|
 | Pure logic | `RuleEngineTests`, `DnsTests`, `PacketReflectorTests` (Windows), `CaptureFilterTests` (Windows), `PasswordEncryptionTests` (DPAPI mode: `WindowsPasswordEncryptionTests`), `SluiceProfileTests`, `ShareLinkTests`, `TunnelTransportTests`, `SingBoxConfigTests` (in `SingBoxTests.cs`), most of `LinuxCaptureTests` (Linux; nft script, netlink messages, `/proc` parsing) | nothing |
-| Loopback end to end | `EngineTests` (own-process and loop-prevention cases: `WindowsEngineTests`), `ProxyTests`, `RelayTests`, `UdpTests`, `UdpFlowsTests` (`UdpNatTests`: Windows), `LinuxRelayTests` (Linux), `HappyEyeballsTests`, `CheckerAndStatsTests`, `StaleFakeAddressTests` | local test servers from `Sluice.Tests.Support` (`EchoServer`, `Socks5TestServer`, `Socks4TestServer`, `HttpConnectTestServer`) |
+| Loopback end to end | `EngineTests` (own-process and loop-prevention cases: `WindowsEngineTests`), `ProxyTests`, `RelayTests`, `UdpTests`, `UdpFlowsTests` (`WinDivertUdpTests`: Windows), `LinuxRelayTests` (Linux), `HappyEyeballsTests`, `CheckerAndStatsTests`, `StaleFakeAddressTests` | local test servers from `Sluice.Tests.Support` (`EchoServer`, `Socks5TestServer`, `Socks4TestServer`, `HttpConnectTestServer`) |
 | Live sing-box | `LiveSingBoxTests` (in `SingBoxTests.cs`), parts of `SshSingBoxTests` | `sing-box.exe` next to the tests (the Windows build puts it there; the tests look for that name, so elsewhere they pass trivially): a throwaway sing-box **server** on 127.0.0.1 for every protocol, Sluice's client side through `TunnelBackends`. REALITY also needs `SLUICE_TEST_INTERNET=1` |
 | Network namespace (Linux) | `LinuxUdpTproxyNetnsTests` | opt-in: `SLUICE_TEST_NETNS=1` under `unshare -rn sh -c 'ip link set lo up && dotnet test tests/Sluice.Tests.Linux --filter LinuxUdpTproxyNetnsTests'` (a throwaway namespace: nft, policy routing and tproxy for real, never the machine's own network); otherwise they pass trivially |
 | Live SSH | `LiveSshTests` | opt-in: `SLUICE_LIVE_SSH_PORT`, `_USER`, `_KEY` for an sshd on 127.0.0.1; otherwise they pass trivially |
@@ -82,10 +81,14 @@ Windows ones to the Windows area. Built packages are never committed; release CI
 that matches `<Version>` ([CONTRIBUTING → Releases](../CONTRIBUTING.md#releases)).
 
 - **Linux** (`scripts/package-linux.sh`, `packaging/linux/`): `scripts/package-linux.sh` stages a framework-dependent publish of `Sluice.Desktop` (`-f net10.0`) and
-  `Sluice.Cli` into `sluice-linux-x64.tar.gz`, drops Windows-only files and sing-box, and adds
+  `Sluice.Cli` into `sluice-linux-x64.tar.gz` (the release workflow renames it `sluice-<version>-linux-x64.tar.gz`, #217),
+  drops Windows-only files and sing-box, and adds
   `packaging/linux/install.sh` / `uninstall.sh` / `sluice.desktop` / `README.txt`. `install.sh` installs .NET 10,
   nftables, libcap and desktop libraries with the system's package manager, downloads the pinned sing-box (or uses an
-  archive next to it), and grants the capture capabilities with `setcap`. User guide: [linux/INSTALL.md](../linux/INSTALL.md).
-- **Windows:** no package on `main` yet; the installer (`packaging/windows/`, `scripts/package-windows.ps1`) is #64
-  ([REQUIRED.md §4](../REQUIRED.md#4-windows-release-package)).
+  archive next to it), and grants the capture capabilities with `setcap`. With `--deb` (#67) it also builds
+  `sluice_<version>_amd64.deb` for Ubuntu 24.04 and later: the same layout with sing-box bundled, depending on Ubuntu's
+  `dotnet-runtime-10.0`. User guide: [linux/INSTALL.md](../linux/INSTALL.md).
+- **Windows** (`scripts/package-windows.ps1`, `packaging/windows/Sluice.iss`, #64): publishes `Sluice.Desktop` and
+  `Sluice.Cli` self-contained for win-x64 with WinDivert and sing-box, and compiles the Inno Setup installer
+  `Sluice-Setup-<version>-x64.exe`. Not code-signed in 1.0.0 (#65). User guide: [windows/INSTALL.md](../windows/INSTALL.md).
 - Remaining release work and CI: [REQUIRED.md §5–6](../REQUIRED.md#5-linux-release-remaining).

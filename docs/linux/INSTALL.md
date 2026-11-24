@@ -66,16 +66,16 @@ The rest of this guide is the tar.gz.
 In the folder holding both files, run:
 
 ```bash
-sha256sum -c sluice-linux-x64.tar.gz.sha256
+sha256sum -c sluice-<version>-linux-x64.tar.gz.sha256
 ```
 
-It should print `sluice-linux-x64.tar.gz: OK`.
+It should print `sluice-<version>-linux-x64.tar.gz: OK`.
 
 ## 3. Install
 
 ```bash
-tar -xzf sluice-linux-x64.tar.gz
-cd sluice-linux-x64
+tar -xzf sluice-<version>-linux-x64.tar.gz
+cd sluice-linux-x64            # the folder inside has no version in its name
 sudo ./install.sh
 ```
 

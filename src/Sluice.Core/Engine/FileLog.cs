@@ -7,7 +7,8 @@ namespace Sluice.Core.Engine;
 /// Writes the tracker's log to a daily file ("Sluice-yyyy-MM-dd.log") in a directory,
 /// with its own level, independent of the on-screen log. Each file starts with <see cref="SluiceVersion.Banner"/>. Keeps the last <see cref="RetainDays"/> days of files.
 /// A file that can't be opened or written (disk full, folder deleted or denied) never throws into the tracker: the log
-/// reports it once, stops writing the file and tries again every <see cref="RetryAfter"/> (issue #226).
+/// reports it once, stops writing the file and tries again every <see cref="RetryAfter"/> (issue #226). A file deleted
+/// while open (Linux) is noticed within <see cref="ExistsCheckEvery"/> and started again.
 /// </summary>
 public sealed class FileLog : IDisposable
 {
@@ -56,13 +57,30 @@ public sealed class FileLog : IDisposable
             try
             {
                 var today = DateOnly.FromDateTime(now);
+                // A file deleted while open (Linux allows it) takes every line into the void: check now and then,
+                // and start the file again (#226). Windows doesn't let it be deleted while open.
+                DateTime? deletedSince = null;
+                if (_writer is not null && now >= _nextExistsCheck)
+                {
+                    if (!File.Exists(CurrentFile))
+                    {
+                        CloseWriter();
+                        deletedSince = _lastSeen;
+                    }
+                    _lastSeen = now;
+                    _nextExistsCheck = now + ExistsCheckEvery;
+                }
                 if (_writer is null || today != _day)
                 {
                     CloseWriter();
                     _day = today;
                     CurrentFile = Path.Combine(_directory, $"Sluice-{today:yyyy-MM-dd}.log");
                     Directory.CreateDirectory(_directory);         // the folder may have been deleted since
+                    var cutOff = !EndsWithNewline(CurrentFile);   // the last write failed (full disk) or a crash
                     _writer = new StreamWriter(OpenFile(CurrentFile), new UTF8Encoding(false)) { AutoFlush = true };
+                    if (cutOff) _writer.WriteLine();
+                    _lastSeen = now;
+                    _nextExistsCheck = now + ExistsCheckEvery;
                     // Every file, and every start appending to one, begins with the build that wrote it (issue #91).
                     _writer.WriteLine($"[{now:yyyy-MM-dd HH:mm:ss.fff}] {Tag(LogLevel.Normal)} {SluiceVersion.Banner}");
                     DeleteOldFiles(today);
@@ -72,6 +90,11 @@ public sealed class FileLog : IDisposable
                     _failedAt = null;
                     report = $"Log file is written again ({CurrentFile}); lines from {since:HH:mm:ss} to {now:HH:mm:ss} are missing from it.";
                     reportLevel = LogLevel.Normal;
+                }
+                else if (deletedSince is { } seen)
+                {
+                    report = $"Log file was deleted while Sluice was writing it; started it again ({CurrentFile}). Lines since {seen:HH:mm:ss} may be missing from it.";
+                    reportLevel = LogLevel.Error;
                 }
                 _writer.WriteLine($"[{now:yyyy-MM-dd HH:mm:ss.fff}] {Tag(level)} {message}");
             }
@@ -103,6 +126,11 @@ public sealed class FileLog : IDisposable
     /// </summary>
     public static readonly TimeSpan RetryAfter = TimeSpan.FromSeconds(60);
 
+    /// <summary>How often the log checks that its file still exists (it may be deleted while open on Linux).</summary>
+    public static readonly TimeSpan ExistsCheckEvery = TimeSpan.FromSeconds(5);
+
+    private DateTime _lastSeen, _nextExistsCheck;
+
     /// <summary>When the current outage started (null while the file is written).</summary>
     private DateTime? _failedAt;
     private DateTime _retryAt;
@@ -116,6 +144,19 @@ public sealed class FileLog : IDisposable
     /// <summary>Opens the day's file for appending (tests replace it to simulate a full disk).</summary>
     internal Func<string, Stream> OpenFile { get; set; } =
         path => new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
+
+    /// <summary>True if the file is missing, empty or ends with a line break; errors count as true.</summary>
+    private static bool EndsWithNewline(string path)
+    {
+        try
+        {
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            if (stream.Length == 0) return true;
+            stream.Seek(-1, SeekOrigin.End);
+            return stream.ReadByte() == '\n';
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return true; }
+    }
 
     /// <summary>Disposes the writer, ignoring errors (its final flush fails again on a full disk).</summary>
     private void CloseWriter()

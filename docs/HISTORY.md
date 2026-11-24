@@ -295,3 +295,7 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   fails. Without IPv6 to the transparent socket, `LinuxCapture.CanTake` drops IPv6 flows it would take, so a
   tunnel-rule app's IPv6 UDP isn't marked and sent out past the tunnel. `LinuxIpv6DisabledNetnsTests` (namespace with
   IPv6 off); the namespace tests share one xUnit collection.
+- Stale docs before the first release candidate (2026-11-25, #215): README, QUICKSTART, STATUS, REQUIRED and the
+  architecture pages describe the Windows installer (#64, unsigned in 1.0.0, #65), the Ubuntu `.deb` (#67), the
+  multi-targeted CLI (#53), the finished online-install tests (#71) and release CI (#74); `platforms.md` no longer says
+  #54/#55 moved; superseded decisions marked; the docs index lists `windows/INSTALL.md`.

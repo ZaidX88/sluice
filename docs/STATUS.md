@@ -3,7 +3,7 @@
 Where Sluice stands and how it is put together. For what to do next see [REQUIRED.md](REQUIRED.md) (must-do),
 each area's `FIXES.md` (known bugs) and `FEATURES.md` (ideas), listed in [README.md](README.md).
 
-Last updated: 2026-11-16.
+Last updated: 2026-11-25.
 
 ## What works
 
@@ -19,10 +19,11 @@ Sluice captures other applications' connections and routes each one by rules: **
 | Capturing other apps' traffic | ✅ WinDivert | ✅ nftables + NFQUEUE |
 | Fake DNS (198.18.0.0/15) so hostnames reach tunnels; kept across restarts (`fake-dns.json`) | ✅ | ✅ |
 | UDP through tunnels (QUIC, games, calls) | ✅ | ✅ tproxy (#60) |
+| Direct UDP to names looked up through the tunnel (placeholder addresses), also with UDP set to go direct | ✅ (#53, #208) | ✅ (#60, #209) |
 | Tunnel lifecycle: on/off, idle stop, health checks, retries, restart on network change, notifications | ✅ | ✅ |
 | Desktop app (Avalonia, light/dark, tray) | ✅ | ✅ (tray needs a StatusNotifier host; without one, closing the window quits) |
 | Command line (`Sluice.Cli`) | ✅ | ✅ |
-| Release package | ❌ not yet | ✅ app-only tarball + `install.sh` ([linux/INSTALL.md](linux/INSTALL.md)) |
+| Release package | ✅ installer `Sluice-Setup-<version>-x64.exe`, self-contained ([windows/INSTALL.md](windows/INSTALL.md)); not code-signed in 1.0.0 (#65, planned for 1.0.1) | ✅ `.deb` for Ubuntu 24.04+ (`sudo apt install ./…deb`), and for Debian, older Ubuntu and other distributions an app-only tar.gz + `install.sh` ([linux/INSTALL.md](linux/INSTALL.md)) |
 
 **Not supported, by design:** Xray-only features that sing-box doesn't implement, namely the `xhttp` transport and
 VLESS post-quantum encryption (`mlkem768x25519plus`). Sluice shows a clear error for such links.
@@ -46,7 +47,7 @@ How the modules fit together: [ARCHITECTURE.md](ARCHITECTURE.md); how each build
 | `src/Sluice.Cli` | net10.0-windows…; net10.0 | Headless engine; `#if WINDOWS` picks the platform module, and `--intercept` takes its capture from it. |
 | `tests/Sluice.Tests` (+ `.Linux`, `.Windows`, `.Support`) | net10.0 (Windows tests: net10.0-windows) | xUnit: shared tests plus one project per platform; run with `Sluice.Linux.slnf` / `Sluice.Windows.slnf`. |
 | `build/Dependencies.targets` | — | Fetches WinDivert and sing-box on the first build (pinned, SHA-256 checked) into `.deps/`. |
-| `scripts/` | — | Live-test helpers (`scripts/linux/`), sing-box download scripts. Linux release packaging: `scripts/package-linux.sh` and `packaging/linux/`. |
+| `scripts/`, `packaging/` | — | Live-test helpers (`scripts/linux/`), sing-box download scripts. Release packaging: `scripts/package-linux.sh` and `packaging/linux/` (tar.gz, `--deb`), `scripts/package-windows.ps1` and `packaging/windows/` (Inno Setup); `.github/workflows/release.yml` builds the release packages from a version tag (#74). |
 
 ## How capture works
 

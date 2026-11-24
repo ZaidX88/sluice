@@ -4,10 +4,14 @@ Five minutes from install to your first app going through a tunnel. Works the sa
 
 ## 1. Install
 
-- **Linux:** unpack the release and run `sudo ./install.sh`, which installs everything else Sluice needs. See [linux/INSTALL.md](linux/INSTALL.md).
-- **Windows:** no installer yet. Build and run it as described in [windows/BUILD.md](windows/BUILD.md); capture needs "Run as administrator".
+- **Windows:** run `Sluice-Setup-<version>-x64.exe` (it includes everything Sluice needs). Version 1.0.0 isn't
+  code-signed yet, so SmartScreen may warn: **More info → Run anyway**. See [windows/INSTALL.md](windows/INSTALL.md).
+- **Linux, Ubuntu 24.04 or later:** `sudo apt install ./sluice_<version>_amd64.deb` (with the `./`).
+- **Linux, Debian, older Ubuntu and other distributions:** unpack `sluice-<version>-linux-x64.tar.gz` and run
+  `sudo ./install.sh` in it, which installs everything else Sluice needs. Both Linux packages: [linux/INSTALL.md](linux/INSTALL.md).
 
-Then open **Sluice** (Linux: the applications menu or `sluice`).
+Then open **Sluice** (Windows: the Start Menu; Linux: the applications menu or `sluice`). Capturing other apps' traffic
+on Windows needs administrator rights: **Run as administrator**, or **Restart as administrator** in the banner.
 
 ## 2. Add your tunnel
 
@@ -54,5 +58,8 @@ reopens the last profile when it starts.
 - **Hostnames through the tunnel:** on by default (**Settings → Privacy** → *Look up website names*), so sites are
   looked up by your tunnel's server instead of your local network. Choose *On this PC* to use your local DNS instead.
 - **UDP** (calls, games, QUIC) goes through tunnels that carry it (SOCKS5 and the sing-box protocols; not SSH or HTTP,
-  so UDP of apps sent through those is blocked and browsers fall back to normal HTTPS).
+  so UDP of apps sent through those is blocked and browsers fall back to normal HTTPS). Apps with a **Direct** rule can
+  use UDP as usual, also to sites whose names were looked up through the tunnel.
+- **SSH with a private key:** paste the whole key into **Private key**, or use **Load key file…**; long RSA keys work
+  too.
 - **Headless?** `Sluice.Cli myprofile.sluice --intercept` (Linux: `sluice-cli`) does the same without a window.

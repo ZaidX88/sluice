@@ -108,6 +108,15 @@ public class PlatformServicesTests
         Assert.False(p.Autostart);
     }
 
+    // #265: the desktop's theme is "not known" (null) until a platform reads it, so the app looks as it does today.
+    [Fact]
+    public void The_desktop_theme_is_not_known_by_default()
+    {
+        Assert.Null(new PlatformServices.NoPlatform().PrefersDarkTheme());   // the platform before Use
+        IPlatformServices bare = new BarePlatform();
+        Assert.Null(bare.PrefersDarkTheme());                                // a platform that doesn't implement it
+    }
+
     [Fact]
     public void Use_sets_the_platform_and_the_process_lookup_backend() => Restoring(() =>
     {

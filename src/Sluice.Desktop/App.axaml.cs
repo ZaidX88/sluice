@@ -71,18 +71,30 @@ public partial class App : Application
 
         // --profile opens that file as it is; otherwise the last profile, copied into Sluice's profiles folder once if it
         // was elsewhere (#134), or the first profile there, or a new "Default".
+        // If it can't be opened (e.g. its master password is cancelled), Sluice runs an empty profile without a file:
+        // that sends everything Direct, so capture is not started on launch and the banner says why (#248).
         var profileArg = Arg(args, "--profile") is { } p && File.Exists(p) ? p : null;
+        var startCapture = args.Contains("--intercept") || settings.StartInterceptionOnLaunch;
+        string? asked = null;
+        string? notOpened = null;
+        var profileOpen = false;
         try
         {
-            if (_host.OpenStartupProfile(profileArg, (name, confirm) => Dialogs.AskMasterPassword(name, confirm)) is { } note)
-                vm.ShowInfo(note);
+            var note = _host.OpenStartupProfile(profileArg, (name, confirm) =>
+            {
+                asked = name;
+                return Dialogs.AskMasterPassword(name, confirm);
+            });
+            profileOpen = true;
+            if (note is not null) vm.ShowInfo(note);
         }
         catch (OperationCanceledException) { }
-        catch (Exception ex) { vm.Banner = $"Could not open the profile: {ex.Message}"; }
+        catch (Exception ex) { notOpened = ex.Message; }
+        if (!profileOpen) vm.ShowProfileNotOpened(asked, notOpened, startCapture);
 
         if (Arg(args, "--log-file") is { } diagDir) _host.StartDiagnosticLog(diagDir);
         _host.StartSocks();
-        if (args.Contains("--intercept") || settings.StartInterceptionOnLaunch) vm.TurnOn();
+        if (startCapture && profileOpen) vm.TurnOn();
         if (Arg(args, "--crash-test") is { } where) CrashTest(where);
         vm.StartUpdateChecks();   // about a minute from now, then daily, while the setting is on (#198)
     }

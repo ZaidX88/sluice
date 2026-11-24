@@ -1,0 +1,24 @@
+#!/bin/sh
+# After the files are removed: undo postinst's /etc/dotnet change, only if it is still the one postinst made.
+set -e
+
+STATE=/var/lib/sluice
+
+case "$1" in
+remove|purge|abort-install)
+    if [ -f "$STATE/install_location_x64" ]; then
+        if [ "$(head -n 1 /etc/dotnet/install_location_x64 2>/dev/null)" = "$(cat "$STATE/install_location_x64")" ]; then
+            if [ -f "$STATE/install_location_x64.orig" ]; then
+                mv "$STATE/install_location_x64.orig" /etc/dotnet/install_location_x64
+            else
+                rm -f /etc/dotnet/install_location_x64
+                rmdir /etc/dotnet 2>/dev/null || true
+            fi
+        fi
+        rm -f "$STATE/install_location_x64" "$STATE/install_location_x64.orig"
+    fi
+    rmdir "$STATE" 2>/dev/null || true
+    ;;
+esac
+
+exit 0

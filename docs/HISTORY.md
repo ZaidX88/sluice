@@ -253,3 +253,9 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   kernel. `WinDivertNative.TakesOutbound` (WinDivertHelperEvalFilter) lets `CaptureFilterTests` check which packets the
   filter takes. Live: `localtest.me` echo through `--udp bypass` came back from its placeholder; a datagram to
   192.0.2.1 left no flow.
+- Ubuntu `.deb` (2026-11-22, #67): `scripts/package-linux.sh --deb` builds `sluice_<version>_amd64.deb` with `dpkg-deb
+  --root-owner-group` from the tar.gz's files: `/opt/sluice` with the launcher and the bundled sing-box (pin read from
+  `install.sh`), `/usr/bin` links, menu entry, icon; `packaging/linux/deb/` holds the control file and `preinst`
+  (replaces an `install.sh` copy), `postinst` (`/etc/dotnet` only if needed, setcap on the launcher), `prerm`/`postrm`
+  (undo; `prerm` closes a running Sluice first). Lowest release 24.04 (22.04's archive has no `dotnet-runtime-10.0`).
+  Checked in Docker on 24.04 and 26.04 without .NET: install, capture as a normal user, remove, purge.

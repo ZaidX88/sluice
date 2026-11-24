@@ -3,15 +3,51 @@
 Sluice sends each app's connections where you choose: **directly**, **blocked**, or **through a tunnel**
 (SSH, SOCKS, HTTP(S), VLESS, VMess, Trojan, Shadowsocks, Hysteria2, TUIC).
 
-The package holds only Sluice itself (about 13 MB). The installer adds whatever your system is missing.
+There are two packages:
 
-| File | What it is |
+| File | For |
 |---|---|
-| `sluice-linux-x64.tar.gz` | the release package |
-| `sluice-linux-x64.tar.gz.sha256` | its checksum, to check the download |
+| `sluice_<version>_amd64.deb` (+ `.sha256`) | **Ubuntu 24.04 LTS or later**: see [the .deb](#ubuntu-2404-or-later-the-deb) below |
+| `sluice-<version>-linux-x64.tar.gz` (+ `.sha256`) | every other distribution, **Debian** and **Ubuntu 22.04 or older** included: the rest of this guide |
+
+The tar.gz holds only Sluice itself (about 13 MB); its installer adds whatever your system is missing.
 
 The short version (install, add a tunnel, add rules, start) is [../QUICKSTART.md](../QUICKSTART.md); building the
 package yourself is in [BUILD.md](BUILD.md).
+
+---
+
+## Ubuntu 24.04 or later: the .deb
+
+```bash
+sudo apt install ./sluice_<version>_amd64.deb
+```
+
+Or open the file in **App Center**. apt installs what Sluice needs with it from Ubuntu's own archive: the .NET 10
+runtime (`dotnet-runtime-10.0`), nftables, libcap, the X11 / font libraries and notify-send. sing-box 1.14.4 is in the
+package, so nothing is downloaded from GitHub. The package puts Sluice in `/opt/sluice`, adds the `sluice` and
+`sluice-cli` commands and the menu entry, and gives the launcher `/opt/sluice/sluice` the capture rights, as
+`install.sh` does. A copy installed earlier with `install.sh` is replaced. Then start Sluice as in
+[4. Start Sluice](#4-start-sluice).
+
+Use `apt install ./…`, with the `./`, not `dpkg -i`: dpkg doesn't install the .NET runtime, and leaves Sluice
+unconfigured, without capture rights, until `sudo apt -f install`.
+
+**Lowest release: Ubuntu 24.04 LTS**, the first whose archive has `dotnet-runtime-10.0`. On Ubuntu 22.04 apt refuses
+with "Depends: dotnet-runtime-10.0 but it is not installable". There, and on **Debian** (which has no
+`dotnet-runtime-10.0` in its archive), use the tar.gz with `install.sh` below.
+
+Update by installing a newer `.deb` the same way. Uninstall with:
+
+```bash
+sudo apt remove sluice     # or: sudo apt purge sluice
+```
+
+A running Sluice is closed first, so it takes its capture rules down itself. This removes the app, sing-box, the
+commands, the menu entry and the capture rights. Your profiles in
+`~/.config/Sluice` are kept. The .NET runtime and the other packages apt added stay until `sudo apt autoremove`.
+
+The rest of this guide is the tar.gz.
 
 ---
 

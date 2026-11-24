@@ -24,11 +24,13 @@ internal static class PolicyRoutes
     private const ushort FRA_PRIORITY = 6, FRA_FWMARK = 10, FRA_TABLE = 15, FRA_FWMASK = 16;
     private const ushort RTA_OIF = 4, RTA_TABLE = 15;
     public const byte AF_INET = 2, AF_INET6 = 10;
-    private const int ENOENT = 2, ESRCH = 3, EEXIST = 17, EAFNOSUPPORT = 97;
+    private const int ENOENT = 2, ESRCH = 3, EEXIST = 17;
 
     /// <summary>
-    /// Adds the rule and route for both families, after removing any left from an earlier run. An IPv6 failure because
-    /// the system has no IPv6 is not an error (returned in <paramref name="ipv6Problem"/>); any IPv4 failure throws.
+    /// Adds the rule and route for both families, after removing any left from an earlier run. Any IPv6 failure (no IPv6
+    /// in the kernel, or IPv6 disabled by sysctl, where adding the route gives EACCES) is not an error: what was added for
+    /// IPv6 is removed again and the reason returned in <paramref name="ipv6Problem"/>, so IPv4 works on its own (#216).
+    /// An IPv4 failure throws, after removing what was added.
     /// </summary>
     public static void Add(uint mark, out string? ipv6Problem)
     {
@@ -36,15 +38,24 @@ internal static class PolicyRoutes
         ipv6Problem = null;
         using var nl = Netlink.Open();
         var lo = LoopbackIndex();
-        nl.Request(RuleMessage(RTM_NEWRULE, NLM_F_CREATE | NLM_F_EXCL, nl.NextSeq(), AF_INET, mark), "add the IPv4 routing rule");
-        nl.Request(RouteMessage(RTM_NEWROUTE, NLM_F_CREATE | NLM_F_EXCL, nl.NextSeq(), AF_INET, lo), "add the IPv4 route");
+        try
+        {
+            nl.Request(RuleMessage(RTM_NEWRULE, NLM_F_CREATE | NLM_F_EXCL, nl.NextSeq(), AF_INET, mark), "add the IPv4 routing rule");
+            nl.Request(RouteMessage(RTM_NEWROUTE, NLM_F_CREATE | NLM_F_EXCL, nl.NextSeq(), AF_INET, lo), "add the IPv4 route");
+        }
+        catch (NetlinkException)
+        {
+            RemoveFamily(nl, AF_INET, mark, lo);
+            throw;
+        }
         try
         {
             nl.Request(RuleMessage(RTM_NEWRULE, NLM_F_CREATE | NLM_F_EXCL, nl.NextSeq(), AF_INET6, mark), "add the IPv6 routing rule");
             nl.Request(RouteMessage(RTM_NEWROUTE, NLM_F_CREATE | NLM_F_EXCL, nl.NextSeq(), AF_INET6, lo), "add the IPv6 route");
         }
-        catch (NetlinkException ex) when (ex.Errno is EAFNOSUPPORT)
+        catch (NetlinkException ex)
         {
+            RemoveFamily(nl, AF_INET6, mark, lo);     // the rule may be in while the route failed
             ipv6Problem = ex.Message;
         }
     }
@@ -56,14 +67,17 @@ internal static class PolicyRoutes
         {
             using var nl = Netlink.Open();
             var lo = LoopbackIndex();
-            foreach (var family in new[] { AF_INET, AF_INET6 })
-            {
-                // Several copies could exist if earlier runs failed half-way: delete until there is none.
-                for (var i = 0; i < 8 && nl.TryRequest(RuleMessage(RTM_DELRULE, 0, nl.NextSeq(), family, mark), out _); i++) { }
-                for (var i = 0; i < 8 && nl.TryRequest(RouteMessage(RTM_DELROUTE, 0, nl.NextSeq(), family, lo), out _); i++) { }
-            }
+            foreach (var family in new[] { AF_INET, AF_INET6 }) RemoveFamily(nl, family, mark, lo);
         }
         catch (InvalidOperationException) { /* best effort */ }
+    }
+
+    /// <summary>Deletes one family's rules and routes. Several copies could exist if earlier runs failed half-way:
+    /// deletes until there is none.</summary>
+    private static void RemoveFamily(Netlink nl, byte family, uint mark, int lo)
+    {
+        for (var i = 0; i < 8 && nl.TryRequest(RuleMessage(RTM_DELRULE, 0, nl.NextSeq(), family, mark), out _); i++) { }
+        for (var i = 0; i < 8 && nl.TryRequest(RouteMessage(RTM_DELROUTE, 0, nl.NextSeq(), family, lo), out _); i++) { }
     }
 
     /// <summary>RTM_NEWRULE / RTM_DELRULE: fib_rule_hdr + priority, fwmark/mask, table.</summary>

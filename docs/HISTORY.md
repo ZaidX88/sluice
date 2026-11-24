@@ -278,3 +278,7 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
 - Linux tarball name in the docs (2026-11-24, #217): `docs/linux/INSTALL.md` (check and install steps) and
   `packaging/linux/README.txt` use `sluice-<version>-linux-x64.tar.gz`, the name `release.yml` publishes and its
   `.sha256` checks; the folder inside stays `sluice-linux-x64`.
+- Linux capture without IPv6 (2026-11-25, #216): `LinuxDnsServer.BindLoopbackPair` treats `AddressNotAvailable` (`::1`
+  gone with `disable_ipv6`) as no IPv6, as `LoopbackRelay` did; `PolicyRoutes.Add` treats any IPv6 failure (EACCES
+  when IPv6 is disabled) as IPv6-only, removing what it added for IPv6, and removes the IPv4 rule if the IPv4 part
+  fails. `LinuxIpv6DisabledNetnsTests` (namespace with IPv6 off); the namespace tests share one xUnit collection.

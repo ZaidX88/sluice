@@ -14,6 +14,7 @@ namespace Sluice.Tests;
 /// <c>unshare -rn dotnet test … --filter LinuxUdpTproxyNetnsTests</c> (a throwaway namespace; the machine's own
 /// network is never touched). Otherwise it passes without doing anything.
 /// </summary>
+[Collection(NetnsTests.Collection)]   // one at a time: they change the same namespace
 public class LinuxUdpTproxyNetnsTests
 {
     private const ushort Queue = 1473;

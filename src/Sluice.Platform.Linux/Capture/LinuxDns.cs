@@ -35,8 +35,9 @@ internal sealed class LinuxDnsServer : IAsyncDisposable
         (_v4, _v6, Port) = BindLoopbackPair();
     }
 
-    /// <summary>127.0.0.1:P and [::1]:P on the same port P (nftables redirects both families to one port).</summary>
-    private static (Socket V4, Socket V6, int Port) BindLoopbackPair()
+    /// <summary>127.0.0.1:P and [::1]:P on the same port P (nftables redirects both families to one port). Without IPv6
+    /// (not in the kernel, or disabled by sysctl, which removes ::1) the IPv6 socket is left unbound: IPv4 only (#216).</summary>
+    internal static (Socket V4, Socket V6, int Port) BindLoopbackPair()
     {
         for (var attempt = 0; ; attempt++)
         {
@@ -49,10 +50,14 @@ internal sealed class LinuxDnsServer : IAsyncDisposable
                 v6.Bind(new IPEndPoint(IPAddress.IPv6Loopback, port));
                 return (v4, v6, port);
             }
-            catch (SocketException ex) when (attempt < 20 || ex.SocketErrorCode == SocketError.AddressFamilyNotSupported)
+            catch (SocketException ex) when (ex.SocketErrorCode is SocketError.AddressFamilyNotSupported or SocketError.AddressNotAvailable)
             {
                 v6.Dispose();
-                if (ex.SocketErrorCode == SocketError.AddressFamilyNotSupported) return (v4, v6, port);   // no IPv6 on this host
+                return (v4, v6, port);      // IPv6 missing or disabled: IPv4 queries only, as LoopbackRelay does
+            }
+            catch (SocketException) when (attempt < 20)
+            {
+                v6.Dispose();               // the port is taken on ::1: try another one
                 v4.Dispose();
             }
         }

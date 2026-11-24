@@ -39,6 +39,8 @@ into the version's section, and that section, with the install links, becomes th
   profiles you already have keep their choice, and "On this PC" is still in Settings → Privacy (#167).
 
 ### Fixed
+- Linux: capture starts on a system with IPv6 disabled (`net.ipv6.conf.all.disable_ipv6=1`) and works over IPv4,
+  UDP through tunnels included; before, it failed with "Cannot assign requested address" (#216).
 - A rule's Ports value that isn't a list of ports (`https`, `70000`) no longer makes the rule apply to every port,
   so a Block rule can't block everything by mistake: those parts are ignored, a rule with no valid port matches no
   connection, and the Log page says which rule and value. Ports may also be separated by spaces (`80 443`) (#230).

@@ -295,6 +295,10 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   fails. Without IPv6 to the transparent socket, `LinuxCapture.CanTake` drops IPv6 flows it would take, so a
   tunnel-rule app's IPv6 UDP isn't marked and sent out past the tunnel. `LinuxIpv6DisabledNetnsTests` (namespace with
   IPv6 off); the namespace tests share one xUnit collection.
+- App rules with a Linux path (2026-11-25, #212): `RuleEngine.ParseApps` turned every `/` in an Applications value
+  into `\`, so `/usr/bin/curl` never matched on Linux. It now folds `/` and `\` only for Windows paths, in both the
+  value and the process path (a `windowsPaths` switch, `OperatingSystem.IsWindows()` in the app, so tests cover both on
+  any system); Linux compares as written. Tests in `RuleEngineTests`; checked live with a `/usr/bin/curl` Block rule.
 - Stale docs before the first release candidate (2026-11-25, #215): README, QUICKSTART, STATUS, REQUIRED and the
   architecture pages describe the Windows installer (#64, unsigned in 1.0.0, #65), the Ubuntu `.deb` (#67), the
   multi-targeted CLI (#53), the finished online-install tests (#71) and release CI (#74); `platforms.md` no longer says

@@ -167,6 +167,42 @@ public class RuleEngineTests
     }
 
 
+    private static bool AppMatches(string spec, string path, bool windowsPaths) =>
+        RuleEngine.ParseApps(spec, windowsPaths)!.Any(m => m(path));
+
+    // #212: a Linux path in Applications used to have its "/" turned into "\", so it never matched.
+    [Theory]
+    [InlineData("/usr/bin/curl", "/usr/bin/curl", true)]
+    [InlineData("/usr/bin/*", "/usr/bin/curl", true)]
+    [InlineData("/usr/bin/*", "/usr/local/bin/curl", false)]
+    [InlineData("/usr/bin/curl", "/usr/bin/curl2", false)]
+    [InlineData("curl", "/usr/bin/curl", true)]                       // a name: the file name, as before
+    [InlineData("cur*", "/usr/bin/curl", true)]
+    [InlineData("/opt/sluice/*; /usr/bin/curl", "/usr/bin/curl", true)]
+    [InlineData("C:\\Program Files\\App\\app.exe", "/usr/bin/curl", false)]
+    public void LinuxPathsMatchTheProgramsPath(string spec, string path, bool expected) =>
+        Assert.Equal(expected, AppMatches(spec, path, windowsPaths: false));
+
+    [Theory]
+    [InlineData("C:\\Program Files\\App\\app.exe", "C:\\Program Files\\App\\app.exe", true)]
+    [InlineData("C:/Program Files/App/app.exe", "C:\\Program Files\\App\\app.exe", true)]   // either separator
+    [InlineData("C:\\Program Files\\App\\app.exe", "C:/Program Files/App/app.exe", true)]
+    [InlineData("c:\\program files\\app\\*", "C:\\Program Files\\App\\app.exe", true)]      // case-insensitive
+    [InlineData("C:\\Program Files\\Other\\*", "C:\\Program Files\\App\\app.exe", false)]
+    [InlineData("app.exe", "C:\\Program Files\\App\\app.exe", true)]
+    [InlineData("chrome.exe", "C:\\Program Files\\App\\app.exe", false)]
+    public void WindowsPathsMatchAsBefore(string spec, string path, bool expected) =>
+        Assert.Equal(expected, AppMatches(spec, path, windowsPaths: true));
+
+    [Fact]
+    public void AppRuleWithALinuxPathMatchesOnLinux()
+    {
+        if (OperatingSystem.IsWindows()) return;   // the engine uses this system's paths
+        var e = Engine(new Rule { Name = "curl by path", Applications = "/usr/bin/curl", Action = RuleAction.Block });
+        Assert.Equal("curl by path", Match(e, "/usr/bin/curl", "example.com", 443));
+        Assert.Equal("Default", Match(e, "/usr/bin/wget", "example.com", 443));
+    }
+
     [Fact]
     public void MissingDefaultFallsBackToDirect()
     {

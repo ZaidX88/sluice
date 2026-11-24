@@ -83,20 +83,33 @@ public sealed class RuleEngine
 
     // ---------- applications ----------
 
-    internal static List<Func<string?, bool>>? ParseApps(string? spec)
+    /// <summary>
+    /// The matchers for a rule's Applications value: a name (<c>curl</c>, <c>chrome.exe</c>, wildcards allowed) is
+    /// compared with the program's file name, a value with a path separator with its full path. On Windows, where paths
+    /// may be written with either separator, <c>/</c> and <c>\</c> are treated alike in both the value and the path. On
+    /// Linux they are compared as they are, so <c>/usr/bin/curl</c> matches curl's own path (#212); before, every
+    /// <c>/</c> in the value was turned into <c>\</c>, so a Linux path never matched.
+    /// </summary>
+    internal static List<Func<string?, bool>>? ParseApps(string? spec) => ParseApps(spec, OperatingSystem.IsWindows());
+
+    /// <summary><see cref="ParseApps(string?)"/> for Windows paths (<paramref name="windowsPaths"/>) or Linux ones, so
+    /// tests can check both on any system.</summary>
+    internal static List<Func<string?, bool>>? ParseApps(string? spec, bool windowsPaths)
     {
         var tokens = Tokenize(spec);
         if (tokens.Count == 0) return null;
+        string Fold(string p) => windowsPaths ? p.Replace('/', '\\') : p;
+        string FileName(string p) => windowsPaths ? p[(p.LastIndexOfAny(['\\', '/']) + 1)..] : Path.GetFileName(p);
         var list = new List<Func<string?, bool>>();
         foreach (var tok in tokens)
         {
             var expanded = Environment.ExpandEnvironmentVariables(tok);
             var hasPath = expanded.Contains('\\') || expanded.Contains('/');
-            var rx = WildcardToRegex(expanded.Replace('/', '\\'));
+            var rx = WildcardToRegex(Fold(expanded));
             list.Add(path =>
             {
                 if (string.IsNullOrEmpty(path)) return false;
-                var candidate = hasPath ? path : Path.GetFileName(path);
+                var candidate = hasPath ? Fold(path) : FileName(path);
                 return rx.IsMatch(candidate);
             });
         }

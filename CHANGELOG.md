@@ -6,8 +6,9 @@ fixes) is [docs/HISTORY.md](docs/HISTORY.md).
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/). Each pull request with a change users would notice adds one line under
 **Unreleased**, in one of the groups **Added**, **Changed**, **Fixed**, **Removed** or **Security**, with its issue
-number ([docs/CONTRIBUTING.md](docs/CONTRIBUTING.md#from-idea-to-merge)). At a release the owner turns **Unreleased**
-into the version's section, and that section, with the install links, becomes the GitHub Release notes.
+number ([docs/CONTRIBUTING.md](docs/CONTRIBUTING.md#from-idea-to-merge)). A release candidate's GitHub Release notes
+are **Unreleased** together with the coming version's section, with the install links; at the release the owner moves
+**Unreleased** into that section, dated, and the section becomes the notes.
 
 ## [Unreleased]
 
@@ -47,7 +48,8 @@ into the version's section, and that section, with the install links, becomes th
 - Linux: the install guide and the package's README name the download as releases publish it,
   `sluice-<version>-linux-x64.tar.gz`, so its checksum and unpack commands work as written (#217).
 - A log file that can't be written (disk full, its folder deleted or denied) no longer crashes Sluice: the Log page
-  shows one error, the log file is tried again every minute, and the on-screen log keeps working (#226).
+  shows one error, the log file is tried again every minute, and the on-screen log keeps working. On Linux, a log file
+  or folder deleted while Sluice runs is started again within seconds instead of losing every line until midnight (#226).
 - A profile with an SSH tunnel that uses a pasted private key (longer than 256 characters) can now be saved, in every
   password mode, and `Sluice.Cli import` works with it. A profile holding a key over about 2000 characters (RSA) can't
   be opened by earlier versions (#213).

@@ -263,7 +263,9 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   `ConnectionTracker.Write` (the relay-statistics timer ended the process on a full disk). It closes the writer
   quietly, reports once, retries after `RetryAfter` (60 s, `Failing` while it waits), recreates a deleted folder, and
   logs the missing span when the file is written again; `Dispose` ignores a failing final flush. Tests in
-  `FileLogFailureTests` (folder replaced by a file, read-only file, full-disk stream).
+  `FileLogFailureTests` (folder replaced by a file, read-only file, full-disk stream). After the live check: a file
+  deleted while open (Linux) is found within `ExistsCheckEvery` (5 s) and started again, and a cut-off last line gets a
+  line break before the next one.
 - Long secrets (2026-11-24, #213): `ProxifierPasswordCodec.Encode` refused more than 256 characters, so a pasted SSH
   key couldn't be saved in any mode. The character limit is gone; AES values over 255 blocks use a long form (block
   byte 0, then the count as a little-endian `int32`), which `Decode` reads next to Proxifier's layout. Shorter values
@@ -278,6 +280,10 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
 - Linux tarball name in the docs (2026-11-24, #217): `docs/linux/INSTALL.md` (check and install steps) and
   `packaging/linux/README.txt` use `sluice-<version>-linux-x64.tar.gz`, the name `release.yml` publishes and its
   `.sha256` checks; the folder inside stays `sluice-linux-x64`.
+- Release-candidate notes (2026-11-25, #214): `scripts/release-notes.sh` took only `[1.0.0]` for `1.0.0-rc.1`
+  because the section exists, leaving out everything under `[Unreleased]`. A candidate now joins `[Unreleased]` with a
+  version section still marked "not released yet", merging the `### ` groups (Keep a Changelog order, Known
+  limitations last); a release refuses a non-empty `[Unreleased]`. The prerelease argument defaults from the version.
 - Linux capture without IPv6 (2026-11-25, #216): `LinuxDnsServer.BindLoopbackPair` treats `AddressNotAvailable` (`::1`
   gone with `disable_ipv6`) as no IPv6, as `LoopbackRelay` did; `PolicyRoutes.Add` treats any IPv6 failure (EACCES
   when IPv6 is disabled) as IPv6-only, removing what it added for IPv6, and removes the IPv4 rule if the IPv4 part

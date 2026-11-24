@@ -150,6 +150,45 @@ public sealed class FileLogFailureTests : IDisposable
     }
 
     [Fact]
+    public void CutOffLastLine_TheNextLineStartsOnItsOwn()
+    {
+        Directory.CreateDirectory(_dir);
+        var file = Path.Combine(_dir, $"Sluice-{DateOnly.FromDateTime(_now):yyyy-MM-dd}.log");
+        File.WriteAllText(file, "[2026-11-24 09:59:59.000] ERROR   cut o");   // the disk filled up mid-line
+        using var log = Open();
+        _tracker.Write(LogLevel.Normal, "next");
+        var lines = FileLines(log);
+        Assert.Equal(3, lines.Length);
+        Assert.EndsWith("cut o", lines[0]);
+        Assert.Contains("INFO", lines[1]);                      // the version line, on its own
+        Assert.EndsWith("next", lines[2]);
+    }
+
+    [Fact]
+    public void FolderDeletedWhileOpen_IsStartedAgain_AndReported()
+    {
+        using var log = Open();
+        // Linux lets an open file be deleted; FileShare.Delete gives Windows the same here.
+        log.OpenFile = path => new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete);
+        _tracker.Write(LogLevel.Normal, "one");
+        Directory.Delete(_dir, recursive: true);
+
+        _tracker.Write(LogLevel.Normal, "lost");                // before the next check: into the deleted file
+        Assert.Empty(Errors());
+        _now += FileLog.ExistsCheckEvery;
+        _tracker.Write(LogLevel.Normal, "two");
+
+        Assert.False(log.Failing);
+        var error = Assert.Single(Errors());
+        Assert.StartsWith("Log file was deleted", error);
+        var lines = FileLines(log);
+        Assert.DoesNotContain(lines, l => l.EndsWith("one") || l.EndsWith("lost"));
+        Assert.Contains(lines, l => l.EndsWith("two"));
+        Assert.Contains(lines, l => l.Contains("Log file was deleted"));
+        Assert.Contains(_screen, e => e.Message == "lost");
+    }
+
+    [Fact]
     public void Dispose_AfterAFailedWrite_DoesNotThrow()
     {
         var log = Open();

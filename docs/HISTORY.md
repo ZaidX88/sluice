@@ -263,7 +263,9 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   `ConnectionTracker.Write` (the relay-statistics timer ended the process on a full disk). It closes the writer
   quietly, reports once, retries after `RetryAfter` (60 s, `Failing` while it waits), recreates a deleted folder, and
   logs the missing span when the file is written again; `Dispose` ignores a failing final flush. Tests in
-  `FileLogFailureTests` (folder replaced by a file, read-only file, full-disk stream).
+  `FileLogFailureTests` (folder replaced by a file, read-only file, full-disk stream). After the live check: a file
+  deleted while open (Linux) is found within `ExistsCheckEvery` (5 s) and started again, and a cut-off last line gets a
+  line break before the next one.
 - Long secrets (2026-11-24, #213): `ProxifierPasswordCodec.Encode` refused more than 256 characters, so a pasted SSH
   key couldn't be saved in any mode. The character limit is gone; AES values over 255 blocks use a long form (block
   byte 0, then the count as a little-endian `int32`), which `Decode` reads next to Proxifier's layout. Shorter values

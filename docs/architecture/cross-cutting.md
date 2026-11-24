@@ -70,7 +70,9 @@ headers (`Interceptor.DiagnosticPackets`). Helper output (sing-box) is logged li
 and a throwing handler also hides the line from the handlers after it. `FileLog` catches its own open and write errors
 (disk full, folder deleted or denied, #226): it reports `Log file stopped: …` once at Error, stops writing the file,
 tries again every `FileLog.RetryAfter` (60 s; recreating a deleted folder), and on success logs which span of lines is
-missing.
+missing. Every `FileLog.ExistsCheckEvery` (5 s) it checks that its file still exists: Linux lets an open file (or its
+folder) be deleted, and the lines would go nowhere; it then starts the file again and reports it at Error. A file
+whose last line was cut off (full disk, crash) gets a line break before the next line.
 
 ## Security points
 

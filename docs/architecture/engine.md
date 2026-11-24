@@ -176,6 +176,13 @@ it is: the flow gets its own UDP socket to the name's real address (looked up li
 `RoutingEngine.HostResolver`, else the OS; the app's address family first), and replies reach the app from the
 placeholder. Only datagrams from that address and port are passed on; a failed lookup is retried at most every 5 s.
 Linux uses it since #60, Windows since #53 (which deleted `UdpNat`).
+A flow whose **owner isn't found** (`findOwner` gives 0; on Windows the UDP table can miss a socket created a moment
+earlier) isn't decided at once unless process services are on or it goes to a placeholder (#255): it waits, holding up
+to 16 datagrams, while a background task looks the owner up again after 20, 50, 100, 250 and 500 ms
+(`OwnerRetryDelays`). Once found, the flow is decided as usual and the held datagrams go its way (through the tunnel,
+or dropped for a Block rule); still unknown after about 1 s, it passes as an unknown owner's flow. Held datagrams of a
+flow that passes can't be sent on (the capture can't re-inject them), so the app resends. Debug lines: `pid 0 => Wait`,
+then the usual decision line or `pid 0 => Pass (owner unknown)`.
 
 **Windows: `Sluice.Platform.Windows/Capture/WinDivertUdp.cs` (#53).** For each outbound datagram `Interceptor` calls
 `WinDivertUdp.ProcessOutbound`, which parses it (`UdpPacket.TryParse`) into an `AppDatagram` whose context is its

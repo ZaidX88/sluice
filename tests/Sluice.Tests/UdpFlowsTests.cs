@@ -95,6 +95,100 @@ public class UdpFlowsTests
         Assert.Empty(engine.Tracker.Active);
     }
 
+    private static readonly TimeSpan[] QuickRetries = [.. Enumerable.Repeat(TimeSpan.FromMilliseconds(20), 5)];
+
+    [Fact]
+    public async Task OwnerFoundOnASecondLook_FlowFollowsItsRule_HeldDatagramsGoThroughTheTunnel()
+    {
+        using var echo = new UdpEchoServer();
+        await using var socks = new Socks5UdpServer();
+        socks.Hosts["203.0.113.5"] = IPAddress.Loopback;
+
+        var p = Profile.CreateDefault();
+        p.Tunnels.Add(new Tunnel { Id = 100, Type = TunnelType.Socks5, Address = "127.0.0.1", Port = socks.Port });
+        p.Rules.Insert(0, new Rule { Name = "Game", Targets = "203.0.113.5", Action = RuleAction.ViaTunnel(100) });
+        await using var engine = new RoutingEngine(p);
+        engine.Tracker.Level = LogLevel.Debug;
+        var log = new ConcurrentQueue<string>();
+        engine.Tracker.Log += (_, m) => log.Enqueue(m);
+        var lookups = 0;
+        var sender = new FakeSender();
+        // The socket isn't listed yet on the first two looks, as on Windows right after it is created (#255).
+        await using var flows = new UdpFlows(engine, new FakeIpPool(), sender, _ => Interlocked.Increment(ref lookups) <= 2 ? 0 : 4242)
+        {
+            OwnerRetryDelays = QuickRetries,
+        };
+
+        var dst = new IPEndPoint(IPAddress.Parse("203.0.113.5"), echo.Port);
+        Assert.Equal(UdpFlows.Verdict.Drop, flows.Handle(Datagram(dst, "one", "ctx-1")));   // held, not passed
+        Assert.Equal(UdpFlows.Verdict.Drop, flows.Handle(Datagram(dst, "two", "ctx-1")));
+
+        var replies = new[] { sender.Next(), sender.Next() };
+        Assert.Equal(new[] { "one", "two" }, replies.Select(r => r.Payload).Order());
+        Assert.All(replies, r => Assert.Equal(dst, r.From));
+
+        // Decided once: later datagrams go straight through the tunnel, no more looks.
+        Assert.Equal(UdpFlows.Verdict.Drop, flows.Handle(Datagram(dst, "three", "ctx-1")));
+        Assert.Equal("three", sender.Next().Payload);
+        Assert.Equal(3, lookups);
+        Assert.Equal(1, flows.FlowCount);
+        Assert.Equal(3, flows.DatagramsTunneled);
+        var entry = Assert.Single(engine.Tracker.Active);
+        Assert.Equal(4242, entry.ProcessId);
+        Assert.Contains(log, m => m.Contains("pid 0 => Wait"));
+        Assert.Contains(log, m => m.Contains("pid 4242 rule Game => Tunnel"));
+    }
+
+    [Fact]
+    public async Task OwnerNeverFound_FlowPassesAfterTheRetries()
+    {
+        var p = Profile.CreateDefault();
+        p.Rules.Single(r => r.IsDefault).Action = RuleAction.ViaTunnel(100);
+        p.Tunnels.Add(new Tunnel { Id = 100, Type = TunnelType.Socks5, Address = "127.0.0.1", Port = 9 });
+        await using var engine = new RoutingEngine(p);
+        engine.Tracker.Level = LogLevel.Debug;
+        var log = new ConcurrentQueue<string>();
+        engine.Tracker.Log += (_, m) => log.Enqueue(m);
+        var lookups = 0;
+        await using var flows = new UdpFlows(engine, new FakeIpPool(), new NoSender(), _ => { Interlocked.Increment(ref lookups); return 0; })
+        {
+            OwnerRetryDelays = QuickRetries,
+        };
+
+        var dst = new IPEndPoint(IPAddress.Parse("203.0.113.7"), 3478);
+        Assert.Equal(UdpFlows.Verdict.Drop, flows.Handle(Datagram(dst, "x")));   // held while the owner is looked up again
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+        while (flows.Handle(Datagram(dst, "x")) == UdpFlows.Verdict.Drop && DateTime.UtcNow < deadline)
+            await Task.Delay(10);
+
+        Assert.Equal(UdpFlows.Verdict.Pass, flows.Handle(Datagram(dst, "x")));   // an unknown owner's flow, as before
+        Assert.Equal(1 + QuickRetries.Length, lookups);
+        Assert.True(flows.DatagramsDropped >= 1);   // the held datagrams can't be sent on; the app resends
+        Assert.Empty(engine.Tracker.Active);
+        Assert.Contains(log, m => m.Contains("pid 0 => Pass (owner unknown)"));
+    }
+
+    [Fact]
+    public async Task OwnerNotFound_FlowEndedWhileWaiting_IsDecidedAgain()
+    {
+        var p = Profile.CreateDefault();   // Default rule: Direct
+        await using var engine = new RoutingEngine(p);
+        var pid = 0;
+        await using var flows = new UdpFlows(engine, new FakeIpPool(), new NoSender(), _ => pid)
+        {
+            OwnerRetryDelays = [TimeSpan.FromMilliseconds(300)],
+        };
+
+        var dst = new IPEndPoint(IPAddress.Parse("203.0.113.8"), 3478);
+        Assert.Equal(UdpFlows.Verdict.Drop, flows.Handle(Datagram(dst, "x")));
+        engine.Reload(Profile.CreateDefault());   // a new profile ends every flow, the waiting one too
+        pid = 4242;
+        Assert.Equal(UdpFlows.Verdict.Pass, flows.Handle(Datagram(dst, "x")));   // decided again at once: Direct
+        await Task.Delay(500);   // the first look-up's late answer doesn't replace the new flow
+        Assert.Equal(UdpFlows.Verdict.Pass, flows.Handle(Datagram(dst, "x")));
+        Assert.Equal(1, flows.FlowCount);
+    }
+
     [Fact]
     public async Task UnknownFakeAddress_IsDropped()
     {

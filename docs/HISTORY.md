@@ -289,6 +289,15 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   still turning capture on at launch. Now any failure to open the startup profile shows an error banner
   (`MainViewModel.ShowProfileNotOpened`, naming the profile the password was asked for), capture is not started on
   launch, and the banner clears once a profile with a file is opened. `banner-profile-not-opened.png` in screenshots.
+- UDP flow with an owner not found yet (2026-11-25, #255): `UdpFlows.NewFlow` passed a flow whose owner lookup gave
+  pid 0 for its whole life, with no log line, so on Windows (where the UDP table can miss a fresh socket) an app's first
+  flow could skip its rule. Such a flow now waits (`Way.Wait`, up to 16 held datagrams) while `FindOwnerLaterAsync`
+  looks again off the packet thread (`OwnerRetryDelays`, about 1 s), then is decided and replaced with
+  `TryUpdate`; held datagrams follow the decided way. Still unknown: Pass, as before. The live testkit scenario that
+  reported it (`udp-dns-non53`) sends to port 5353, which `IsNeverCaptured` always leaves alone, so it can't show the
+  fix. Moved to UDP 443 (50 probes, each a new process), `main` and this branch both tunneled every query and the
+  owner was always found at once: the race wasn't seen live. Tests in `UdpFlowsTests`; `Socks5UdpServer.Hosts` may
+  now map an address too.
 - Linux capture without IPv6 (2026-11-25, #216): `LinuxDnsServer.BindLoopbackPair` treats `AddressNotAvailable` (`::1`
   gone with `disable_ipv6`) as no IPv6, as `LoopbackRelay` did; `PolicyRoutes.Add` treats any IPv6 failure (EACCES
   when IPv6 is disabled) as IPv6-only, removing what it added for IPv6, and removes the IPv4 rule if the IPv4 part

@@ -50,6 +50,12 @@ public sealed class MainViewModel : ObservableObject
             Raise(nameof(ProfileInitial));
             Raise(nameof(ProfileHint));
             Raise(nameof(CanManageProfile));
+            // A profile is open now: the "wasn't opened" notice (#248) no longer applies.
+            if (_profileNotOpenedBanner is not null && _host.ProfilePath is not null)
+            {
+                if (Banner == _profileNotOpenedBanner) Banner = null;
+                _profileNotOpenedBanner = null;
+            }
         };
         host.StateChanged += () => RaiseCapture();
         host.Notice += ShowInfo;
@@ -305,6 +311,25 @@ public sealed class MainViewModel : ObservableObject
     }
 
     public bool BannerIsError { get; private set; } = true;
+
+    /// <summary>
+    /// The startup profile could not be opened (a cancelled or wrong master password, an unreadable file): Sluice runs
+    /// an empty profile without a file, so it says so instead of quietly sending everything Direct (#248).
+    /// </summary>
+    /// <param name="name">The profile that wasn't opened; null when it is not known.</param>
+    /// <param name="why">The error, or null when the master password was cancelled.</param>
+    /// <param name="captureHeld">True when capture would have started on launch and was held back.</param>
+    public void ShowProfileNotOpened(string? name, string? why, bool captureHeld)
+    {
+        var what = name is null ? "Your profile" : $"\"{name}\"";
+        var text = why is null ? $"{what} wasn't opened" : $"{what} could not be opened: {why.TrimEnd('.')}";
+        text += ". Choose it from the profile menu.";
+        if (captureHeld) text += " Capture stays off until a profile is open.";
+        ShowBanner(text);
+        _profileNotOpenedBanner = text;
+    }
+
+    private string? _profileNotOpenedBanner;
 
     // ---------------- update notice (#198) ----------------
 

@@ -57,9 +57,12 @@ Program.cs ──▶ App (App.axaml.cs)
    `EngineHost.TunnelNotice` to `OsPlatform.Current.Notify`.
 6. Open the profile (`EngineHost.OpenStartupProfile`, asking for a master password if needed): `--profile` as it is;
    otherwise `AppSettings.LastProfilePath`, copied into the profiles folder once if it is elsewhere (#134); otherwise
-   the first profile there, or a new `Default`.
+   the first profile there, or a new `Default`. If it can't be opened (its master password cancelled or wrong, an
+   unreadable file), the app runs an empty profile without a file, which sends everything Direct and saves no edits:
+   `MainViewModel.ShowProfileNotOpened` shows a banner saying so ("<name> wasn't opened; choose it from the profile
+   menu"), cleared when a profile is opened (#248). `--screenshot` renders it as `banner-profile-not-opened.png`.
 7. `--log-file DIR` (a Debug-level log for this run only), start the local SOCKS5 listener, and turn capture on with
-   `--intercept` or `StartInterceptionOnLaunch`.
+   `--intercept` or `StartInterceptionOnLaunch`, but only when step 6 opened a profile (#248).
 
 `ShutdownMode` is explicit: closing the window only hides it when tray mode is on and `TrayHost` finds a tray (stock
 GNOME has none without the AppIndicator extension: there, closing quits). `ExitApp` (tray "Exit", or closing

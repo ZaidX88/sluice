@@ -108,7 +108,7 @@ public class PasswordEncryptionTests
         Assert.Throws<CryptographicFailure>(() => c.Decode(Convert.ToBase64String([1, 0, 2])));         // bad leading byte
         Assert.Throws<CryptographicFailure>(() => c.Decode(Convert.ToBase64String([0, 9, 2])));         // unknown type
         Assert.Throws<CryptographicFailure>(() => c.Decode(Convert.ToBase64String([0, 0, 2, 1, 2])));   // wrong length
-        Assert.Throws<CryptographicFailure>(() => c.Encode(new string('x', 257)));                     // too long
+        Assert.Throws<CryptographicFailure>(() => c.Decode(Convert.ToBase64String([0, 0, 0, 1])));      // long form cut short
     }
 
     // ---------------- profile files ----------------

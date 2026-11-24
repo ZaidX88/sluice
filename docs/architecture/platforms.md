@@ -172,9 +172,10 @@ public static class PlatformServices
   the signed-in user would: `true` dark, `false` light, `null` not known (the app then leaves it to Avalonia). Never
   throws; returns within about a second. It's a default member returning `null`, as are the platform before `Use`
   (`NoPlatform`) and any platform that doesn't read it yet. Linux reads xdg-desktop-portal's `color-scheme` from a
-  helper without capabilities (#266), Windows the signed-in user's `AppsUseLightTheme` (#267), and the desktop app
-  uses it at start when no `--theme` is given (#268). The reason: a Sluice with raised rights (capabilities on Linux,
-  an elevated administrator on Windows) can't see the signed-in user's theme the usual way.
+  helper without capabilities (#266, `DesktopTheme`: `gdbus`, else `busctl`, each `ReadOne` then `Read`; 1 dark, 2
+  light, 0 or any failure null; all within one second), Windows the signed-in user's `AppsUseLightTheme` (#267), and
+  the desktop app uses it at start when no `--theme` is given (#268). The reason: a Sluice with raised rights
+  (capabilities on Linux, an elevated administrator on Windows) can't see the signed-in user's theme the usual way.
 
 ### 6.2 New `IPlatformServices` members
 

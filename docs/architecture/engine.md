@@ -65,7 +65,7 @@ always matches and is evaluated last wherever it sits. A rule matches when all o
 
 | Field (`Rule`) | Syntax | Compiled to |
 |---|---|---|
-| `Applications` | `chrome.exe; "C:\path\x.exe"; fire*` (env vars expanded; with a path separator the full path is matched, otherwise the file name) | wildcard regexes over `ProcessPath` |
+| `Applications` | `chrome.exe; "C:\path\x.exe"; /usr/bin/curl; fire*` (env vars expanded; with a path separator the full path is matched, otherwise the file name; on Windows `/` and `\` count as the same, on Linux paths are compared as written, #212) | wildcard regexes over `ProcessPath` |
 | `Targets` | `*.example.com; 10.0.0.0/8; 10.1.0.0-10.5.255.255; 192.168.1.*; ::1; %ComputerName%; %SimpleHostnames%` | `HostWildcard`, `IpRange`, `SimpleHostnames` patterns |
 | `Ports` | `80; 8000-9000` (spaces also separate: `80 443`) | port ranges (`RuleEngine.TryParsePorts`) |
 

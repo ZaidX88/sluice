@@ -37,10 +37,15 @@ their own), and `src/Sluice.App` was deleted (#63).
 
 ## 4. Windows release package
 
-There is no Windows package yet (Linux has one: [linux/INSTALL.md](linux/INSTALL.md)). Needed (DECISIONS.md, 2026-11-22):
-a self-contained build of `Sluice.Desktop` + `Sluice.Cli` with WinDivert and sing-box, an Inno Setup installer that adds
-the Start Menu shortcut and the firewall rule (#64; a WiX MSI after 1.0, #186), and a guide in `docs/windows/`. Code signing avoids SmartScreen
-warnings and antivirus complaints about the WinDivert driver.
+**Done** (#64, DECISIONS.md 2026-11-22): `scripts/package-windows.ps1` publishes `Sluice.Desktop` + `Sluice.Cli`
+self-contained with WinDivert and sing-box, and `packaging/windows/Sluice.iss` builds the Inno Setup installer
+`Sluice-Setup-<version>-x64.exe`, which adds the Start Menu shortcut and the firewall rules. Guide:
+[windows/INSTALL.md](windows/INSTALL.md). Remaining:
+
+- **Code signing** (#65, SignPath Foundation, for 1.0.1): v1.0.0 ships unsigned, so SmartScreen warns on first run
+  ([windows/INSTALL.md → Install](windows/INSTALL.md#3-install)); signing also reduces antivirus complaints about the
+  WinDivert driver.
+- **A WiX MSI** after 1.0 (#186).
 
 ## 5. Linux release, remaining
 
@@ -57,11 +62,14 @@ warnings and antivirus complaints about the WinDivert driver.
   can change that folder and every folder above it).
 - **Autostart entry** (`~/.config/autostart`) as a setting. Done: the switch in Settings (#70) and the Linux part
   (#69: an XDG autostart entry that starts the launcher).
-- The installer's online paths (package-manager install, Microsoft's .NET installer, the GitHub download) have not been
-  run on a machine with internet yet; test them on Ubuntu, Fedora and Arch.
+- The installer's online paths (package-manager install, Microsoft's .NET installer, the GitHub download) on Ubuntu,
+  Fedora and Arch. Done (#71).
 
 ## 6. Continuous integration
 
-GitHub Actions: build both desktop targets; run the tests on Windows and Linux (Linux also runs
+GitHub Actions (#51): build both desktop targets; run the tests on Windows and Linux (Linux also runs
 `Socket_owner_is_found_through_proc`, skipped on Windows); include the live sing-box tests (the build fetches the pinned
-sing-box). Optionally run `scripts/linux/capture-livetest.sh` in a privileged Linux job. Publish release packages from tags.
+sing-box) (#72, after #41 and #33). Optionally run `scripts/linux/capture-livetest.sh` in a privileged Linux job (#73).
+
+- **Release packages from tags:** done (#74). `.github/workflows/release.yml` builds the packages from a tag `vX.Y.Z`
+  and drafts the GitHub Release ([CONTRIBUTING.md → Releases](CONTRIBUTING.md#releases)).

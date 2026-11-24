@@ -81,7 +81,9 @@ cat <<EOF
 | System | File | Guide |
 |---|---|---|
 | Windows 10 / 11, x64 | \`Sluice-Setup-$VERSION-x64.exe\` | [docs/windows/INSTALL.md](https://github.com/$REPO/blob/v$VERSION/docs/windows/INSTALL.md) |
-| Linux, x86-64 | \`sluice-$VERSION-linux-x64.tar.gz\` | [docs/linux/INSTALL.md](https://github.com/$REPO/blob/v$VERSION/docs/linux/INSTALL.md) |
+| Ubuntu 24.04 LTS or later, x86-64 | \`sluice_${VERSION}_amd64.deb\` | [docs/linux/INSTALL.md](https://github.com/$REPO/blob/v$VERSION/docs/linux/INSTALL.md#ubuntu-2404-or-later-the-deb) |
+| Other Linux, x86-64 (Debian, Ubuntu 22.04 or older, Fedora, Arch, …) | \`sluice-$VERSION-linux-x64.tar.gz\` | [docs/linux/INSTALL.md](https://github.com/$REPO/blob/v$VERSION/docs/linux/INSTALL.md) |
 
-Each file has a \`.sha256\` next to it to check the download.
+On Ubuntu, install the .deb with \`sudo apt install ./sluice_${VERSION}_amd64.deb\` (with the \`./\`, not \`dpkg -i\`),
+so apt brings in the .NET runtime too. Each file has a \`.sha256\` next to it to check the download.
 EOF

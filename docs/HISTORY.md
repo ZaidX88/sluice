@@ -298,3 +298,21 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   fix. Moved to UDP 443 (50 probes, each a new process), `main` and this branch both tunneled every query and the
   owner was always found at once: the race wasn't seen live. Tests in `UdpFlowsTests`; `Socks5UdpServer.Hosts` may
   now map an address too.
+- Linux capture without IPv6 (2026-11-25, #216): `LinuxDnsServer.BindLoopbackPair` treats `AddressNotAvailable` (`::1`
+  gone with `disable_ipv6`) as no IPv6, as `LoopbackRelay` did; `PolicyRoutes.Add` treats any IPv6 failure (EACCES
+  when IPv6 is disabled) as IPv6-only, removing what it added for IPv6, and removes the IPv4 rule if the IPv4 part
+  fails. Without IPv6 to the transparent socket, `LinuxCapture.CanTake` drops IPv6 flows it would take, so a
+  tunnel-rule app's IPv6 UDP isn't marked and sent out past the tunnel. `LinuxIpv6DisabledNetnsTests` (namespace with
+  IPv6 off); the namespace tests share one xUnit collection.
+- App rules with a Linux path (2026-11-25, #212): `RuleEngine.ParseApps` turned every `/` in an Applications value
+  into `\`, so `/usr/bin/curl` never matched on Linux. It now folds `/` and `\` only for Windows paths, in both the
+  value and the process path (a `windowsPaths` switch, `OperatingSystem.IsWindows()` in the app, so tests cover both on
+  any system); Linux compares as written. Tests in `RuleEngineTests`; checked live with a `/usr/bin/curl` Block rule.
+- The .deb in releases (2026-11-25, #272): the release workflow's Linux job runs `scripts/package-linux.sh --deb`, so a
+  release carries `sluice_<version>_amd64.deb` (+ `.sha256`) next to the tar.gz, and the release notes list it with
+  `sudo apt install ./…deb` and Debian / older Ubuntu → tar.gz. The job is pinned to `ubuntu-24.04`, because the
+  launcher compiled there sets the .deb's `libc6` dependency (2.34 now; a newer runner could raise it past 24.04's).
+- Stale docs before the first release candidate (2026-11-25, #215): README, QUICKSTART, STATUS, REQUIRED and the
+  architecture pages describe the Windows installer (#64, unsigned in 1.0.0, #65), the Ubuntu `.deb` (#67), the
+  multi-targeted CLI (#53), the finished online-install tests (#71) and release CI (#74); `platforms.md` no longer says
+  #54/#55 moved; superseded decisions marked; the docs index lists `windows/INSTALL.md`.

@@ -40,12 +40,16 @@ are **Unreleased** together with the coming version's section, with the install 
   profiles you already have keep their choice, and "On this PC" is still in Settings → Privacy (#167).
 
 ### Fixed
+- Linux: an app rule written with a full path, such as `/usr/bin/curl` or `/usr/bin/*`, now matches that program;
+  before, it never matched and the traffic fell through to the Default rule (#212).
 - Cancelling the master password when Sluice starts no longer runs an empty profile that sends everything
   Direct without a word: a banner says the profile wasn't opened and to choose it from the profile menu, and capture
   isn't turned on at launch until a profile is open (#248).
 - UDP from an app that sends right after opening its socket follows the app's rule: before, when Sluice couldn't yet
   tell which app the socket belonged to, the whole flow went direct, even for an app set to use a tunnel. Its first
   datagrams now wait up to about a second while Sluice looks again (#255).
+- Linux: capture starts on a system with IPv6 disabled (`net.ipv6.conf.all.disable_ipv6=1`) and works over IPv4,
+  UDP through tunnels included; before, it failed with "Cannot assign requested address" (#216).
 - A rule's Ports value that isn't a list of ports (`https`, `70000`) no longer makes the rule apply to every port,
   so a Block rule can't block everything by mistake: those parts are ignored, a rule with no valid port matches no
   connection, and the Log page says which rule and value. Ports may also be separated by spaces (`80 443`) (#230).

@@ -48,6 +48,9 @@ public sealed class LinuxCapture : ITrafficCapture
     private TransparentUdp? _tproxy;
     private UdpFlows? _udpFlows;
     private bool _routesAdded;
+    /// <summary>False when IPv6 UDP can't reach the transparent socket (no IPv6 socket or no IPv6 route, #216): IPv6
+    /// flows are then dropped instead of taken, since a marked IPv6 datagram would otherwise go out past the tunnel.</summary>
+    private bool _udpIpv6;
     private readonly CancellationTokenSource _cts = new();
     private DnsResolver? _resolver;
     private LinuxDnsServer? _dns;
@@ -225,8 +228,10 @@ public sealed class LinuxCapture : ITrafficCapture
             _tproxy = TransparentUdp.Open(OnTakenDatagram, m => _engine.Tracker.Write(LogLevel.Error, m));
             PolicyRoutes.Add(UdpMark, out var ipv6Problem);
             _routesAdded = true;
-            if ((ipv6Problem ?? _tproxy.Ipv6Problem) is { } why && UdpMode != UdpMode.Bypass)   // placeholders are IPv4
-                _engine.Tracker.Write(LogLevel.Normal, $"UDP is taken for IPv4 only ({why})");
+            var why = ipv6Problem ?? _tproxy.Ipv6Problem;
+            _udpIpv6 = why is null;
+            if (why is not null && UdpMode != UdpMode.Bypass)   // placeholders are IPv4
+                _engine.Tracker.Write(LogLevel.Normal, $"UDP is taken for IPv4 only ({why}); IPv6 UDP of tunneled apps is blocked");
             _tproxy.Start();
         }
         catch (InvalidOperationException ex)
@@ -242,6 +247,7 @@ public sealed class LinuxCapture : ITrafficCapture
     {
         if (_routesAdded) PolicyRoutes.Remove(UdpMark);
         _routesAdded = false;
+        _udpIpv6 = false;
         _tproxy?.Dispose();
         _tproxy = null;
     }
@@ -425,7 +431,7 @@ public sealed class LinuxCapture : ITrafficCapture
         {
             var path = pid == 0 ? null : _lookup.GetProcessPath(pid);
             var route = _engine.ClassifyUdp(new InboundRequest(fake ? hostname : remote.Address.ToString(), remote.Port, pid, path));
-            choice = Choose(route.Verdict, fake, canTake: _tproxy is not null);
+            choice = Choose(route.Verdict, fake, canTake: CanTake(_tproxy is not null, _udpIpv6, remote.Address));
             if (!quiet) _engine.Tracker.Write(choice == UdpChoice.Drop ? LogLevel.Verbose : LogLevel.Debug,
                 $"{Path.GetFileName(path) ?? "?"} ({pid}) - UDP {(fake ? hostname : remote.Address.ToString())}:{remote.Port} " +
                 $"{choice switch { UdpChoice.Take => "taken", UdpChoice.Drop => "blocked", _ => "direct" }} (rule {route.Match.Rule.Name})");
@@ -433,6 +439,14 @@ public sealed class LinuxCapture : ITrafficCapture
         _udpVerdicts[key] = (choice, DateTime.UtcNow);
         return Count(choice);
     }
+
+    /// <summary>
+    /// Whether a flow to <paramref name="destination"/> can be taken: the transparent socket is up and, for an IPv6
+    /// destination, IPv6 reaches it too (<paramref name="ipv6Usable"/>). Placeholders are IPv4, so Direct-by-name flows
+    /// never depend on IPv6.
+    /// </summary>
+    internal static bool CanTake(bool tproxyUp, bool ipv6Usable, IPAddress destination) =>
+        tproxyUp && (ipv6Usable || destination.AddressFamily == AddressFamily.InterNetwork || destination.IsIPv4MappedToIPv6);
 
     /// <summary>
     /// The choice for a flow the rules gave <paramref name="verdict"/>. A tunnel flow is taken; so is a Direct flow to a

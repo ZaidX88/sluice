@@ -168,6 +168,13 @@ public static class PlatformServices
 - `OnAppStart()` stays the desktop app's own start-up step (Start Menu shortcut, notification registration); the CLI
   never calls it. Nothing that both programs need may live in `OnAppStart` any more.
 - `OsPlatform.Current` (desktop) stays as it is; `App` passes it to `PlatformServices.Use`.
+- `PrefersDarkTheme()` (#265, part of #253): the theme the desktop asks for, read the way an unprivileged process of
+  the signed-in user would: `true` dark, `false` light, `null` not known (the app then leaves it to Avalonia). Never
+  throws; returns within about a second. It's a default member returning `null`, as are the platform before `Use`
+  (`NoPlatform`) and any platform that doesn't read it yet. Linux reads xdg-desktop-portal's `color-scheme` from a
+  helper without capabilities (#266), Windows the signed-in user's `AppsUseLightTheme` (#267), and the desktop app
+  uses it at start when no `--theme` is given (#268). The reason: a Sluice with raised rights (capabilities on Linux,
+  an elevated administrator on Windows) can't see the signed-in user's theme the usual way.
 
 ### 6.2 New `IPlatformServices` members
 

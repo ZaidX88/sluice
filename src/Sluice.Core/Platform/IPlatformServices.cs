@@ -73,4 +73,12 @@ public interface IPlatformServices
     /// <summary>Whether Sluice starts at login for this user (Linux: <c>~/.config/autostart/sluice.desktop</c>). Setting
     /// it where <see cref="AutostartSupported"/> is false does nothing.</summary>
     bool Autostart { get => false; set { } }
+
+    // ---------- the desktop's theme (#265; #253's Coordination) ----------
+    // A default member, like the ones above: until a platform reads its desktop's theme (Linux #266, Windows #267), it
+    // keeps building and answers null, so the app looks as it does today.
+
+    /// <summary>The theme the desktop asks for, read the way an unprivileged process of the signed-in user would:
+    /// true dark, false light, null not known (leave it to Avalonia). Never throws; returns within about a second.</summary>
+    bool? PrefersDarkTheme() => null;
 }

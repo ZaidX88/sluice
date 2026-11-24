@@ -35,5 +35,6 @@ public static class PlatformServices
         public bool CanRestartElevated => false;
         public ITrafficCapture CreateCapture(Engine.RoutingEngine engine) =>
             throw new PlatformNotSupportedException("No platform module is loaded.");
+        public bool? PrefersDarkTheme() => null;                  // not known: the app leaves the theme to Avalonia
     }
 }

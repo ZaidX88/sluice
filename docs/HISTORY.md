@@ -316,3 +316,7 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   architecture pages describe the Windows installer (#64, unsigned in 1.0.0, #65), the Ubuntu `.deb` (#67), the
   multi-targeted CLI (#53), the finished online-install tests (#71) and release CI (#74); `platforms.md` no longer says
   #54/#55 moved; superseded decisions marked; the docs index lists `windows/INSTALL.md`.
+- `IPlatformServices.PrefersDarkTheme` (2026-11-25, #265, part of #253): the desktop's theme as an unprivileged process
+  of the signed-in user reads it (true dark, false light, null not known), as in #253's Coordination; a default member
+  returning null, and `NoPlatform` returns null too, so nothing changes until the Linux (#266), Windows (#267) and UI
+  (#268) parts land. `PlatformServicesTests`, `platforms.md` §6.1.

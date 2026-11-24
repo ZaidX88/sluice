@@ -8,7 +8,7 @@ There are two packages:
 | File | For |
 |---|---|
 | `sluice_<version>_amd64.deb` (+ `.sha256`) | **Ubuntu 24.04 LTS or later**: see [the .deb](#ubuntu-2404-or-later-the-deb) below |
-| `sluice-linux-x64.tar.gz` (+ `.sha256`) | every other distribution, **Debian** and **Ubuntu 22.04 or older** included: the rest of this guide |
+| `sluice-<version>-linux-x64.tar.gz` (+ `.sha256`) | every other distribution, **Debian** and **Ubuntu 22.04 or older** included: the rest of this guide |
 
 The tar.gz holds only Sluice itself (about 13 MB); its installer adds whatever your system is missing.
 

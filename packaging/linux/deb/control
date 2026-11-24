@@ -1,0 +1,16 @@
+Package: sluice
+Version: @VERSION@
+Architecture: amd64
+Maintainer: Sluice <https://github.com/ZaidX88/sluice/issues>
+Installed-Size: @INSTALLED_SIZE@
+Depends: @LIBC@, dotnet-runtime-10.0, nftables, libcap2-bin, libx11-6, libice6, libsm6, libfontconfig1, libnotify-bin
+Section: net
+Priority: optional
+Homepage: https://github.com/ZaidX88/sluice
+Description: rule-based traffic router: each app direct, blocked or through a tunnel
+ Sluice sends each app's connections where you choose: directly, blocked, or
+ through a tunnel (SSH, SOCKS, HTTP(S), VLESS, VMess, Trojan, Shadowsocks,
+ Hysteria2, TUIC). Rules go by application or by site.
+ .
+ It includes sing-box @SINGBOX_VERSION@ (GPL-3.0-or-later), the helper for the
+ encrypted tunnels.

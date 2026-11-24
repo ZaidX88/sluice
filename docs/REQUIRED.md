@@ -48,8 +48,10 @@ warnings and antivirus complaints about the WinDivert driver.
   v1.0.0 ships for x86-64 only. If it comes back: `-r linux-arm64`, install.sh downloads sing-box linux-arm64, and
   check every architecture-specific constant in `Native/Libc.cs` (e.g. `O_DIRECTORY` differs on arm64). Issue #66 was
   closed as not planned.
-- **`.deb` / AppImage** with the same layout (post-install = `install.sh` steps). Not Flatpak/Snap: a sandbox can't use
-  nftables.
+- **`.deb` for Ubuntu** with the same layout (post-install = `install.sh` steps). Done (#67):
+  `scripts/package-linux.sh --deb` builds `sluice_<version>_amd64.deb` for Ubuntu 24.04 LTS and later, with sing-box
+  bundled; Debian and older Ubuntu use the tar.gz. **AppImage:** not for 1.0 (#144, after 1.0). Not Flatpak/Snap: a
+  sandbox can't use nftables.
 - **"Grant capture rights" button** (pkexec + setcap) for people who run the app without the installer. Done: the
   banner button (#70) and the Linux part (#69: `setcap` on the launcher next to the running copy, only when root alone
   can change that folder and every folder above it).

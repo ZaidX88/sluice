@@ -43,7 +43,8 @@ Update by installing a newer `.deb` the same way. Uninstall with:
 sudo apt remove sluice     # or: sudo apt purge sluice
 ```
 
-This removes the app, sing-box, the commands, the menu entry and the capture rights. Your profiles in
+A running Sluice is closed first, so it takes its capture rules down itself. This removes the app, sing-box, the
+commands, the menu entry and the capture rights. Your profiles in
 `~/.config/Sluice` are kept. The .NET runtime and the other packages apt added stay until `sudo apt autoremove`.
 
 The rest of this guide is the tar.gz.

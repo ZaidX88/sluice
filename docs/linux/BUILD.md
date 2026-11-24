@@ -57,7 +57,9 @@ The control file and maintainer scripts are in `packaging/linux/deb/`:
 - `postinst`: if `/etc/dotnet` doesn't lead to a .NET 10 runtime, writes `/usr/lib/dotnet` into
   `install_location_x64` (keeping the old file in `/var/lib/sluice`); keeps `/etc/dotnet` root's; `setcap` on the
   launcher only. Ubuntu's `dotnet-host` already names `/usr/lib/dotnet` there, so usually nothing changes;
-- `prerm` (remove): deletes the `inet sluice` nftables table and the launcher's capabilities;
+- `prerm` (remove): closes a running Sluice (SIGTERM to `/opt/sluice/Sluice.Desktop` and `Sluice.Cli`, up to 10 s),
+  which removes its own capture rules; then deletes the `inet sluice` nftables table if a crash left it, and the
+  launcher's capabilities;
 - `postrm` (remove/purge): restores `install_location_x64` if `postinst` changed it and nobody changed it since.
 
 Package layout and installer: `packaging/linux/` (`install.sh`, `uninstall.sh`, `sluice.desktop`, `README.txt`, and the

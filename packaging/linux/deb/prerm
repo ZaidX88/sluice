@@ -1,10 +1,39 @@
 #!/bin/sh
-# Before the files are removed: a capture left by a crash would keep redirecting DNS, so Sluice's nftables table goes,
-# and the launcher loses its capture rights.
+# Before the files are removed: a running Sluice is closed first, so it takes its capture rules down itself (on
+# SIGTERM it removes its nftables table and policy routes and drops cached placeholder answers) instead of running on
+# without them from deleted files. Then a capture left by a crash, which would keep redirecting DNS, goes too, and the
+# launcher loses its capture rights.
 set -e
+
+# The launcher execs Sluice.Desktop or Sluice.Cli, so a running copy is a process with one of them as its executable.
+sluice_pids() {
+    for exe in /proc/[0-9]*/exe; do
+        case "$(readlink "$exe" 2>/dev/null)" in
+        /opt/sluice/Sluice.Desktop|/opt/sluice/Sluice.Cli) pid=${exe#/proc/}; printf '%s ' "${pid%/exe}" ;;
+        esac
+    done
+}
+
+close_running_sluice() {
+    pids=$(sluice_pids)
+    [ -n "$pids" ] || return 0
+    echo "Closing the running Sluice ($pids) so it removes its capture rules"
+    # shellcheck disable=SC2086
+    kill -TERM $pids 2>/dev/null || true
+    i=0
+    while [ "$i" -lt 20 ]; do
+        left=""
+        for pid in $pids; do kill -0 "$pid" 2>/dev/null && left="$left $pid"; done
+        [ -n "$left" ] || return 0
+        sleep 0.5
+        i=$((i + 1))
+    done
+    echo "Sluice ($left ) didn't close within 10 seconds; removing its capture rules anyway"
+}
 
 case "$1" in
 remove|deconfigure)
+    close_running_sluice
     command -v nft >/dev/null 2>&1 && nft delete table inet sluice 2>/dev/null || true
     setcap -r /opt/sluice/sluice 2>/dev/null || true
     ;;

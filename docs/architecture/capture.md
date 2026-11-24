@@ -87,6 +87,7 @@ They follow the same model:
 
 ```
   nftables  queue_new (output, mangle) ── first SYN / new UDP flow ──▶ NFQUEUE 1473 ──▶ NfQueue.Receive (own thread)
+            (UDP set to go direct: new UDP flows to 198.18.0.0/15 only)
                                                                                          │ VerdictWorkers.Post
                                                      bounded hand-off (1024) ── full ──▶ accept unmarked at once
                                                                                          │
@@ -106,7 +107,10 @@ They follow the same model:
   a placeholder (which can't go out as it is; `UdpFlows` sends it by name). `PolicyRoutes` adds the rule and route over
   rtnetlink (IPv4 and IPv6; priority and table 1473) at start and removes them on stop and on an exit signal; a start
   first removes any an earlier run left. If the transparent socket or the routes can't be set up (no tproxy in the
-  kernel), capture starts anyway and those flows are dropped, as before. Sluice's sockets (the replies, `UdpFlows`'
+  kernel), capture starts anyway and those flows are dropped, as before. With UDP set to go direct (`Bypass`, #209)
+  `queue_new` queues only new UDP flows to the placeholder range (`NftRules.PlaceholderRange`, from
+  `LinuxCapture.UdpRules`), so only Direct-by-name flows are taken and all other UDP is never touched; without the
+  transparent socket no UDP is queued in that mode, as before #209. Sluice's sockets (the replies, `UdpFlows`'
   Direct sockets, tunnel helpers) carry its group, so the rules never mark them. Known limit: a flow already marked
   stays taken until its conntrack entry expires, so after a profile change that makes it Direct its datagrams are
   dropped until it is idle.

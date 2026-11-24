@@ -25,14 +25,7 @@ public class LinuxUdpTproxyNetnsTests
     public async Task Marked_udp_reaches_the_transparent_socket_and_the_reply_comes_from_the_original_destination()
     {
         if (!Enabled) return;
-        // A dummy interface with a default route, as a real machine has one: the app's first route lookup needs it.
-        Ip("link set lo up");
-        Ip("link add sluice0 type dummy");
-        Ip("addr add 192.0.2.1/24 dev sluice0");
-        Ip("-6 addr add 2001:db8::1/64 dev sluice0 nodad");
-        Ip("link set sluice0 up");
-        Ip("route add default dev sluice0");
-        Ip("-6 route add default dev sluice0");
+        AddDefaultRoute();
 
         var seen = new ConcurrentQueue<(IPEndPoint App, IPEndPoint Destination, string Payload)>();
         TransparentUdp? tproxy = null;
@@ -96,6 +89,91 @@ public class LinuxUdpTproxyNetnsTests
         Assert.Equal("", Ip($"route show table {PolicyRoutes.Table}").Trim());
         Assert.Equal("", Ip($"-6 route show table {PolicyRoutes.Table}").Trim());
         Assert.DoesNotContain("sluice", Run("nft", "list tables"));
+    }
+
+    /// <summary>
+    /// #209: with UDP set to go direct, only UDP to placeholders is queued and reaches the transparent socket (where
+    /// <c>UdpFlows</c> sends it direct by name); UDP to real addresses, IPv4 or IPv6, is never queued.
+    /// </summary>
+    [Fact]
+    public async Task Udp_set_to_go_direct_takes_udp_to_placeholders_only()
+    {
+        if (!Enabled) return;
+        AddDefaultRoute();
+
+        var seen = new ConcurrentQueue<IPEndPoint>();
+        TransparentUdp? tproxy = null;
+        tproxy = TransparentUdp.Open((app, dst, payload) =>
+        {
+            seen.Enqueue(dst);
+            tproxy!.SendToApp(dst, app, payload.Span);
+        }, _ => { });
+        using var _ = tproxy;
+        using var queue = NfQueue.Open(Queue);
+        var stop = false;
+        var queued = new ConcurrentQueue<string>();
+        var loop = new Thread(() =>
+        {
+            while (!stop && queue.Receive(p =>
+            {
+                queued.Enqueue(PacketInfo.TryParse(p.Payload, out var f) ? f.Destination.ToString() : "?");
+                queue.Verdict(p.Id, NfQueue.Accept, UdpMark);
+            })) { }
+        }) { IsBackground = true };
+        try
+        {
+            var rules = LinuxCapture.UdpRules(new NftRules.Settings(Queue, 0x5C1CE, Gid: 4_242_424, RelayPort: 1, DnsPort: null, QueueUdp: false),
+                Sluice.Core.Profiles.UdpMode.Bypass, tproxy.Port);
+            Assert.Equal(UdpMark, rules.UdpMark);
+            NftRules.Run(NftRules.Build(rules));
+            PolicyRoutes.Add(UdpMark, out var ipv6Problem);
+            Assert.Null(ipv6Problem);
+            tproxy.Start();
+            loop.Start();
+
+            // To a placeholder: queued, taken, answered from the placeholder.
+            using (var app = new UdpClient(new IPEndPoint(IPAddress.Parse("192.0.2.1"), 0)))
+            {
+                var placeholder = new IPEndPoint(IPAddress.Parse("198.18.0.42"), 123);
+                await app.SendAsync(Encoding.ASCII.GetBytes("ntp?"), placeholder);
+                var reply = await app.ReceiveAsync().WaitAsync(TimeSpan.FromSeconds(5));
+                Assert.Equal(placeholder, reply.RemoteEndPoint);
+            }
+
+            // To real addresses: sent out as they are (into the dummy interface), never queued or taken.
+            foreach (var (local, remote) in new[] { ("192.0.2.1", "192.0.2.77"), ("192.0.2.1", "198.51.100.7"), ("2001:db8::1", "2001:db8::77") })
+            {
+                using var app = new UdpClient(new IPEndPoint(IPAddress.Parse(local), 0));
+                await app.SendAsync(Encoding.ASCII.GetBytes("ntp?"), new IPEndPoint(IPAddress.Parse(remote), 123));
+            }
+            await Task.Delay(500);
+
+            Assert.Equal(["198.18.0.42:123"], queued.Distinct().ToArray());
+            Assert.Equal([new IPEndPoint(IPAddress.Parse("198.18.0.42"), 123)], seen.Distinct().ToArray());
+        }
+        finally
+        {
+            stop = true;
+            queue.Stop();
+            loop.Join(2000);
+            PolicyRoutes.Remove(UdpMark);
+            NftRules.Remove();
+        }
+        Assert.DoesNotContain("sluice", Run("nft", "list tables"));
+    }
+
+    /// <summary>A dummy interface with a default route, as a real machine has one: the app's first route lookup needs it.
+    /// Once per namespace (the tests share it).</summary>
+    private static void AddDefaultRoute()
+    {
+        Ip("link set lo up");
+        if (Ip("link show").Contains("sluice0:", StringComparison.Ordinal)) return;
+        Ip("link add sluice0 type dummy");
+        Ip("addr add 192.0.2.1/24 dev sluice0");
+        Ip("-6 addr add 2001:db8::1/64 dev sluice0 nodad");
+        Ip("link set sluice0 up");
+        Ip("route add default dev sluice0");
+        Ip("-6 route add default dev sluice0");
     }
 
     [Fact]

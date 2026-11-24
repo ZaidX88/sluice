@@ -97,7 +97,8 @@ it would reset every connection through it.
 
 1. `NftRules` installs the table `inet sluice`:
    - chain `queue_new` (filter/output, priority mangle) sends the first SYN of each new outbound TCP connection, and new
-     UDP flows when UDP is handled, to NFQUEUE 1473 with `bypass` (traffic passes if Sluice is gone);
+     UDP flows when UDP is handled (with UDP set to go direct, only those to the placeholder range, #209), to NFQUEUE
+     1473 with `bypass` (traffic passes if Sluice is gone);
    - chain `to_sluice` (nat/output, priority dstnat) redirects packets carrying mark `0x5C1CE` to the relay port, and
      UDP/53 to the DNS port;
    - both skip `meta skgid <Sluice's group>` and loopback. Chain names must not be nft keywords (`redirect` once broke the

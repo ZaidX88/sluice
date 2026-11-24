@@ -7,8 +7,9 @@ namespace Sluice.Platform.Linux.Capture;
 /// <summary>
 /// The nftables table Sluice installs while capturing ("inet sluice"):
 /// <list type="bullet">
-/// <item>The first SYN of every new outbound TCP connection (and, when UDP is handled, every new UDP flow) goes to
-/// NFQUEUE, where Sluice decides with the owning process in hand. <c>bypass</c>: if Sluice is gone, packets pass.</item>
+/// <item>The first SYN of every new outbound TCP connection (and, when UDP is handled, every new UDP flow, or only those
+/// to name placeholders, see <see cref="Settings.UdpToPlaceholdersOnly"/>) goes to NFQUEUE, where Sluice decides with the
+/// owning process in hand. <c>bypass</c>: if Sluice is gone, packets pass.</item>
 /// <item>A SYN Sluice marked is redirected to the relay; UDP/53 goes to Sluice's DNS server.</item>
 /// <item>A UDP flow Sluice takes (through a tunnel, or Direct to a placeholder) gets <see cref="Settings.UdpMark"/>
 /// with its NFQUEUE verdict. The mark is kept in conntrack and put back on the flow's later packets (which are no
@@ -21,17 +22,24 @@ internal static class NftRules
 {
     public const string Table = "sluice";
 
+    /// <summary>The name placeholders' range (<see cref="Sluice.Core.Dns.FakeIpPool"/>), IPv4 only.</summary>
+    public const string PlaceholderRange = "198.18.0.0/15";
+
     /// <param name="RejectMark">A SYN Sluice gives this mark is refused with a TCP reset, so the app's connect() fails at
     /// once (used for IPv6 through a tunnel without IPv6, see <see cref="Sluice.Core.Engine.Ipv6Fallback"/>). 0: no such rule.</param>
     /// <param name="UdpMark">The mark of UDP flows Sluice takes, and <paramref name="UdpPort"/> the port of its
     /// transparent UDP socket. 0: UDP flows are only passed or dropped.</param>
+    /// <param name="UdpToPlaceholdersOnly">With <paramref name="QueueUdp"/>, queue only new UDP flows to
+    /// <see cref="PlaceholderRange"/>; all other UDP is never touched. For "Let it go direct" (<c>UdpMode.Bypass</c>),
+    /// where UDP to a placeholder can only reach its host by name, through Sluice (#209).</param>
     public sealed record Settings(ushort Queue, uint Mark, uint Gid, int RelayPort, int? DnsPort, bool QueueUdp, uint RejectMark = 0,
-        uint UdpMark = 0, int UdpPort = 0);
+        uint UdpMark = 0, int UdpPort = 0, bool UdpToPlaceholdersOnly = false);
 
     public static string Build(Settings s)
     {
         string N(long v) => v.ToString(CultureInfo.InvariantCulture);
-        var udp = s.QueueUdp ? $"\n        meta l4proto udp udp dport != 53 ct state new queue num {N(s.Queue)} bypass" : "";
+        var udpTo = s.UdpToPlaceholdersOnly ? $" ip daddr {PlaceholderRange}" : "";
+        var udp = s.QueueUdp ? $"\n        meta l4proto udp{udpTo} udp dport != 53 ct state new queue num {N(s.Queue)} bypass" : "";
         var dns = s.DnsPort is { } d ? $"\n        meta l4proto udp udp dport 53 redirect to :{N(d)}" : "";
         // After queue_new (mangle) and to_sluice (dstnat): the mark set with the NFQUEUE verdict is on the packet by then.
         var refuse = s.RejectMark == 0 ? "" : $$"""

@@ -39,6 +39,8 @@ into the version's section, and that section, with the install links, becomes th
   profiles you already have keep their choice, and "On this PC" is still in Settings → Privacy (#167).
 
 ### Fixed
+- Linux: with UDP set to "Let it go direct", apps' UDP (NTP, QUIC, games) to names looked up through the tunnel reaches
+  them again, sent directly by name; before, it went nowhere. Other UDP is still left alone in that mode (#209).
 - Windows: with UDP set to "Let it go direct", apps' UDP to names looked up through the tunnel (QUIC, NTP, games,
   calls) reaches the real host again instead of going nowhere; UDP to other addresses still isn't captured (#208).
 - Linux: Settings → Tunnels shows and saves "Through the tunnel" for UDP again, instead of showing it as "Block it"

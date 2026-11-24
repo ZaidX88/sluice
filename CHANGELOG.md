@@ -40,6 +40,9 @@ are **Unreleased** together with the coming version's section, with the install 
   profiles you already have keep their choice, and "On this PC" is still in Settings → Privacy (#167).
 
 ### Fixed
+- UDP from an app that sends right after opening its socket follows the app's rule: before, when Sluice couldn't yet
+  tell which app the socket belonged to, the whole flow went direct, even for an app set to use a tunnel. Its first
+  datagrams now wait up to about a second while Sluice looks again (#255).
 - A rule's Ports value that isn't a list of ports (`https`, `70000`) no longer makes the rule apply to every port,
   so a Block rule can't block everything by mistake: those parts are ignored, a rule with no valid port matches no
   connection, and the Log page says which rule and value. Ports may also be separated by spaces (`80 443`) (#230).

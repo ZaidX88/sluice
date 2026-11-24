@@ -284,3 +284,10 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   because the section exists, leaving out everything under `[Unreleased]`. A candidate now joins `[Unreleased]` with a
   version section still marked "not released yet", merging the `### ` groups (Keep a Changelog order, Known
   limitations last); a release refuses a non-empty `[Unreleased]`. The prerelease argument defaults from the version.
+- UDP flow with an owner not found yet (2026-11-25, #255): `UdpFlows.NewFlow` passed a flow whose owner lookup gave
+  pid 0 for its whole life, with no log line, so on Windows (where the UDP table can miss a fresh socket) an app's first
+  flow could skip its rule. Such a flow now waits (`Way.Wait`, up to 16 held datagrams) while `FindOwnerLaterAsync`
+  looks again off the packet thread (`OwnerRetryDelays`, about 1 s), then is decided and replaced with
+  `TryUpdate`; held datagrams follow the decided way. Still unknown: Pass, as before. The live testkit scenario that
+  reported it (`udp-dns-non53`) sends to port 5353, which `IsNeverCaptured` always leaves alone, so it can't show the
+  fix. Tests in `UdpFlowsTests`; `Socks5UdpServer.Hosts` may now map an address too.

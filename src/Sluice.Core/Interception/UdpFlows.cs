@@ -30,14 +30,22 @@ public sealed class UdpFlows : IAsyncDisposable
 {
     public enum Verdict { Pass, Drop }   // Drop: taken (tunneled or blocked); the platform must not send it on
 
-    /// <summary>How a taken flow leaves: through a tunnel, or straight to the real address behind a placeholder.</summary>
-    private enum Way { Pass, Block, Tunnel, DirectByName }
+    /// <summary>How a taken flow leaves: through a tunnel, or straight to the real address behind a placeholder.
+    /// Wait: the socket's owner isn't known yet; its datagrams are held until it is (<see cref="FindOwnerLaterAsync"/>).</summary>
+    private enum Way { Pass, Block, Tunnel, DirectByName, Wait }
+
+    /// <summary>At most this many datagrams of a flow are held while its owner is looked up again.</summary>
+    private const int MaxHeld = 16;
 
     private sealed class Flow
     {
         public required IPEndPoint Src { get; init; }
         public required IPEndPoint Dst { get; init; }
         public required Way Way { get; init; }
+        /// <summary>A Wait flow's datagrams so far; null once it is decided.</summary>
+        public List<(byte[] Data, object? Context)>? Held;
+        /// <summary>The flow a Wait flow became, once its owner was looked up again.</summary>
+        public Flow? Decided;
         public string SendHost { get; init; } = "";
         public Client? Client { get; set; }
         public Direct? Direct { get; set; }
@@ -86,6 +94,15 @@ public sealed class UdpFlows : IAsyncDisposable
         _findOwner = findOwner;
     }
 
+    /// <summary>
+    /// When a new flow's owner isn't found (on Windows the table can miss a socket created a moment earlier), it is
+    /// looked up again after each of these delays, off the capture's thread, until it is found; the flow's datagrams
+    /// wait meanwhile. About 1 s in all, then the flow is decided as an unknown owner's (#255).
+    /// </summary>
+    internal IReadOnlyList<TimeSpan> OwnerRetryDelays { get; init; } =
+        [TimeSpan.FromMilliseconds(20), TimeSpan.FromMilliseconds(50), TimeSpan.FromMilliseconds(100),
+         TimeSpan.FromMilliseconds(250), TimeSpan.FromMilliseconds(500)];
+
     public int FlowCount => _flows.Count;
     /// <summary>Datagrams Sluice sent on itself: through a tunnel, or Direct to the real address behind a placeholder.</summary>
     public long DatagramsTunneled => Interlocked.Read(ref _tunneled);
@@ -110,6 +127,28 @@ public sealed class UdpFlows : IAsyncDisposable
         if (!_flows.TryGetValue(key, out var flow)) flow = _flows.GetOrAdd(key, _ => NewFlow(src, dst));
         Interlocked.Exchange(ref flow.LastSeenTicks, DateTime.UtcNow.Ticks);
 
+        if (flow.Way == Way.Wait)
+        {
+            var wait = flow;
+            lock (wait)
+            {
+                if (wait.Decided is null)
+                {
+                    // Held until the owner is known; the capture may reuse its buffer once this returns.
+                    if (wait.Held!.Count < MaxHeld) wait.Held.Add((datagram.Payload.ToArray(), datagram.Context));
+                    else Interlocked.Increment(ref _dropped);
+                    return Verdict.Drop;
+                }
+                flow = wait.Decided;
+            }
+            Interlocked.Exchange(ref flow.LastSeenTicks, DateTime.UtcNow.Ticks);
+        }
+
+        return Take(flow, datagram.Payload, datagram.Context);
+    }
+
+    private Verdict Take(Flow flow, ReadOnlyMemory<byte> payload, object? context)
+    {
         switch (flow.Way)
         {
             case Way.Pass:
@@ -119,9 +158,9 @@ public sealed class UdpFlows : IAsyncDisposable
                 return Verdict.Drop;
         }
 
-        flow.Context = datagram.Context;
+        flow.Context = context;
         // The capture may reuse its buffer once this returns.
-        var data = datagram.Payload.ToArray();
+        var data = payload.ToArray();
         return flow.Way == Way.DirectByName ? SendDirect(flow, data) : SendTunneled(flow, data);
     }
 
@@ -149,13 +188,91 @@ public sealed class UdpFlows : IAsyncDisposable
     private Flow NewFlow(IPEndPoint src, IPEndPoint dst)
     {
         var pid = _findOwner(src);
+        // Owner not found: a socket created a moment earlier may not be listed yet. Deciding now would pass the flow for
+        // its whole life, skipping the app's rule, so hold its datagrams and look again off this thread (#255).
+        if (pid == 0 && !FakeIpPool.IsFake(dst.Address) && !_engine.Profile.Options.ProcessServices)
+        {
+            var wait = new Flow { Src = src, Dst = dst, Way = Way.Wait, Held = [] };
+            _engine.Tracker.Write(LogLevel.Debug, $"UDP {src} -> {Unmap(dst.Address)}:{dst.Port} pid 0 => Wait (owner not found yet)");
+            _ = FindOwnerLaterAsync(wait);
+            return wait;
+        }
+        var flow = Decide(src, dst, pid);
+        Attach(flow);
+        return flow;
+    }
+
+    /// <summary>Looks a Wait flow's owner up again, then puts the flow it becomes in its place and sends its held
+    /// datagrams the way that flow goes. Datagrams held for a flow that passes can't be sent on: the app resends.</summary>
+    private async Task FindOwnerLaterAsync(Flow wait)
+    {
+        var key = (wait.Src, wait.Dst);
+        var pid = 0;
+        try
+        {
+            foreach (var delay in OwnerRetryDelays)
+            {
+                await Task.Delay(delay, _cts.Token);
+                if (!_flows.TryGetValue(key, out var current) || current != wait) return;   // ended, or the factory's spare
+                pid = _findOwner(wait.Src);
+                if (pid != 0) break;
+            }
+        }
+        catch (OperationCanceledException) { return; }
+
+        Flow decided;
+        try
+        {
+            decided = Decide(wait.Src, wait.Dst, pid);
+        }
+        catch (Exception ex)
+        {
+            _engine.Tracker.Write(LogLevel.Debug, $"UDP {wait.Src} -> {wait.Dst} pid {pid} => Pass ({ex.Message})");
+            decided = new Flow { Src = wait.Src, Dst = wait.Dst, Way = Way.Pass };
+        }
+
+        List<(byte[] Data, object? Context)> held;
+        if (_flows.TryUpdate(key, decided, wait))
+            Attach(decided);
+        else if (decided.Entry is { } e)
+            _engine.Tracker.End(e, ConnectionState.Closed, null);   // the flow ended meanwhile (profile changed, stopped)
+        lock (wait)
+        {
+            wait.Decided = decided;
+            held = wait.Held!;
+            wait.Held = null;
+        }
+        if (!_flows.TryGetValue(key, out var now) || now != decided)
+        {
+            Interlocked.Add(ref _dropped, held.Count);
+            return;
+        }
+        foreach (var (data, context) in held)
+            if (Take(decided, data, context) == Verdict.Pass) Interlocked.Increment(ref _dropped);
+    }
+
+    /// <summary>Ends the flow when its connection is disconnected; once the flow is in <see cref="_flows"/>.</summary>
+    private void Attach(Flow flow)
+    {
+        if (flow.Entry is { } entry)
+            entry.Cts.Token.Register(() => EndFlow((flow.Src, flow.Dst), ConnectionState.Closed, "disconnected"));
+    }
+
+    /// <summary>The way a flow from <paramref name="src"/> (owned by <paramref name="pid"/>, 0 when unknown) goes.</summary>
+    private Flow Decide(IPEndPoint src, IPEndPoint dst, int pid)
+    {
         var fake = _fakes.TryGetHost(dst.Address, out var hostname);
         // A placeholder Sluice no longer knows (from an app's DNS cache before a restart) leads nowhere: drop it, so the
         // app gives up on it and looks the name up again.
         if (!fake && FakeIpPool.IsFake(dst.Address))
             return new Flow { Src = src, Dst = dst, Way = Way.Block };
-        if (pid == Environment.ProcessId || (pid == 0 && !fake && !_engine.Profile.Options.ProcessServices))
+        if (pid == Environment.ProcessId)
             return new Flow { Src = src, Dst = dst, Way = Way.Pass };
+        if (pid == 0 && !fake && !_engine.Profile.Options.ProcessServices)
+        {
+            _engine.Tracker.Write(LogLevel.Debug, $"UDP {src} -> {Unmap(dst.Address)}:{dst.Port} pid 0 => Pass (owner unknown)");
+            return new Flow { Src = src, Dst = dst, Way = Way.Pass };
+        }
 
         var path = pid == 0 ? null : ProcessLookup.GetProcessPath(pid);
         var host = fake ? hostname! : Unmap(dst.Address).ToString();
@@ -182,7 +299,6 @@ public sealed class UdpFlows : IAsyncDisposable
         var entry = _engine.BeginUdp(req, route);
         entry.State = ConnectionState.Open;
         flow.Entry = entry;
-        entry.Cts.Token.Register(() => EndFlow((src, dst), ConnectionState.Closed, "disconnected"));
         _engine.Tracker.Write(LogLevel.Normal, $"{app} - {host}:{dst.Port} UDP through {route.Via} (rule {route.Match.Rule.Name})");
         return flow;
     }

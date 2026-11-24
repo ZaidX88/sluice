@@ -38,7 +38,7 @@ public sealed class UdpEchoServer : IDisposable
 
 /// <summary>
 /// Minimal SOCKS5 server supporting only UDP ASSOCIATE (no auth). Hostnames are resolved through
-/// <see cref="Hosts"/> (so tests can use names that only exist here).
+/// <see cref="Hosts"/> (so tests can use names that only exist here); an address listed there is sent to its entry.
 /// </summary>
 public sealed class Socks5UdpServer : LoopbackServer
 {
@@ -83,7 +83,7 @@ public sealed class Socks5UdpServer : LoopbackServer
                     client = from;
                     if (!Socks5UdpAssociation.TryParse(d.AsSpan(0, r.ReceivedBytes), out var host, out var p, out var off)) continue;
                     LastTargetHost = host;
-                    var ip = IPAddress.TryParse(host, out var lit) ? lit : Hosts[host];
+                    var ip = Hosts.TryGetValue(host, out var mapped) ? mapped : IPAddress.Parse(host);
                     await udp.SendToAsync(d.AsMemory(off, r.ReceivedBytes - off), SocketFlags.None, new IPEndPoint(ip, p), ct);
                 }
                 else

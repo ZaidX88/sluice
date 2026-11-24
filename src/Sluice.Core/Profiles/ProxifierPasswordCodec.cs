@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
@@ -13,13 +14,20 @@ namespace Sluice.Core.Profiles;
 ///   type 2 "master"  : AES-256-CBC, IV = 0, key[i] = i XOR pw[UTF-16LE bytes, cycled over 32]
 ///   AES plaintext    = FF FF FF FF ‖ UTF-16LE text ‖ 00 00 ‖ padding, nBlocks = ⌈(2n+6)/16⌉, at least 2
 ///
+/// Proxifier stores nBlocks in one byte, so its AES values hold at most 255 blocks (about 2000 characters). Longer
+/// values (SSH private keys, #213) use a Sluice extension: nBlocks byte 0, which no valid value has, then nBlocks as a
+/// 4-byte little-endian number, then the ciphertext. Values that fit in 255 blocks keep Proxifier's layout, so files
+/// stay readable by earlier versions unless they hold such a long secret.
+///
 /// A profile also stores a hash = Encode("A") in account/master modes ("passwordHash" in a .sluice file), used to
 /// check the master password before any tunnel password is decrypted.
 /// </summary>
 public sealed class ProxifierPasswordCodec : IPasswordCodec
 {
     private const string HashPlaintext = "A";
-    private const int MaxChars = 0x100;
+    /// <summary>Upper bound for a long value's block count (16 MB of ciphertext), so a corrupt length can't ask for
+    /// an absurd allocation.</summary>
+    private const int MaxLongBlocks = 1 << 20;
 
     private readonly PasswordEncryptionMode _mode;
     private readonly string? _master;
@@ -47,7 +55,6 @@ public sealed class ProxifierPasswordCodec : IPasswordCodec
     public string Encode(string plain)
     {
         if (_mode == PasswordEncryptionMode.Disabled) return plain;
-        if (plain.Length > MaxChars) throw new CryptographicFailure("String is too large.");
 
         var text = new byte[(plain.Length + 1) * 2];
         Encoding.Unicode.GetBytes(plain, 0, plain.Length, text, 0);
@@ -66,7 +73,7 @@ public sealed class ProxifierPasswordCodec : IPasswordCodec
             {
                 var type = _mode == PasswordEncryptionMode.MasterPassword ? (byte)2 : (byte)0;
                 var blocks = Math.Max(2, (text.Length + 4 + 15) / 16);
-                if (blocks > 0xFF) throw new CryptographicFailure("Too many blocks.");
+                if (blocks > MaxLongBlocks) throw new CryptographicFailure("String is too large.");
                 var plainBlock = new byte[blocks * 16];
                 plainBlock[0] = plainBlock[1] = plainBlock[2] = plainBlock[3] = 0xFF;
                 text.CopyTo(plainBlock, 4);
@@ -74,10 +81,19 @@ public sealed class ProxifierPasswordCodec : IPasswordCodec
                 using var aes = Aes.Create();
                 aes.Key = Key(type, _master);
                 var cipher = aes.EncryptCbc(plainBlock, new byte[16], PaddingMode.None);
-                data = new byte[3 + cipher.Length];
+                if (blocks <= 0xFF)
+                {
+                    data = new byte[3 + cipher.Length];
+                    data[2] = (byte)blocks;
+                    cipher.CopyTo(data, 3);
+                }
+                else
+                {
+                    data = new byte[7 + cipher.Length];   // data[2] = 0: long form
+                    BinaryPrimitives.WriteInt32LittleEndian(data.AsSpan(3), blocks);
+                    cipher.CopyTo(data, 7);
+                }
                 data[1] = type;
-                data[2] = (byte)blocks;
-                cipher.CopyTo(data, 3);
                 break;
             }
         }
@@ -103,12 +119,24 @@ public sealed class ProxifierPasswordCodec : IPasswordCodec
                 if (data[1] == 2 && string.IsNullOrEmpty(_master))
                     throw new CryptographicFailure("A master password is required.");
                 if (data.Length < 3) throw new CryptographicFailure("Incorrect format.");
-                var blocks = data[2];
-                if (blocks == 0 || data.Length != 3 + blocks * 16) throw new CryptographicFailure("Incorrect number of blocks.");
+                int blocks, start;
+                if (data[2] != 0)
+                {
+                    blocks = data[2];
+                    start = 3;
+                }
+                else
+                {
+                    if (data.Length < 7) throw new CryptographicFailure("Incorrect format.");
+                    blocks = BinaryPrimitives.ReadInt32LittleEndian(data.AsSpan(3));
+                    start = 7;
+                    if (blocks <= 0xFF || blocks > MaxLongBlocks) throw new CryptographicFailure("Incorrect number of blocks.");
+                }
+                if (data.Length != start + blocks * 16) throw new CryptographicFailure("Incorrect number of blocks.");
 
                 using var aes = Aes.Create();
                 aes.Key = Key(data[1], _master);
-                var plain = aes.DecryptCbc(data.AsSpan(3), new byte[16], PaddingMode.None);
+                var plain = aes.DecryptCbc(data.AsSpan(start), new byte[16], PaddingMode.None);
                 if (plain[0] != 0xFF || plain[1] != 0xFF || plain[2] != 0xFF || plain[3] != 0xFF)
                     throw new CryptographicFailure("Wrong password.");
                 return FromUtf16Z(plain.AsSpan(4));

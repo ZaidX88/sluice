@@ -253,3 +253,8 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   kernel. `WinDivertNative.TakesOutbound` (WinDivertHelperEvalFilter) lets `CaptureFilterTests` check which packets the
   filter takes. Live: `localtest.me` echo through `--udp bypass` came back from its placeholder; a datagram to
   192.0.2.1 left no flow.
+- Long secrets (2026-11-24, #213): `ProxifierPasswordCodec.Encode` refused more than 256 characters, so a pasted SSH
+  key couldn't be saved in any mode. The character limit is gone; AES values over 255 blocks use a long form (block
+  byte 0, then the count as a little-endian `int32`), which `Decode` reads next to Proxifier's layout. Shorter values
+  are written as before. `LongSecretTests` round-trips a 4096-bit RSA key in every mode (account mode with a stand-in
+  `ISecretProtector`).

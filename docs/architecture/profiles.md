@@ -65,6 +65,10 @@ its doc comment has the byte layout), unchanged so existing `.sluice` files keep
 different Windows account fails with `CryptographicFailure` before any value is decrypted. Moving DPAPI behind a
 platform interface is part of [REQUIRED.md §1](../REQUIRED.md#1-move-windows-only-code-out-of-core).
 
+Proxifier counts AES blocks in one byte, so its values end at about 2000 characters. A longer secret (an SSH private
+key of several KB, #213) is written in a Sluice-only long form: block byte 0, then a 4-byte count. Shorter values keep
+Proxifier's layout, so only a profile that holds such a long secret can't be opened by a version before the fix.
+
 ## App settings and the settings folder
 
 The settings folder is `<ApplicationData>/Sluice` (`AppSettings.Folder`): `%APPDATA%\Sluice` on Windows,

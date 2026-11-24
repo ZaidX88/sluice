@@ -269,6 +269,12 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   byte 0, then the count as a little-endian `int32`), which `Decode` reads next to Proxifier's layout. Shorter values
   are written as before. `LongSecretTests` round-trips a 4096-bit RSA key in every mode (account mode with a stand-in
   `ISecretProtector`).
+- Unparsable Ports (2026-11-25, #230): `RuleEngine.ParsePorts` returned null ("any port") when no part parsed, so
+  Ports `https` or `80 443` made a rule apply to every port. Public `RuleEngine.TryParsePorts` (for the rule dialog's
+  check, #247) splits on `;`, `,`, newlines and spaces, takes digits only, 0–65535, and returns the parts that aren't
+  ports; those are dropped, and a non-empty value with nothing left gives an empty list that matches nothing.
+  `RuleEngine.Problems` names the rule and parts; `RoutingEngine` writes them at Error when a profile loads, not per
+  connection. Tests in `RuleEngineTests`.
 - Linux tarball name in the docs (2026-11-24, #217): `docs/linux/INSTALL.md` (check and install steps) and
   `packaging/linux/README.txt` use `sluice-<version>-linux-x64.tar.gz`, the name `release.yml` publishes and its
   `.sha256` checks; the folder inside stays `sluice-linux-x64`.

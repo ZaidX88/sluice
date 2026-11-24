@@ -67,10 +67,12 @@ always matches and is evaluated last wherever it sits. A rule matches when all o
 |---|---|---|
 | `Applications` | `chrome.exe; "C:\path\x.exe"; fire*` (env vars expanded; with a path separator the full path is matched, otherwise the file name) | wildcard regexes over `ProcessPath` |
 | `Targets` | `*.example.com; 10.0.0.0/8; 10.1.0.0-10.5.255.255; 192.168.1.*; ::1; %ComputerName%; %SimpleHostnames%` | `HostWildcard`, `IpRange`, `SimpleHostnames` patterns |
-| `Ports` | `80; 8000-9000` | port ranges |
+| `Ports` | `80; 8000-9000` (spaces also separate: `80 443`) | port ranges (`RuleEngine.TryParsePorts`) |
 
 Lists split on `;`, `,` or newlines, honouring double quotes. Host wildcards also match the IP's text form; IP ranges
-also match a literal-IP host. The action is a `RuleAction`: `Direct`, `Block`, `Tunnel` (with a tunnel id) or `Chain`
+also match a literal-IP host. A Ports part that isn't a port 0–65535 or a range is ignored, and a Ports value with
+no valid part matches no connection (never "any port"); `RuleEngine.Problems` lists them, and `RoutingEngine` logs
+them at Error once per loaded profile. The action is a `RuleAction`: `Direct`, `Block`, `Tunnel` (with a tunnel id) or `Chain`
 (with a chain id). `Profile.CreateDefault()` gives the Proxifier defaults: `Localhost → Direct`, `Default → Direct`.
 
 `RuleEngine.ParseTargets` is reused by `DnsPolicy` for the DNS exclusion list.

@@ -39,6 +39,9 @@ into the version's section, and that section, with the install links, becomes th
   profiles you already have keep their choice, and "On this PC" is still in Settings → Privacy (#167).
 
 ### Fixed
+- A rule's Ports value that isn't a list of ports (`https`, `70000`) no longer makes the rule apply to every port,
+  so a Block rule can't block everything by mistake: those parts are ignored, a rule with no valid port matches no
+  connection, and the Log page says which rule and value. Ports may also be separated by spaces (`80 443`) (#230).
 - Linux: the install guide and the package's README name the download as releases publish it,
   `sluice-<version>-linux-x64.tar.gz`, so its checksum and unpack commands work as written (#217).
 - A log file that can't be written (disk full, its folder deleted or denied) no longer crashes Sluice: the Log page

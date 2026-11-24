@@ -70,6 +70,102 @@ public class RuleEngineTests
         Assert.Equal(expected, Match(e, null, "a.com", port));
     }
 
+    // #230: a Ports value that doesn't parse used to mean "any port", so a Block rule blocked everything.
+    [Theory]
+    [InlineData("https")]
+    [InlineData("70000")]
+    [InlineData("-80")]
+    [InlineData("+443")]
+    [InlineData("80-")]
+    [InlineData("http; https")]
+    public void UnparsablePortsMatchNothing(string ports)
+    {
+        var e = Engine(new Rule { Name = "Bad", Ports = ports, Action = RuleAction.Block });
+        foreach (var port in new[] { 1, 80, 443, 8080, 65535 })
+            Assert.Equal("Default", Match(e, null, "a.com", port));
+        Assert.Contains("the rule matches no connection", Assert.Single(e.Problems));
+    }
+
+    [Fact]
+    public void PartlyUnparsablePortsKeepWhatParsed()
+    {
+        var e = Engine(new Rule { Name = "Web", Ports = "80; https; 8000-9000" });
+        Assert.Equal("Web", Match(e, null, "a.com", 80));
+        Assert.Equal("Web", Match(e, null, "a.com", 8500));
+        Assert.Equal("Default", Match(e, null, "a.com", 443));
+        var problem = Assert.Single(e.Problems);
+        Assert.Contains("Rule \"Web\"", problem);
+        Assert.Contains("\"https\"", problem);
+        Assert.Contains("ignored", problem);
+    }
+
+    [Theory]
+    [InlineData("80 443")]
+    [InlineData("80, 443")]
+    [InlineData("80;443")]
+    [InlineData("  80\n443 ")]
+    [InlineData("80 440 - 450")]
+    public void PortsSplitOnSpacesToo(string ports)
+    {
+        var e = Engine(new Rule { Name = "Web", Ports = ports });
+        Assert.Equal("Web", Match(e, null, "a.com", 80));
+        Assert.Equal("Web", Match(e, null, "a.com", 443));
+        Assert.Equal("Default", Match(e, null, "a.com", 8080));
+        Assert.Empty(e.Problems);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData(" ; ")]
+    public void EmptyPortsMatchAny(string? ports)
+    {
+        Assert.True(RuleEngine.TryParsePorts(ports, out var ranges, out var invalid));
+        Assert.Null(ranges);
+        Assert.Empty(invalid);
+        Assert.Equal("Any", Match(Engine(new Rule { Name = "Any", Ports = ports }), null, "a.com", 12345));
+    }
+
+    [Fact]
+    public void TryParsePortsReportsTheInvalidParts()
+    {
+        Assert.False(RuleEngine.TryParsePorts("443 https 9000-8000 99999", out var ranges, out var invalid));
+        Assert.Equal([(443, 443), (8000, 9000)], ranges!);
+        Assert.Equal(["https", "99999"], invalid);
+
+        Assert.True(RuleEngine.TryParsePorts("0; 65535", out ranges, out invalid));
+        Assert.Equal([(0, 0), (65535, 65535)], ranges!);
+        Assert.Empty(invalid);
+    }
+
+    [Fact]
+    public void DisabledRulesReportNoProblems()
+    {
+        var e = Engine(new Rule { Name = "Off", Enabled = false, Ports = "https" });
+        Assert.Empty(e.Problems);
+    }
+
+    [Fact]
+    public async Task UnparsablePortsAreLoggedOncePerLoad()
+    {
+        var tracker = new Sluice.Core.Engine.ConnectionTracker();
+        var log = new List<(Sluice.Core.Engine.LogLevel, string)>();
+        tracker.Log += (l, m) => { lock (log) log.Add((l, m)); };
+        var profile = Profile.CreateDefault();
+        profile.Rules.Insert(0, new Rule { Name = "Bad", Ports = "https", Action = RuleAction.Block });
+
+        await using var engine = new Sluice.Core.Engine.RoutingEngine(profile, tracker);
+        engine.HostResolver = null;   // rebuilds the rules without a new profile: no second report
+        engine.Reload(profile);
+
+        lock (log)
+        {
+            var reports = log.Where(e => e.Item2.Contains("Rule \"Bad\"")).ToList();
+            Assert.Equal(2, reports.Count);   // the first load and the reload, nothing per connection
+            Assert.All(reports, r => Assert.Equal(Sluice.Core.Engine.LogLevel.Error, r.Item1));
+        }
+    }
+
 
     [Fact]
     public void MissingDefaultFallsBackToDirect()

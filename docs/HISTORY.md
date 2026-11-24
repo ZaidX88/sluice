@@ -259,6 +259,11 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   (replaces an `install.sh` copy), `postinst` (`/etc/dotnet` only if needed, setcap on the launcher), `prerm`/`postrm`
   (undo; `prerm` closes a running Sluice first). Lowest release 24.04 (22.04's archive has no `dotnet-runtime-10.0`).
   Checked in Docker on 24.04 and 26.04 without .NET: install, capture as a normal user, remove, purge.
+- Failing log file (2026-11-24, #226): `FileLog.OnLog` catches open and write errors instead of letting them leave
+  `ConnectionTracker.Write` (the relay-statistics timer ended the process on a full disk). It closes the writer
+  quietly, reports once, retries after `RetryAfter` (60 s, `Failing` while it waits), recreates a deleted folder, and
+  logs the missing span when the file is written again; `Dispose` ignores a failing final flush. Tests in
+  `FileLogFailureTests` (folder replaced by a file, read-only file, full-disk stream).
 - Long secrets (2026-11-24, #213): `ProxifierPasswordCodec.Encode` refused more than 256 characters, so a pasted SSH
   key couldn't be saved in any mode. The character limit is gone; AES values over 255 blocks use a long form (block
   byte 0, then the count as a little-endian `int32`), which `Decode` reads next to Proxifier's layout. Shorter values

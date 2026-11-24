@@ -290,9 +290,9 @@ the repository**:
   `1.0.0-rc.1`, `-rc.2` … for release candidates, `1.0.0` for the release, then the next `-dev`. Never change it in a
   feature pull request.
 - **A release tag** `vX.Y.Z` (or `vX.Y.Z-rc.N`) on `main` must match `<Version>`. Pushing it runs the release workflow
-  (`.github/workflows/release.yml`, #74): it checks the tag, builds the Linux tar.gz and the Windows installer from
-  it, whose file names take the version (`sluice-1.0.0-linux-x64.tar.gz`, `Sluice-Setup-1.0.0-x64.exe`), each with
-  a `.sha256`, and creates a **draft** GitHub Release with them; the owner reviews it and publishes it (a `-rc` tag
+  (`.github/workflows/release.yml`, #74): it checks the tag, builds the Linux tar.gz, the Ubuntu `.deb` and the
+  Windows installer from it, whose file names take the version (`sluice-1.0.0-linux-x64.tar.gz`,
+  `sluice_1.0.0_amd64.deb`, `Sluice-Setup-1.0.0-x64.exe`), each with a `.sha256`, and creates a **draft** GitHub Release with them; the owner reviews it and publishes it (a `-rc` tag
   becomes a pre-release). Run by hand from the Actions tab, the workflow only builds the packages and keeps them as
   workflow artifacts (a dry run, or a test installer). Built packages are never committed.
 - **Release notes** come from [CHANGELOG.md](../CHANGELOG.md), plus the install links, written into the draft by

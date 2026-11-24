@@ -1,8 +1,8 @@
 # Release packages from a version tag (#74; docs/CONTRIBUTING.md → Releases).
 #
 # A tag vX.Y.Z or vX.Y.Z-rc.N pushed on main: check it matches <Version> in Directory.Build.props, build the Linux
-# tar.gz and the Windows installer from that tag, and create a **draft** GitHub Release with them, their .sha256 files
-# and notes from CHANGELOG.md (scripts/release-notes.sh). The owner reviews the draft and publishes it.
+# tar.gz, the Ubuntu .deb and the Windows installer from that tag, and create a **draft** GitHub Release with them,
+# their .sha256 files and notes from CHANGELOG.md (scripts/release-notes.sh). The owner reviews the draft and publishes it.
 #
 # Run by hand (Actions → Release → Run workflow) it only builds the packages from the chosen ref and keeps them as
 # workflow artifacts: a dry run, and a way to get a release-candidate installer for testing.
@@ -56,9 +56,11 @@ jobs:
           echo "Version $version (pre-release: $prerelease)"
 
   linux:
-    name: Linux package
+    name: Linux packages
     needs: version
-    runs-on: ubuntu-latest
+    # Pinned, not ubuntu-latest: the launcher is compiled here, and the .deb requires the C library version it was
+    # built against, so a newer runner would make the .deb refuse to install on Ubuntu 24.04, its lowest release.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -69,14 +71,19 @@ jobs:
           VERSION: ${{ needs.version.outputs.version }}
         run: |
           set -euo pipefail
-          # Framework-dependent; sing-box is downloaded by install.sh (DECISIONS.md, 2026-11-14).
+          # Framework-dependent. The tar.gz leaves sing-box to install.sh (DECISIONS.md, 2026-11-14); the .deb bundles
+          # the version install.sh pins, downloaded and SHA-256 checked by package-linux.sh (DECISIONS.md, 2026-11-21).
           dotnet publish src/Sluice.Desktop -f net10.0 -r linux-x64 --self-contained false -c Release -p:SluiceFetchDependencies=false -o out/app
           dotnet publish src/Sluice.Cli -f net10.0 -r linux-x64 --self-contained false -c Release -p:SluiceFetchDependencies=false -o out/app
-          scripts/package-linux.sh out/app out/pkg
-          # Release file names carry the version (CONTRIBUTING.md → Releases).
+          scripts/package-linux.sh --deb out/app out/pkg
+          # Release file names carry the version (CONTRIBUTING.md → Releases). The .deb's name already does
+          # (sluice_<version>_amd64.deb, the name UpdateCheck looks for); its .sha256 comes from package-linux.sh.
           mkdir -p dist
           mv out/pkg/sluice-linux-x64.tar.gz "dist/sluice-$VERSION-linux-x64.tar.gz"
           (cd dist && sha256sum "sluice-$VERSION-linux-x64.tar.gz" > "sluice-$VERSION-linux-x64.tar.gz.sha256")
+          mv "out/pkg/sluice_${VERSION}_amd64.deb" "out/pkg/sluice_${VERSION}_amd64.deb.sha256" dist/
+          (cd dist && sha256sum -c "sluice_${VERSION}_amd64.deb.sha256")
+          dpkg-deb --info "dist/sluice_${VERSION}_amd64.deb"
           ls -l dist
       - uses: actions/upload-artifact@v4
         with:

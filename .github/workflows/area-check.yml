@@ -34,8 +34,6 @@ jobs:
               packaging/linux/*|scripts/package-linux.sh) echo linux ;;
               packaging/windows/*) echo windows ;;
               src/Sluice.Platform.Windows/*|docs/windows/*|tests/Sluice.Tests.Windows/*) echo windows ;;
-              src/Sluice.Core/Interception/Interceptor.cs|src/Sluice.Core/Interception/WinDivertNative.cs) echo windows ;;
-              src/Sluice.Core/Interception/UdpNat.cs|src/Sluice.Core/Interception/CaptureFilter.cs) echo windows ;;
               src/Sluice.Core/Platform/ProcessLookup.cs|src/Sluice.Core/Profiles/Dpapi.cs) echo windows ;;
               scripts/*/*) echo core ;;
               scripts/*.ps1) echo windows ;;

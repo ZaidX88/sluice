@@ -153,7 +153,9 @@ sees `HostResolver`. When capture is off, fake IPs are not handed out and Sluice
 
 ## UDP
 
-UDP is only captured while capture runs and the profile's `UdpMode` is not `Bypass`.
+UDP is only captured while capture runs. With `UdpMode` `Bypass` only UDP to placeholders (198.18.0.0/15) is captured,
+since it can't go out as it is and `UdpFlows` sends it Direct by name (Linux since #209, Windows with #208); other UDP is
+never touched in that mode.
 `RoutingEngine.ClassifyUdp(request)` returns a `UdpRoute`:
 
 | Rule action | `UdpMode` | Verdict |
@@ -183,7 +185,8 @@ WinDivert address and hands it to `UdpFlows`. Replies are rebuilt as inbound pac
 
 **Linux:** `LinuxCapture` passes, drops or takes each new flow (verdict cached 30 s). Taken flows (tunnel, or Direct
 to a placeholder) reach `UdpFlows` through a tproxy and the transparent socket `TransparentUdp`, which also delivers
-the replies ([capture.md](capture.md#linux-linuxcapture), #60).
+the replies ([capture.md](capture.md#linux-linuxcapture), #60). In `Bypass` nftables queues only flows to the
+placeholder range, so only those are taken (#209).
 
 ## Health checking a tunnel by hand: `Checker/TunnelChecker.cs`
 

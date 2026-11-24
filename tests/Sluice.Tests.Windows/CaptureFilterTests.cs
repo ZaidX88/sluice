@@ -17,8 +17,38 @@ public class CaptureFilterTests
         Assert.Contains("(tcp.Syn and !tcp.Ack)", f);
         Assert.Contains("tcp.SrcPort == 50123", f);
         Assert.Contains(CaptureFilter.FakeRange, f);
-        Assert.Contains("(udp and udp.DstPort == 53 and udp.SrcPort != 53)", f);
+        Assert.Contains($"(udp and udp.SrcPort != 53 and (udp.DstPort == 53 or {CaptureFilter.FakeRange}))", f);
         Assert.Contains(" or (udp and udp.SrcPort != 53))", CaptureFilter.Main(Relay, captureUdp: true));
+    }
+
+    private static readonly IPEndPoint App = new(IPAddress.Parse("192.168.50.10"), 50123);
+
+    private static bool Takes(bool captureUdp, string dst, int dstPort, int srcPort = 50123) =>
+        WinDivertNative.TakesOutbound(CaptureFilter.Main(Relay, captureUdp),
+            UdpPacket.Build(new IPEndPoint(App.Address, srcPort), new IPEndPoint(IPAddress.Parse(dst), dstPort), "x"u8));
+
+    /// <summary>"Let it go direct" (#208): DNS and datagrams to placeholders only; nothing else, and never DNS answers.</summary>
+    [Fact]
+    public void Without_udp_capture_main_takes_dns_and_placeholder_datagrams_only()
+    {
+        if (!OperatingSystem.IsWindows()) return;   // WinDivert.dll evaluates the filter
+        Assert.True(Takes(false, "198.18.2.113", 443));
+        Assert.True(Takes(false, "198.18.0.0", 123));        // both ends of 198.18.0.0/15
+        Assert.True(Takes(false, "198.19.255.255", 3478));
+        Assert.True(Takes(false, "192.0.2.53", 53));         // DNS: answered locally or passed on, as before
+        Assert.False(Takes(false, "198.17.255.255", 443));   // just outside the range
+        Assert.False(Takes(false, "198.20.0.0", 443));
+        Assert.False(Takes(false, "203.0.113.1", 443));      // real addresses stay in the kernel
+        Assert.False(Takes(false, "198.18.2.113", 50000, srcPort: 53));   // a DNS server's answer
+    }
+
+    [Fact]
+    public void With_udp_capture_main_takes_every_app_datagram()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        Assert.True(Takes(true, "203.0.113.1", 443));
+        Assert.True(Takes(true, "198.18.2.113", 443));
+        Assert.False(Takes(true, "203.0.113.1", 50000, srcPort: 53));
     }
 
     [Fact]

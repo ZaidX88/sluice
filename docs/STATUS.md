@@ -58,7 +58,8 @@ UDP of tunneled apps goes through `UdpFlows` (`WinDivertUdp`).
 - **Only packets Sluice may rewrite** reach user mode (`CaptureFilter`). WinDivert can't redirect a whole connection,
   so each packet of a handled flow is rewritten, but nothing else is captured:
   - the **main handle** takes every new connection's first SYN (to decide it), the relay's packets back to apps, all
-    TCP to the fake-address range 198.18.0.0/15 (those flows are always redirected), and UDP as the UDP mode needs;
+    TCP to the fake-address range 198.18.0.0/15 (those flows are always redirected), and UDP as the UDP mode needs
+    (in "let it go direct" only DNS and UDP to the fake range, which `UdpFlows` sends direct by name, #208);
   - a **followers' handle** takes the later packets of redirected connections to *real* addresses (a rule matched an
     app or an IP, not a faked name). Its filter lists those addresses; `Interceptor.Follow` adds one and reopens the
     handle **before** that connection's SYN is sent on, and `PruneFollowed` drops addresses with no redirected flow left.
@@ -96,7 +97,8 @@ it would reset every connection through it.
 
 1. `NftRules` installs the table `inet sluice`:
    - chain `queue_new` (filter/output, priority mangle) sends the first SYN of each new outbound TCP connection, and new
-     UDP flows when UDP is handled, to NFQUEUE 1473 with `bypass` (traffic passes if Sluice is gone);
+     UDP flows when UDP is handled (with UDP set to go direct, only those to the placeholder range, #209), to NFQUEUE
+     1473 with `bypass` (traffic passes if Sluice is gone);
    - chain `to_sluice` (nat/output, priority dstnat) redirects packets carrying mark `0x5C1CE` to the relay port, and
      UDP/53 to the DNS port;
    - both skip `meta skgid <Sluice's group>` and loopback. Chain names must not be nft keywords (`redirect` once broke the

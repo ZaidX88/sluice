@@ -21,13 +21,13 @@ They follow the same model:
 
 | | Windows | Linux |
 |---|---|---|
-| Class | `Interceptor` (`src/Sluice.Core/Interception/`, still in Core) | `LinuxCapture` (`src/Sluice.Platform.Linux/Capture/`) |
+| Class | `Interceptor` (`src/Sluice.Platform.Windows/Capture/`, since #53) | `LinuxCapture` (`src/Sluice.Platform.Linux/Capture/`) |
 | Packet source | WinDivert driver (`WinDivertNative`): a socket-layer sniff handle (PIDs) and a network-layer handle (packets) | nftables table `inet sluice` (`NftRules`) queueing first SYNs to NFQUEUE 1473, read by `NfQueue` (raw netlink, `Native/Libc.cs`) |
 | PID | WinDivert socket events (`processId`; waits up to 3 ms for the event), else iphlpapi (`ProcessLookup`) | `LinuxProcessLookup`: the socket's inode and uid from the kernel's socket diagnostics (`SockDiag`, `NETLINK_SOCK_DIAG`; `/proc/net` if unavailable), the process from a cache or `/proc/<pid>/fd` (the socket owner's newest processes first) |
 | Steering to the relay | **Reflection**: `PacketReflector` rewrites the packets of a redirected flow and reinjects them inbound, in both directions, for the whole connection | **Mark + REDIRECT**: the verdict sets mark `0x5C1CE`; nftables' nat chain redirects marked SYNs to the relay port; the kernel does the rest |
 | Original destination | `PacketReflector` flow table, keyed by (remote address, app port) | `LinuxCapture.FlowTable` over `FlowRecords`, keyed by (app endpoint, original destination); the relay looks the connection up in conntrack (`Conntrack`) by the reply tuple, so a source port renumbered after a clash still finds its record |
 | DNS | `DnsRedirector.TryAnswer` on captured UDP/53 packets; an answer is injected, the query dropped. Unfaked queries pass | nftables redirects UDP/53 to `LinuxDnsServer` (127.0.0.1:P and [::1]:P); unfaked queries are forwarded to the real upstreams (`UpstreamServers`, skipping loopback stubs) |
-| UDP | `WinDivertUdp` hands each captured packet to `UdpFlows` (#53) and injects the replies | taken flows are marked, routed back in through `lo` and handed by `tproxy` to `TransparentUdp`, then `UdpFlows` (#60) |
+| UDP | `WinDivertUdp` hands each captured packet to `UdpFlows` (#53) and injects the replies. In "let it go direct" (`UdpMode.Bypass`) the main filter takes only DNS and UDP to the placeholder range, which `UdpFlows` sends direct by name (#208) | taken flows are marked, routed back in through `lo` and handed by `tproxy` to `TransparentUdp`, then `UdpFlows` (#60) |
 | Self-exclusion | filters skip Sluice's PID; helpers by PID in `Classify` | Sluice switches to a private group (`SluiceGroup.Pick`, `setresgid`) inherited by helpers; nftables skips `meta skgid` |
 | Fail-open | WinDivert handles close with the process; packets with errors are re-sent unchanged | `queue … bypass`; on stop or start failure the table is removed first (`Cleanup`) |
 | Rights | administrator (`Environment.IsPrivilegedProcess`) | root, or `CAP_NET_ADMIN` + `CAP_SETGID`, passed on by the launcher that holds them (setcap); `NftRules` raises `CAP_NET_ADMIN` as an ambient capability so the `nft` child keeps it, and lowers it once `nft` has started (#99) |
@@ -87,6 +87,7 @@ They follow the same model:
 
 ```
   nftables  queue_new (output, mangle) ── first SYN / new UDP flow ──▶ NFQUEUE 1473 ──▶ NfQueue.Receive (own thread)
+            (UDP set to go direct: new UDP flows to 198.18.0.0/15 only)
                                                                                          │ VerdictWorkers.Post
                                                      bounded hand-off (1024) ── full ──▶ accept unmarked at once
                                                                                          │
@@ -106,7 +107,10 @@ They follow the same model:
   a placeholder (which can't go out as it is; `UdpFlows` sends it by name). `PolicyRoutes` adds the rule and route over
   rtnetlink (IPv4 and IPv6; priority and table 1473) at start and removes them on stop and on an exit signal; a start
   first removes any an earlier run left. If the transparent socket or the routes can't be set up (no tproxy in the
-  kernel), capture starts anyway and those flows are dropped, as before. Sluice's sockets (the replies, `UdpFlows`'
+  kernel), capture starts anyway and those flows are dropped, as before. With UDP set to go direct (`Bypass`, #209)
+  `queue_new` queues only new UDP flows to the placeholder range (`NftRules.PlaceholderRange`, from
+  `LinuxCapture.UdpRules`), so only Direct-by-name flows are taken and all other UDP is never touched; without the
+  transparent socket no UDP is queued in that mode, as before #209. Sluice's sockets (the replies, `UdpFlows`'
   Direct sockets, tunnel helpers) carry its group, so the rules never mark them. Known limit: a flow already marked
   stays taken until its conntrack entry expires, so after a profile change that makes it Direct its datagrams are
   dropped until it is idle.

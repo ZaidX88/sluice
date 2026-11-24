@@ -7,13 +7,14 @@ Items that must be done (not optional ideas), roughly in order. Known bugs are i
 
 The agreed structure is **one branch, separate modules**: shared code in `Sluice.Core`, OS code in
 `Sluice.Platform.Windows` / `Sluice.Platform.Linux`, and every new OS difference behind `IPlatformServices` (or a narrower
-interface it hands out). Still in Core:
+interface it hands out). The WinDivert capture (#53), the job object and the DNS-cache flush (#56) have moved.
+Still in Core:
 
 | File | Move to / replace with |
 |---|---|
-| `Platform/ProcessLookup.cs` (iphlpapi/kernel32 code) | `WindowsProcessLookup : IProcessLookup`; Core keeps the interface and `Backend`. |
-| `Profiles/Dpapi.cs` (used by `ProxifierPasswordCodec`) | an `ISecretProtector` in Core. Linux: a clear "not supported" for "account"-mode (DPAPI) passwords. |
-| WinDivert entries in `build/Dependencies.targets` | import from the Windows module instead of Core. |
+| `Platform/ProcessLookup.cs` (iphlpapi/kernel32 code) | `WindowsProcessLookup : IProcessLookup`; Core keeps the interface and `Backend` (#54). |
+| `Profiles/Dpapi.cs` (used by `ProxifierPasswordCodec`) | an `ISecretProtector` in Core. Linux: a clear "not supported" for "account"-mode (DPAPI) passwords (#55). |
+| WinDivert entries in `build/Dependencies.targets` | import from the Windows module instead of Core (#58). |
 
 `Sluice.Cli` is multi-targeted like the desktop app and takes its capture from the platform module (done in #53).
 

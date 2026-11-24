@@ -320,3 +320,8 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   of the signed-in user reads it (true dark, false light, null not known), as in #253's Coordination; a default member
   returning null, and `NoPlatform` returns null too, so nothing changes until the Linux (#266), Windows (#267) and UI
   (#268) parts land. `PlatformServicesTests`, `platforms.md` §6.1.
+- Linux desktop theme (2026-11-25, #266, part of #253): `LinuxPlatform.PrefersDarkTheme` asks xdg-desktop-portal's
+  `org.freedesktop.appearance` `color-scheme` through a helper started with capabilities cleared (`DesktopTheme`:
+  `gdbus`, else `busctl`; `ReadOne`, then `Read` for portals before 1.18), since the portal refuses Sluice itself while
+  it has capture rights. 1 dark, 2 light, anything else null; one second in all. `LinuxDesktopThemeTests` with stand-in
+  helpers. Nothing calls it until the UI part (#268).

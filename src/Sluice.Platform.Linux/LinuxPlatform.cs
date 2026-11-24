@@ -126,6 +126,13 @@ public sealed class LinuxPlatform : IPlatformServices
         message,
     ];
 
+    // ---------- the desktop's theme (#266, #253's Coordination) ----------
+
+    /// <summary>xdg-desktop-portal's <c>color-scheme</c>, asked by a helper without capabilities, since the portal
+    /// refuses Sluice itself while it has capture rights (<see cref="DesktopTheme"/>). True dark, false light, null not
+    /// known. Never throws; returns within about a second.</summary>
+    public bool? PrefersDarkTheme() => DesktopTheme.Read();
+
     // ---------- traffic capture ----------
 
     public string? CaptureUnavailableReason =>

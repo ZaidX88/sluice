@@ -325,3 +325,11 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   `gdbus`, else `busctl`; `ReadOne`, then `Read` for portals before 1.18), since the portal refuses Sluice itself while
   it has capture rights. 1 dark, 2 light, anything else null; one second in all. `LinuxDesktopThemeTests` with stand-in
   helpers. Nothing calls it until the UI part (#268).
+- Start in the desktop's theme (2026-11-25, #268, part of #253): with no `--theme`, `App.StartInDesktopTheme` sets
+  `RequestedThemeVariant` from `PrefersDarkTheme()` after the single-instance check and before any window opens, asks
+  again off the UI thread on each `PlatformSettings.ColorValuesChanged` (only null goes back to `Default`, so an
+  accent-colour change doesn't fall back to Avalonia's light value) and whenever a Sluice window becomes active
+  (Avalonia raises that event only when its own stored values change, so with capture rights it misses the first
+  switch to light; #280 is for instant switches), and asks once more 5 s later when the first answer is null (the
+  portal at login). `ScreenshotMode`'s demo platform answers null. Live on Linux with capture rights: opens dark, then
+  follows light and back.

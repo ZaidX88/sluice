@@ -40,6 +40,8 @@ are **Unreleased** together with the coming version's section, with the install 
   profiles you already have keep their choice, and "On this PC" is still in Settings → Privacy (#167).
 
 ### Fixed
+- Linux: Sluice opens in your desktop's dark or light theme even when it runs with capture rights; before, it opened
+  light on a dark desktop until the theme was switched once (#253, #268).
 - Linux: an app rule written with a full path, such as `/usr/bin/curl` or `/usr/bin/*`, now matches that program;
   before, it never matched and the traffic fell through to the Default rule (#212).
 - Cancelling the master password when Sluice starts no longer runs an empty profile that sends everything

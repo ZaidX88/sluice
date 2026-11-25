@@ -214,6 +214,7 @@ internal static class ScreenshotMode
         public bool CanGrantCaptureRights => true;
         public bool AutostartSupported => true;
         public bool Autostart { get => _autostart; set => _autostart = value; }
+        public bool? PrefersDarkTheme() => null;            // the screenshots' theme comes from --theme (#268)
     }
 
     /// <summary>The import dialog showing a status line once it's open, the path that crashed in #181.</summary>

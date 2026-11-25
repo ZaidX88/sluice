@@ -45,31 +45,37 @@ Program.cs ──▶ App (App.axaml.cs)
    call points `ProcessLookup.Backend` at the platform's process lookup (`IPlatformServices.ProcessLookup`; #104).
    Until then `PlatformServices.Current` is a platform that does nothing
    ([platforms.md §6.1](platforms.md#61-reaching-the-platform-from-core-platformservices)).
-2. The theme: `--theme dark|light` wins. Without it, `StartInDesktopTheme` (#268, #253) sets `RequestedThemeVariant`
-   from `PlatformServices.Current.PrefersDarkTheme()`, the desktop's theme as the signed-in user's unprivileged process
-   reads it: with raised rights Avalonia can't see it itself (Linux: the portal refuses a process with capabilities;
-   Windows: an elevated administrator's own theme), so Sluice opened light on a dark desktop. On the first
-   `PlatformSettings.ColorValuesChanged` it goes back to `Default`, so Avalonia follows the desktop from then on. A null
-   answer changes nothing; outside screenshot mode it's asked again once, 5 s later in the background (at login the
-   portal may not be up yet), and applied only if the desktop hasn't changed meanwhile. Then `--screenshot DIR`
-   short-circuits into `ScreenshotMode` and exits (its demo platform answers null).
+2. `--theme dark|light` sets `RequestedThemeVariant` (it wins over the desktop's theme, step 4); `--screenshot DIR`
+   short-circuits into `ScreenshotMode` and exits (its demo platform answers null, so screenshots use `--theme`).
 3. **Single instance:** connect to the named pipe `Sluice-<user name>`; if the connect succeeds, another Sluice runs:
    send `show` and exit, even if the write fails (#171). Otherwise listen on that pipe (`ListenForShowRequestsAsync`),
    read each request to its end before closing it, and show the window. On Windows the pipe (`CreatePipeServer`) also
    lets the same user connect from a process without admin rights, so a normal launch reaches a Sluice running as
    administrator.
-4. `OsPlatform.Current.OnAppStart()` (Windows: `StartMenuShortcut.Ensure()` registers the app ID "Sluice" and a Start
+4. **The desktop's theme** (#268, #253), when there's no `--theme`, before any window opens and after the
+   single-instance check (so a second launch hands over without waiting for the platform): `StartInDesktopTheme` sets
+   `RequestedThemeVariant` from `PlatformServices.Current.PrefersDarkTheme()`, the desktop's theme as the signed-in
+   user's unprivileged process reads it. With raised rights Avalonia can't see it itself (Linux: the portal refuses a
+   process with capabilities; Windows: an elevated administrator's own theme), so Sluice opened light on a dark desktop.
+   On each `PlatformSettings.ColorValuesChanged` the platform is asked again off the UI thread and its answer applied;
+   only a null answer goes back to `Default` (Avalonia's own value stays light with capture rights, so an accent-colour
+   change mustn't fall back to it). Avalonia raises that event only when its own stored values change, so with capture
+   rights the first switch to light raises nothing; the platform is therefore also asked whenever a Sluice window
+   becomes active (`WindowBase.IsActiveProperty`), where a null answer changes nothing. Instant switches without
+   coming back to Sluice are #280. A null at start changes nothing and is asked again once, 5 s later (at login the
+   portal may not be up yet); an answer asked before the latest colour change isn't applied.
+5. `OsPlatform.Current.OnAppStart()` (Windows: `StartMenuShortcut.Ensure()` registers the app ID "Sluice" and a Start
    Menu shortcut carrying it, so notifications show Sluice's name and icon; Linux: nothing).
-5. Create `EngineHost` and install `CrashGuard` on it (below), then `MainViewModel`, `MainWindow`, `AppTray`; route
+6. Create `EngineHost` and install `CrashGuard` on it (below), then `MainViewModel`, `MainWindow`, `AppTray`; route
    `EngineHost.TunnelNotice` to `OsPlatform.Current.Notify`.
-6. Open the profile (`EngineHost.OpenStartupProfile`, asking for a master password if needed): `--profile` as it is;
+7. Open the profile (`EngineHost.OpenStartupProfile`, asking for a master password if needed): `--profile` as it is;
    otherwise `AppSettings.LastProfilePath`, copied into the profiles folder once if it is elsewhere (#134); otherwise
    the first profile there, or a new `Default`. If it can't be opened (its master password cancelled or wrong, an
    unreadable file), the app runs an empty profile without a file, which sends everything Direct and saves no edits:
    `MainViewModel.ShowProfileNotOpened` shows a banner saying so ("<name> wasn't opened; choose it from the profile
    menu"), cleared when a profile is opened (#248). `--screenshot` renders it as `banner-profile-not-opened.png`.
-7. `--log-file DIR` (a Debug-level log for this run only), start the local SOCKS5 listener, and turn capture on with
-   `--intercept` or `StartInterceptionOnLaunch`, but only when step 6 opened a profile (#248).
+8. `--log-file DIR` (a Debug-level log for this run only), start the local SOCKS5 listener, and turn capture on with
+   `--intercept` or `StartInterceptionOnLaunch`, but only when step 7 opened a profile (#248).
 
 `ShutdownMode` is explicit: closing the window only hides it when tray mode is on and `TrayHost` finds a tray (stock
 GNOME has none without the AppIndicator extension: there, closing quits). `ExitApp` (tray "Exit", or closing

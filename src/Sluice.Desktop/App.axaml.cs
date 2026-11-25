@@ -37,10 +37,9 @@ public partial class App : Application
         desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
         var args = desktop.Args ?? [];
 
-        if (Arg(args, "--theme") is { } theme)
-            RequestedThemeVariant = theme.Equals("dark", StringComparison.OrdinalIgnoreCase) ? ThemeVariant.Dark : ThemeVariant.Light;
-        else
-            StartInDesktopTheme(askAgainLater: Arg(args, "--screenshot") is null);
+        var themeArg = Arg(args, "--theme");
+        if (themeArg is not null)
+            RequestedThemeVariant = themeArg.Equals("dark", StringComparison.OrdinalIgnoreCase) ? ThemeVariant.Dark : ThemeVariant.Light;
 
         if (Arg(args, "--screenshot") is { } shotDir)
         {
@@ -58,6 +57,9 @@ public partial class App : Application
         }
         _singleCts = new CancellationTokenSource();
         _ = ListenForShowRequestsAsync(_singleCts.Token);
+
+        // After the single-instance check, so a second launch hands over at once; before any window opens (#268).
+        if (themeArg is null) StartInDesktopTheme();
 
         OsPlatform.Current.OnAppStart();   // e.g. the app identity Windows names notifications after
 
@@ -244,8 +246,8 @@ public partial class App : Application
 
     // ---------- the desktop's theme (#268, #253's Coordination) ----------
 
-    /// <summary>Set once the desktop has changed its colours since start-up: from then on Avalonia follows it.</summary>
-    private bool _followingDesktop;
+    /// <summary>Counts the desktop's colour changes, so an answer asked before the latest change isn't applied.</summary>
+    private int _themeAsk;
 
     /// <summary>How long to wait before asking the platform a second time when its first answer was null.</summary>
     private static readonly TimeSpan AskAgainAfter = TimeSpan.FromSeconds(5);
@@ -254,43 +256,56 @@ public partial class App : Application
     /// Starts in the theme the desktop asks for, as the platform reads it for the signed-in user
     /// (<see cref="Sluice.Core.Platform.IPlatformServices.PrefersDarkTheme"/>). With raised rights, Avalonia can't see it
     /// itself (Linux: the portal refuses a process with capabilities; Windows: an elevated administrator's own theme), so
-    /// Sluice would open light on a dark desktop. On the first change of the desktop's colours the requested variant goes
-    /// back to <see cref="ThemeVariant.Default"/>, so Avalonia follows the desktop as before. A platform that answers null
-    /// changes nothing; at login the portal may not be up yet, so a null is asked again once, a few seconds later.
+    /// Sluice would open light on a dark desktop. On each change of the desktop's colours the platform is asked again,
+    /// off the UI thread, and its answer applied; only a null answer goes back to <see cref="ThemeVariant.Default"/>
+    /// (Avalonia's own value, which with capture rights stays light, so an accent-colour change mustn't fall back to it).
+    /// Avalonia reports only changes of its own stored values, which miss the first switch to light in that case, so the
+    /// platform is also asked when a Sluice window becomes active (a null answer then changes nothing).
+    /// A null at start changes nothing; at login the portal may not be up yet, so it is asked again once, a few seconds
+    /// later.
     /// </summary>
-    private void StartInDesktopTheme(bool askAgainLater)
+    private void StartInDesktopTheme()
     {
         if (PlatformSettings is { } settings) settings.ColorValuesChanged += OnDesktopColorsChanged;
+        // Avalonia raises ColorValuesChanged only when its own stored values change; with capture rights its start-up
+        // read was refused and it stays at light, so the first switch to light raises nothing. Coming back to a Sluice
+        // window (after changing the theme in the desktop's settings) asks again too.
+        WindowBase.IsActiveProperty.Changed.AddClassHandler<WindowBase>(OnWindowActiveChanged);
+        var ask = Volatile.Read(ref _themeAsk);
         var dark = Sluice.Core.Platform.PlatformServices.Current.PrefersDarkTheme();
-        if (dark is not null) RequestedThemeVariant = dark.Value ? ThemeVariant.Dark : ThemeVariant.Light;
-        else if (askAgainLater) _ = AskForDesktopThemeAgainAsync();
+        if (dark is not null) ApplyDesktopTheme(dark);
+        else _ = AskForDesktopThemeAsync(ask, AskAgainAfter, applyNull: false);
     }
 
-    private async Task AskForDesktopThemeAgainAsync()
+    private void OnWindowActiveChanged(WindowBase window, AvaloniaPropertyChangedEventArgs e)
+    {
+        if (e.NewValue is true)
+            _ = AskForDesktopThemeAsync(Volatile.Read(ref _themeAsk), TimeSpan.Zero, applyNull: false);
+    }
+
+    private void OnDesktopColorsChanged(object? sender, PlatformColorValues values) =>
+        _ = AskForDesktopThemeAsync(Interlocked.Increment(ref _themeAsk), TimeSpan.Zero, applyNull: true);
+
+    /// <summary>Asks the platform off the UI thread after <paramref name="delay"/> and applies the answer, unless the
+    /// desktop's colours changed again meanwhile (<paramref name="ask"/> is the change count it was asked at). A null answer is applied (as <see cref="ThemeVariant.Default"/>) only when
+    /// <paramref name="applyNull"/>.</summary>
+    private async Task AskForDesktopThemeAsync(int ask, TimeSpan delay, bool applyNull)
     {
         try
         {
-            await Task.Delay(AskAgainAfter);
+            if (delay > TimeSpan.Zero) await Task.Delay(delay);
             var dark = await Task.Run(() => Sluice.Core.Platform.PlatformServices.Current.PrefersDarkTheme());
-            if (dark is null) return;
+            if (dark is null && !applyNull) return;
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                if (!_followingDesktop && RequestedThemeVariant == ThemeVariant.Default)
-                    RequestedThemeVariant = dark.Value ? ThemeVariant.Dark : ThemeVariant.Light;
+                if (ask == Volatile.Read(ref _themeAsk)) ApplyDesktopTheme(dark);
             });
         }
-        catch (Exception) { /* a convenience: the app keeps Avalonia's theme */ }
+        catch (Exception) { /* a convenience: the app keeps the theme it has */ }
     }
 
-    private void OnDesktopColorsChanged(object? sender, PlatformColorValues values)
-    {
-        if (PlatformSettings is { } settings) settings.ColorValuesChanged -= OnDesktopColorsChanged;
-        Dispatcher.UIThread.Post(() =>
-        {
-            _followingDesktop = true;
-            RequestedThemeVariant = ThemeVariant.Default;
-        });
-    }
+    private void ApplyDesktopTheme(bool? dark) =>
+        RequestedThemeVariant = dark switch { true => ThemeVariant.Dark, false => ThemeVariant.Light, null => ThemeVariant.Default };
 
     private static string? Arg(string[] args, string name)
     {

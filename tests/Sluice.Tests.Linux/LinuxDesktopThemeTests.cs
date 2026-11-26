@@ -23,7 +23,7 @@ public class LinuxDesktopThemeTests
     [Theory]
     [InlineData(1u, true)]
     [InlineData(2u, false)]
-    [InlineData(0u, null)]                     // no preference
+    [InlineData(0u, false)]                    // no preference: GNOME's "Light" (#284)
     [InlineData(7u, null)]                     // a value the portal spec doesn't define
     public void The_scheme_maps_to_dark_light_or_not_known(uint scheme, bool? expected) =>
         Assert.Equal(expected, DesktopTheme.ToDark(scheme));
@@ -35,7 +35,8 @@ public class LinuxDesktopThemeTests
     {
         Assert.True(DesktopTheme.Read([Sh("echo '(<uint32 1>,)'")], TimeSpan.FromSeconds(1)));
         Assert.False(DesktopTheme.Read([Sh("echo 'v u 2'")], TimeSpan.FromSeconds(1)));
-        Assert.Null(DesktopTheme.Read([Sh("echo '(<uint32 0>,)'")], TimeSpan.FromSeconds(1)));
+        Assert.False(DesktopTheme.Read([Sh("echo '(<uint32 0>,)'")], TimeSpan.FromSeconds(1)));
+        Assert.Null(DesktopTheme.Read([Sh("echo '(<uint32 7>,)'")], TimeSpan.FromSeconds(1)));
     }
 
     [Fact]
@@ -49,6 +50,16 @@ public class LinuxDesktopThemeTests
             Sh("echo '(<<uint32 1>>,)'"),                                         // Read answers
         ], TimeSpan.FromSeconds(2));
         Assert.True(answer);
+    }
+
+    [Fact]
+    public void The_helper_starts_in_the_users_groups_or_else_as_before()
+    {
+        // #284: asked as the signed-in user, the helper runs in that user's groups; where that can't be done (here, no
+        // CAP_SETGID; or a user that doesn't exist) it starts as before, so the answer never depends on it.
+        Assert.True(DesktopTheme.Read([Sh("echo '(<uint32 1>,)'")], TimeSpan.FromSeconds(2), Environment.UserName));
+        Assert.False(DesktopTheme.Read([Sh("echo '(<uint32 0>,)'")], TimeSpan.FromSeconds(2), "sluice-no-such-user"));
+        Assert.Null(DesktopTheme.Read([("/nonexistent/gdbus", [])], TimeSpan.FromSeconds(1), Environment.UserName));
     }
 
     [Fact]

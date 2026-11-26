@@ -333,3 +333,11 @@ What was built, in order (each line is a branch merged into `main`; `git log --f
   switch to light; #280 is for instant switches), and asks once more 5 s later when the first answer is null (the
   portal at login). `ScreenshotMode`'s demo platform answers null. Live on Linux with capture rights: opens dark, then
   follows light and back.
+- Portal "no preference" is light (2026-11-26, #284, part of #253): `DesktopTheme.ToDark` maps the portal's
+  `color-scheme` 0 to light like 2, since GNOME stores its "Light" style as 0 (`color-scheme` 'default'); as null it
+  left Sluice dark on the first switch to Light after start. Null now only means Sluice couldn't ask (or an undefined
+  value). #253's and #280's Coordination updated by the owner. The live run found a second cause: once capture is on,
+  Sluice runs in its network group (`setresgid`), so every helper started after start-up ran in it and the portal
+  refused it (its `/proc/<pid>/root` check needs matching user and group IDs). `DesktopTheme.Run` now starts the
+  helper as the signed-in user (`ProcessStartInfo.UserName`: their groups, set before exec with the thread's
+  `CAP_SETGID`), and as before when that can't be done.
